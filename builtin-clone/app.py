@@ -323,6 +323,11 @@ def route(conn, method, path, query, payload, user, token, host):
         return Response("Method not allowed", status=405, content_type="text/plain; charset=utf-8")
 
     # ---------- authentication ----------
+    # Friendly aliases for /signin and /signup
+    if path == "/signin":
+        return redirect("/auth/login" + ("?" + urllib.parse.urlencode(query) if query else ""), status=301)
+    if path == "/signup":
+        return redirect("/auth/signup" + ("?" + urllib.parse.urlencode(query) if query else ""), status=301)
     if path in ("/auth/login", "/auth/signup"):
         kind = "login" if path.endswith("login") else "signup"
         next_path = query.get("next", "") if method in ("GET", "HEAD") else payload.get("next", "")
@@ -834,7 +839,7 @@ def route(conn, method, path, query, payload, user, token, host):
         return Response(views.salary_detail_page(conn, user, rows[0], related))
 
     # ---------- articles ----------
-    if path == "/tech-topics":
+    if path in ("/tech-topics", "/articles"):
         return redirect("/article-blogs", status=301)
     if path == "/article-blogs":
         return Response(views.articles_page(conn, user, query.get("q", ""),

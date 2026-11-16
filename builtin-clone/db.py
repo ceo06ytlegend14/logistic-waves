@@ -153,10 +153,9 @@ CREATE TABLE IF NOT EXISTS demo_seed_state (
   created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_articles_slug ON articles(slug);
-CREATE INDEX IF NOT EXISTS idx_articles_featured ON articles(featured);
 CREATE INDEX IF NOT EXISTS idx_applications_user ON applications(user_id);
 CREATE INDEX IF NOT EXISTS idx_saved_jobs_user ON saved_jobs(user_id);
-CREATE INDEX IF NOT EXISTS idx_jobs_active ON jobs(is_active);
+CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
 CREATE INDEX IF NOT EXISTS idx_jobs_company ON jobs(company_slug);
 CREATE INDEX IF NOT EXISTS idx_jobs_category ON jobs(category);
 CREATE INDEX IF NOT EXISTS idx_jobs_posted ON jobs(posted_at);
@@ -175,10 +174,10 @@ def connect():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA synchronous=NORMAL")
-        conn.execute("PRAGMA cache_size=-16000")
-        conn.execute("PRAGMA temp_store=MEMORY")
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute("PRAGMA cache_size=-16000")
+    conn.execute("PRAGMA temp_store=MEMORY")
     return conn
 
 
