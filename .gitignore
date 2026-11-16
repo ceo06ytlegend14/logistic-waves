@@ -1,0 +1,23 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.vercel/
+.env*
+.DS_Store
+Thumbs.db
+
+# Database files (contain live data, not for source control)
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Logs & scratch
+*.log
+scratch/
+
+# Editor
+.idea/
+.vscode/
+*.swp
