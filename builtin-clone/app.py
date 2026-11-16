@@ -1001,6 +1001,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("X-Frame-Options", "SAMEORIGIN")
             self.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
             self.send_header("X-XSS-Protection", "1; mode=block")
+            self.send_header("Permissions-Policy", "camera=(), microphone=(), geolocation=(), browsing-topics=()")
+            self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com data:; img-src 'self' data: https: blob:; connect-src 'self' https:; frame-src 'self' https://www.youtube-nocookie.com https://www.youtube.com; frame-ancestors 'self'; base-uri 'self'; form-action 'self';")
             self.end_headers()
             if self.command != "HEAD":
                 self.wfile.write(data)
