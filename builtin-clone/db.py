@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import secrets
 import sqlite3
 from datetime import datetime, timedelta
@@ -163,7 +164,102 @@ CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 """
 
 
+
+class PgCursor:
+    def __init__(self, cur):
+        self._cur = cur
+        self.lastrowid = None
+
+    def execute(self, sql, params=None):
+        pg_sql = sql.replace("?", "%s")
+        if "INSERT OR IGNORE INTO" in pg_sql.upper():
+            pg_sql = re.sub(r'INSERT\s+OR\s+IGNORE\s+INTO', 'INSERT INTO', pg_sql, flags=re.I)
+            if "ON CONFLICT" not in pg_sql.upper():
+                pg_sql = pg_sql.rstrip().rstrip(";") + " ON CONFLICT DO NOTHING"
+
+        is_insert = pg_sql.strip().upper().startswith("INSERT INTO")
+        has_returning = "RETURNING" in pg_sql.upper()
+
+        if is_insert and not has_returning:
+            target_tables = ("users", "alerts", "applications", "subscribers", "jobs", "companies", "articles", "salaries")
+            for tbl in target_tables:
+                if f"into {tbl}" in pg_sql.lower() or f"into \"{tbl}\"" in pg_sql.lower():
+                    pg_sql = pg_sql.rstrip().rstrip(";") + " RETURNING id"
+                    has_returning = True
+                    break
+
+        if params is not None:
+            if isinstance(params, list):
+                params = tuple(params)
+            self._cur.execute(pg_sql, params)
+        else:
+            self._cur.execute(pg_sql)
+
+        if is_insert and has_returning:
+            try:
+                row = self._cur.fetchone()
+                if row:
+                    self.lastrowid = row[0]
+            except Exception:
+                self.lastrowid = None
+        return self
+
+    def fetchone(self):
+        return self._cur.fetchone()
+
+    def fetchall(self):
+        return self._cur.fetchall()
+
+    def fetchmany(self, size=None):
+        return self._cur.fetchmany(size)
+
+    @property
+    def rowcount(self):
+        return self._cur.rowcount
+
+    def __iter__(self):
+        return iter(self._cur)
+
+
+class PgConn:
+    def __init__(self, raw_conn):
+        self._conn = raw_conn
+        self._conn.autocommit = True
+
+    def cursor(self):
+        import psycopg2.extras
+        return PgCursor(self._conn.cursor(cursor_factory=psycopg2.extras.DictCursor))
+
+    def execute(self, sql, params=None):
+        cur = self.cursor()
+        cur.execute(sql, params)
+        return cur
+
+    def commit(self):
+        pass
+
+    def rollback(self):
+        try:
+            self._conn.rollback()
+        except Exception:
+            pass
+
+    def close(self):
+        try:
+            self._conn.close()
+        except Exception:
+            pass
+
 def connect():
+    db_url = os.environ.get("DATABASE_URL") or os.environ.get("POSTGRES_URL")
+    if db_url:
+        try:
+            import psycopg2
+            raw = psycopg2.connect(db_url, connect_timeout=10)
+            return PgConn(raw)
+        except Exception as e:
+            print(f"[db] Warning: Could not connect to PostgreSQL ({e}), falling back to SQLite.")
+
     if not os.environ.get("VERCEL"):
         DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     else:
@@ -268,6 +364,8 @@ def _seed(conn):
 
 def init_db():
     conn = connect()
+    if isinstance(conn, PgConn):
+        return
     conn.executescript(SCHEMA)
     article_columns = {
         row["name"] for row in conn.execute("PRAGMA table_info(articles)").fetchall()
