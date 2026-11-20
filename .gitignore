@@ -13,11 +13,31 @@ Thumbs.db
 *.sqlite
 *.sqlite3
 
-# Logs & scratch
-*.log
-scratch/
+# Scratch root screenshots & work logs
+/*.png
+/*.jpg
+/*.jpeg
+/*.pdf
+/*.xlsx
+/*.html
+/take_screenshot.py
+/inspect_dom.py
+/append_article_styles.py
+/extract_articles.py
+/fix_scripts_position.py
+/fix_sidebar_flex.py
+/update_article_sidebar.py
+/update_daily_work_log.py
+/update_job1.py
+/.sudo_as_admin_successful
+
 
 # Editor
 .idea/
 .vscode/
 *.swp
+*.log
+scratch/
+**/scratch/
+uploads/
+

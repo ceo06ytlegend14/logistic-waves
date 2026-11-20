@@ -5,10 +5,13 @@ Then open the preview URL (port 8000 by default).
 """
 import html
 import gzip
+import hmac
 import json
 import mimetypes
 import os
 import re
+import secrets
+import threading
 import traceback
 import urllib.parse
 from http.cookies import SimpleCookie
@@ -19,6 +22,62 @@ from datetime import datetime
 import db
 import seed
 import views
+
+# ---------- CSRF protection ----------
+_csrf_lock = threading.Lock()
+_csrf_tokens: dict = {}   # session_token -> csrf_token
+
+
+def _generate_csrf(session_token: str) -> str:
+    csrf = secrets.token_hex(24)
+    with _csrf_lock:
+        _csrf_tokens[session_token] = csrf
+    return csrf
+
+
+def get_csrf_token(session_token: str) -> str:
+    if not session_token:
+        return ""
+    with _csrf_lock:
+        if session_token not in _csrf_tokens:
+            _csrf_tokens[session_token] = secrets.token_hex(24)
+        return _csrf_tokens[session_token]
+
+
+def verify_csrf(session_token: str, submitted: str) -> bool:
+    if not session_token or not submitted:
+        return False
+    with _csrf_lock:
+        expected = _csrf_tokens.get(session_token, "")
+    return bool(expected) and hmac.compare_digest(expected, submitted)
+
+
+# ---------- Login rate limiting ----------
+_login_attempts: dict = {}   # ip -> [timestamp, ...]
+_login_lock = threading.Lock()
+LOGIN_MAX_ATTEMPTS = 5
+LOGIN_WINDOW_SECONDS = 300   # 5 minutes
+
+
+def _check_rate_limit(ip: str) -> bool:
+    now = datetime.utcnow().timestamp()
+    with _login_lock:
+        attempts = [t for t in _login_attempts.get(ip, []) if now - t < LOGIN_WINDOW_SECONDS]
+        _login_attempts[ip] = attempts
+        return len(attempts) >= LOGIN_MAX_ATTEMPTS
+
+
+def _record_failed_login(ip: str) -> None:
+    now = datetime.utcnow().timestamp()
+    with _login_lock:
+        lst = _login_attempts.get(ip, [])
+        lst.append(now)
+        _login_attempts[ip] = lst[-20:]
+
+
+def _clear_login_attempts(ip: str) -> None:
+    with _login_lock:
+        _login_attempts.pop(ip, None)
 
 ROOT = Path(__file__).resolve().parent
 STATIC = ROOT / "static"
@@ -35,12 +94,13 @@ POST_PAGE_PATHS = {
     "/alerts/delete", "/alerts/update", "/tracker/delete", "/employers/post-job",
     "/employers/jobs/update", "/employers/jobs/archive",
     "/admin/seed", "/admin/videos/create", "/admin/articles/create",
-    "/admin/articles/delete", "/admin/jobs/create", "/admin/jobs/delete",
-    "/admin/companies/create", "/admin/companies/delete",
+    "/admin/articles/update", "/admin/articles/delete",
+    "/admin/jobs/create", "/admin/jobs/update", "/admin/jobs/delete",
+    "/admin/companies/create", "/admin/companies/update", "/admin/companies/delete",
     "/admin/users/create", "/admin/users/delete", "/admin/users/role",
     "/admin/applications/delete", "/admin/applications/status",
     "/admin/subscribers/delete",
-    "/admin/salaries/create", "/admin/salaries/delete",
+    "/admin/salaries/create", "/admin/salaries/update", "/admin/salaries/delete",
     "/api/newsletter", "/apply", "/saved/toggle", "/follow/toggle",
 }
 
@@ -130,7 +190,7 @@ def sitemap_xml(conn, host):
 
 # ---------- routing ----------
 
-def route(conn, method, path, query, payload, user, token, host):
+def route(conn, method, path, query, payload, user, token, host, client_ip=""):
     # Static assets
     if path.startswith("/static/"):
         if method not in ("GET", "HEAD"):
@@ -336,10 +396,16 @@ def route(conn, method, path, query, payload, user, token, host):
         email = (payload.get("email") or "").strip()
         password = payload.get("password") or ""
         if kind == "login":
+            # Rate limit: block after 5 failed attempts within 5 minutes
+            if _check_rate_limit(client_ip):
+                return Response(views.auth_page(kind, next_path,
+                                                error="Too many failed login attempts. Please wait 5 minutes and try again."))
             account = db.authenticate(conn, email, password)
             if not account:
+                _record_failed_login(client_ip)
                 return Response(views.auth_page(kind, next_path,
                                                 error="That email or password doesn't match an account."))
+            _clear_login_attempts(client_ip)
             new_token = db.create_session(conn, account["id"])
             destination = safe_next(next_path) if next_path else (
                 "/employers" if account.get("role") == "employer" else "/profile"
@@ -467,13 +533,27 @@ def route(conn, method, path, query, payload, user, token, host):
             return redirect("/employers?" + urllib.parse.urlencode({"error": "Job not found."}))
         return redirect("/employers?" + urllib.parse.urlencode({"message": "Job archived."}))
 
+    # CSRF verification for all state-changing POST requests (skip API and login/signup/logout)
+    if method == "POST" and path not in ("/auth/login", "/auth/signup", "/logout") and not path.startswith("/api/"):
+        submitted_csrf = payload.get("_csrf", "")
+        if not verify_csrf(token, submitted_csrf):
+            body = ("<div style='text-align:center;padding:60px 20px'>"
+                    "<h2>Invalid Request</h2>"
+                    "<p>Your form submission could not be verified (CSRF token mismatch). "
+                    "Please go back and try again.</p>"
+                    "<a href='/'>← Back to Home</a></div>")
+            return Response(views.layout("Invalid Request", body, user), status=403)
+
     # ---------- admin dashboard & data seeder ----------
-    # SECURITY: All /admin routes require a logged-in admin user
+    # SECURITY: All /admin routes require a logged-in admin user (admin role only)
     if path.startswith("/admin"):
         if not user:
             return redirect("/auth/login?next=" + urllib.parse.quote(path, safe=""))
-        if user.get("role") not in ("admin", "employer"):
-            body = "<div style='text-align:center;padding:60px 20px'><h2>Access Denied</h2><p>You need admin or employer privileges to access this page.</p><a href='/'>← Back to Home</a></div>"
+        if user.get("role") != "admin":
+            body = ("<div style='text-align:center;padding:60px 20px'>"
+                    "<h2>Access Denied</h2>"
+                    "<p>Admin privileges are required to access this area.</p>"
+                    "<a href='/'>← Back to Home</a></div>")
             return Response(views.layout("Access Denied", body, user), status=403)
 
     if path in ("/admin", "/admin/dashboard"):
@@ -531,10 +611,13 @@ def route(conn, method, path, query, payload, user, token, host):
 
     if path == "/admin/articles/create" and method == "POST":
         title = payload.get("title", "").strip()
+        if not title or len(title) > 300:
+            return redirect("/admin?tab=articles&err=" + urllib.parse.quote("Article title is required (max 300 characters)."))
         category = payload.get("category", "Maritime & Supply Chain").strip()
         author = payload.get("author", "Editorial Staff").strip()
         tag = payload.get("tag", "Maritime Insights").strip()
         read_time = payload.get("read_time", "6 min read").strip()
+        thumb = payload.get("thumb", "").strip() or "/static/images/fw_today_1.jpg"
         excerpt = payload.get("excerpt", "").strip()
         body = payload.get("body", "").strip()
         slug = views.slugify(title)
@@ -542,14 +625,14 @@ def route(conn, method, path, query, payload, user, token, host):
         ex = conn.execute("SELECT id FROM articles WHERE slug=?", (slug,)).fetchone()
         if ex:
             conn.execute(
-                """UPDATE articles SET title=?, category=?, author=?, tag=?, read_time=?, excerpt=?, body=? WHERE id=?""",
-                (title, category, author, tag, read_time, excerpt, body, ex[0])
+                """UPDATE articles SET title=?, category=?, author=?, tag=?, read_time=?, thumb=?, excerpt=?, body=? WHERE id=?""",
+                (title, category, author, tag, read_time, thumb, excerpt, body, ex[0])
             )
         else:
             conn.execute(
-                """INSERT INTO articles (slug, title, excerpt, body, author, published, category, tag, read_time, accent, is_today)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,0)""",
-                (slug, title, excerpt, body, author, now_str, category, tag, read_time, "#034f9a")
+                """INSERT INTO articles (slug, title, excerpt, body, author, published, category, tag, read_time, accent, thumb, is_today)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,0)""",
+                (slug, title, excerpt, body, author, now_str, category, tag, read_time, "#034f9a", thumb)
             )
         conn.commit()
         return redirect("/admin?tab=articles&msg=" + urllib.parse.quote(f"Article '{title}' published successfully!"))
@@ -561,8 +644,32 @@ def route(conn, method, path, query, payload, user, token, host):
         conn.commit()
         return redirect(f"/admin?tab={tab}&msg=" + urllib.parse.quote("Item deleted successfully."))
 
+    if path == "/admin/articles/update" and method == "POST":
+        art_id = get_int(payload.get("id", "0"), 0, low=0)
+        tab = payload.get("tab", "articles")
+        title = payload.get("title", "").strip()
+        category = payload.get("category", "Maritime & Supply Chain").strip()
+        author = payload.get("author", "Editorial Staff").strip()
+        tag = payload.get("tag", "Maritime Insights").strip()
+        read_time = payload.get("read_time", "6 min read").strip()
+        guest = payload.get("guest", "").strip()
+        duration = payload.get("duration", "15:00 min").strip()
+        thumb = payload.get("thumb", "").strip()
+        excerpt = payload.get("excerpt", "").strip()
+        body = payload.get("body", "").strip()
+        if art_id:
+            conn.execute(
+                """UPDATE articles SET title=?, category=?, author=?, tag=?, read_time=?, guest=?, duration=?, thumb=?, excerpt=?, body=? WHERE id=?""",
+                (title, category, author, tag, read_time, guest, duration, thumb, excerpt, body, art_id)
+            )
+            conn.commit()
+            return redirect(f"/admin?tab={tab}&msg=" + urllib.parse.quote(f"Article '{title}' updated successfully!"))
+        return redirect(f"/admin?tab={tab}&err=" + urllib.parse.quote("Article ID not found."))
+
     if path == "/admin/jobs/create" and method == "POST":
         title = payload.get("title", "").strip()
+        if not title or len(title) > 300:
+            return redirect("/admin?tab=jobs&err=" + urllib.parse.quote("Job title is required (max 300 characters)."))
         comp_slug = payload.get("company_slug", "").strip()
         category = payload.get("category", "Engineering & Architecture").strip()
         workplace = payload.get("workplace", "Hybrid").strip()
@@ -598,6 +705,48 @@ def route(conn, method, path, query, payload, user, token, host):
         conn.commit()
         return redirect(f"/admin?tab={tab}&msg=" + urllib.parse.quote("Job listing deleted."))
 
+    if path == "/admin/jobs/update" and method == "POST":
+        job_id = get_int(payload.get("id", "0"), 0, low=0)
+        tab = payload.get("tab", "jobs")
+        title = payload.get("title", "").strip()
+        comp_slug = payload.get("company_slug", "").strip()
+        category = payload.get("category", "Engineering & Architecture").strip()
+        workplace = payload.get("workplace", "Hybrid").strip()
+        location = payload.get("location", "Vietnam").strip()
+        salary_min = get_int(payload.get("salary_min", "50000"), 50000)
+        salary_max = get_int(payload.get("salary_max", "85000"), 85000)
+        salary_display = payload.get("salary_display", "").strip()
+        if not salary_display:
+            salary_display = f"${salary_min:,} - ${salary_max:,}"
+        skills = payload.get("skills", "").strip()
+        description = payload.get("description", "").strip()
+        level = payload.get("level", "Mid-Senior").strip()
+        
+        comp = conn.execute("SELECT id, name, initials, color FROM companies WHERE slug=?", (comp_slug,)).fetchone()
+        if comp and job_id:
+            cid, cname, cinit, ccolor = comp
+            conn.execute(
+                """UPDATE jobs SET title=?, company_id=?, company_slug=?, company_name=?, company_initials=?, company_color=?,
+                   category=?, level=?, workplace=?, location=?, salary_min=?, salary_max=?, salary_display=?, skills=?, description=?,
+                   is_remote=?, accent=? WHERE id=?""",
+                (title, cid, comp_slug, cname, cinit, ccolor, category, level, workplace, location,
+                 salary_min, salary_max, salary_display, skills, description,
+                 1 if "Remote" in workplace else 0, ccolor, job_id)
+            )
+            conn.commit()
+            return redirect(f"/admin?tab={tab}&msg=" + urllib.parse.quote(f"Job '{title}' updated successfully!"))
+        elif job_id:
+            conn.execute(
+                """UPDATE jobs SET title=?, category=?, level=?, workplace=?, location=?, salary_min=?, salary_max=?, salary_display=?, skills=?, description=?,
+                   is_remote=? WHERE id=?""",
+                (title, category, level, workplace, location,
+                 salary_min, salary_max, salary_display, skills, description,
+                 1 if "Remote" in workplace else 0, job_id)
+            )
+            conn.commit()
+            return redirect(f"/admin?tab={tab}&msg=" + urllib.parse.quote(f"Job '{title}' updated successfully!"))
+        return redirect(f"/admin?tab={tab}&err=" + urllib.parse.quote("Job ID not found."))
+
     if path == "/admin/companies/create" and method == "POST":
         name = payload.get("name", "").strip()
         tagline = payload.get("tagline", "").strip()
@@ -632,6 +781,32 @@ def route(conn, method, path, query, payload, user, token, host):
         conn.execute("DELETE FROM companies WHERE id=?", (comp_id,))
         conn.commit()
         return redirect(f"/admin?tab={tab}&msg=" + urllib.parse.quote("Company and its listings deleted."))
+
+    if path == "/admin/companies/update" and method == "POST":
+        comp_id = get_int(payload.get("id", "0"), 0, low=0)
+        tab = payload.get("tab", "companies")
+        name = payload.get("name", "").strip()
+        tagline = payload.get("tagline", "").strip()
+        industries = payload.get("industries", "Logistics & Maritime").strip()
+        location = payload.get("location", "Vietnam").strip()
+        employees = get_int(payload.get("employees", "1000"), 1000)
+        color = payload.get("color", "#034f9a").strip() or "#034f9a"
+        website = payload.get("website", "https://example.com").strip()
+        description = payload.get("description", "").strip()
+        initials = "".join(w[0] for w in name.split()[:2]).upper() or "CO"
+        
+        if comp_id and name:
+            conn.execute(
+                """UPDATE companies SET name=?, initials=?, tagline=?, industries=?, location=?, employees=?, color=?, website=?, description=? WHERE id=?""",
+                (name, initials, tagline, industries, location, employees, color, website, description, comp_id)
+            )
+            conn.execute(
+                """UPDATE jobs SET company_name=?, company_initials=?, company_color=?, accent=? WHERE company_id=?""",
+                (name, initials, color, color, comp_id)
+            )
+            conn.commit()
+            return redirect(f"/admin?tab={tab}&msg=" + urllib.parse.quote(f"Company '{name}' updated successfully!"))
+        return redirect(f"/admin?tab={tab}&err=" + urllib.parse.quote("Company ID and name are required."))
 
     # ---------- admin: users ----------
     if path == "/admin/users/create" and method == "POST":
@@ -710,6 +885,26 @@ def route(conn, method, path, query, payload, user, token, host):
         conn.execute("DELETE FROM salaries WHERE id=?", (sid,))
         conn.commit()
         return redirect("/admin?tab=salaries&msg=" + urllib.parse.quote("Salary entry deleted."))
+
+    if path == "/admin/salaries/update" and method == "POST":
+        sid = get_int(payload.get("id", "0"), 0, low=0)
+        tab = payload.get("tab", "salaries")
+        title = payload.get("title", "").strip()
+        category = payload.get("category", "Logistics").strip()
+        median = get_int(payload.get("median", "80000"), 80000)
+        low = get_int(payload.get("low", "60000"), 60000)
+        high = get_int(payload.get("high", "110000"), 110000)
+        samples = get_int(payload.get("samples", "500"), 500)
+        trend = payload.get("trend", "+2.0%").strip() or "+2.0%"
+        
+        if sid and title:
+            conn.execute(
+                "UPDATE salaries SET title=?, category=?, median=?, low=?, high=?, samples=?, trend=? WHERE id=?",
+                (title, category, median, low, high, samples, trend, sid)
+            )
+            conn.commit()
+            return redirect(f"/admin?tab={tab}&msg=" + urllib.parse.quote(f"Salary entry '{title}' updated successfully!"))
+        return redirect(f"/admin?tab={tab}&err=" + urllib.parse.quote("Title and ID are required."))
 
     # ---------- home ----------
     if path == "/":
@@ -1020,7 +1215,10 @@ class Handler(BaseHTTPRequestHandler):
         try:
             user = db.current_user(conn, token)
             host = self.headers.get("Host", "localhost")
-            resp = route(conn, self.command, path, query, payload, user, token, host)
+            client_ip = (self.client_address[0] if self.client_address else "") or ""
+            # Set the per-request CSRF token so views can embed it in forms
+            views._set_csrf(get_csrf_token(token))
+            resp = route(conn, self.command, path, query, payload, user, token, host, client_ip)
             self._send(resp)
         except (ConnectionResetError, BrokenPipeError, ConnectionAbortedError):
             pass

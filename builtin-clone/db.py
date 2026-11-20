@@ -15,9 +15,10 @@ ROOT = Path(__file__).resolve().parent
 if os.environ.get("VERCEL"):
     DB_PATH = Path("/tmp") / "site.db"
     bundled_db = ROOT / "data" / "site.db"
-    if bundled_db.exists() and not DB_PATH.exists():
-        import shutil
-        shutil.copyfile(bundled_db, DB_PATH)
+    if bundled_db.exists():
+        if not DB_PATH.exists() or bundled_db.stat().st_mtime > DB_PATH.stat().st_mtime:
+            import shutil
+            shutil.copyfile(bundled_db, DB_PATH)
 else:
     DB_PATH = ROOT / "data" / "site.db" 
 
@@ -161,6 +162,15 @@ CREATE INDEX IF NOT EXISTS idx_jobs_company ON jobs(company_slug);
 CREATE INDEX IF NOT EXISTS idx_jobs_category ON jobs(category);
 CREATE INDEX IF NOT EXISTS idx_jobs_posted ON jobs(posted_at);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_articles_tag ON articles(tag);
+CREATE INDEX IF NOT EXISTS idx_articles_is_today ON articles(is_today);
+CREATE INDEX IF NOT EXISTS idx_jobs_workplace ON jobs(workplace);
+CREATE INDEX IF NOT EXISTS idx_jobs_location ON jobs(location);
+CREATE INDEX IF NOT EXISTS idx_jobs_remote ON jobs(is_remote);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_sessions_token_lookup ON sessions(token);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_companies_slug ON companies(slug);
 """
 
 
@@ -535,6 +545,13 @@ def create_session(conn, user_id):
     expires = (datetime.utcnow() + timedelta(days=30)).isoformat(timespec="seconds")
     conn.execute("INSERT INTO sessions (token,user_id,expires_at) VALUES (?,?,?)", (token, user_id, expires))
     conn.commit()
+    # Occasionally clean up expired sessions (1% chance to avoid overhead on every login)
+    if secrets.randbelow(100) == 0:
+        try:
+            conn.execute("DELETE FROM sessions WHERE expires_at < ?", (_now(),))
+            conn.commit()
+        except Exception:
+            pass
     return token
 
 
@@ -750,6 +767,23 @@ def list_articles(conn, q="", category="", tag="", limit=20):
         " FROM articles" + where + " ORDER BY id ASC LIMIT ?",
         args + [limit]
     ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def list_popular_articles(conn, exclude_id=None, limit=8):
+    """Return popular articles for sidebar — ordered by id DESC as proxy for recency."""
+    if exclude_id:
+        rows = conn.execute(
+            "SELECT id, slug, title, thumb, category, tag, published, read_time "
+            "FROM articles WHERE id != ? ORDER BY id DESC LIMIT ?",
+            (exclude_id, limit)
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT id, slug, title, thumb, category, tag, published, read_time "
+            "FROM articles ORDER BY id DESC LIMIT ?",
+            (limit,)
+        ).fetchall()
     return [dict(r) for r in rows]
 
 

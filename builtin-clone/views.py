@@ -14,6 +14,28 @@ import admin_views
 ROOT = Path(__file__).resolve().parent
 STATIC = ROOT / "static"
 
+# ---------- CSRF helper ----------
+# app.py sets this after import so forms can embed the token without circular imports.
+def get_csrf_input(token: str = "") -> str:
+    """Return a hidden <input> for CSRF protection. token is the per-session CSRF token."""
+    if not token:
+        return ""
+    return f'<input type="hidden" name="_csrf" value="{html.escape(token, quote=True)}">'
+
+# Thread-local storage for the current request's CSRF token (set by app.py dispatcher)
+import threading as _threading
+_request_local = _threading.local()
+
+def _set_csrf(token: str) -> None:
+    _request_local.csrf_token = token
+
+def _get_csrf() -> str:
+    return getattr(_request_local, "csrf_token", "")
+
+def csrf_input() -> str:
+    """Render hidden CSRF input using the current request's token."""
+    return get_csrf_input(_get_csrf())
+
 
 def e(value):
     return html.escape(str(value if value is not None else ""), quote=True)
@@ -539,10 +561,15 @@ def company_card(company, conn, user=None, breakdown=None, variant=0):
 def article_card(article, featured=False, variant=0):
     cls = "article-card featured" if featured else "article-card"
     accent = article.get("accent") or "#244fe7"
+    thumb = article.get("thumb")
+    if thumb:
+        photo_html = f'<img src="{e(thumb)}" alt="{e(article["title"])}" style="width:100%;height:100%;object-fit:cover;display:block;border-radius:8px;" loading="lazy">'
+    else:
+        photo_html = photo_placeholder(accent, "Add your image", article["slug"], variant, 220 if featured else 112)
     return f'''
     <article class="{cls}">
       <a class="article-photo" href="/articles/{e(article['slug'])}">
-        {photo_placeholder(accent, "Add your image", article["slug"], variant, 220 if featured else 112)}
+        {photo_html}
       </a>
       <div class="article-body">
         <a class="article-category" href="{url('/article-blogs', category=article['category'])}">{e(article['category'])}</a>
@@ -687,11 +714,24 @@ def signin_required(next_path, title="Sign in to continue"):
                   <svg class="demo-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
                 </button>
               </form>
+
+              <form method="post" action="/auth/login" class="gate-demo-form">
+                <input type="hidden" name="email" value="admin@logisticwaves.com">
+                <input type="hidden" name="password" value="Admin@Waves2026!">
+                <input type="hidden" name="next" value="/admin">
+                <button type="submit" class="btn gate-demo-btn" style="border-color: #0284c7;">
+                  <div class="demo-btn-content">
+                    <span class="demo-role-tag" style="background: #0284c7; color: #ffffff;">Admin Console</span>
+                    <span class="demo-btn-title">Continue as Admin Demo</span>
+                  </div>
+                  <svg class="demo-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+                </button>
+              </form>
             </div>
 
             <div class="gate-demo-credentials">
               <span class="creds-label">Manual login:</span>
-              <span class="creds-val">candidate@demo.com (demo1234)</span>
+              <span class="creds-val">admin@logisticwaves.com (Admin@Waves2026!)</span>
               <span class="creds-dot">•</span>
               <span class="creds-val">employer@demo.com (demo1234)</span>
             </div>
@@ -1912,7 +1952,7 @@ def linkedin_company_detail_page(conn, user, company, tab, jobs=None, related=No
         for c in similar
     )
     post_cards = "".join(
-        f'''<article class="li-post">{photo_placeholder(a['accent'], "Add post image", a['slug'], i, 150)}
+        f'''<article class="li-post">{f'<img src="{e(a["thumb"])}" alt="{e(a["title"])}" style="width:100%;height:150px;object-fit:cover;border-radius:8px;display:block;" loading="lazy">' if a.get('thumb') else photo_placeholder(a['accent'], "Add post image", a['slug'], i, 150)}
           <div class="li-post-body"><a class="li-post-title" href="/articles/{e(a['slug'])}">{e(a['title'])}</a>
           <p>{e(a['excerpt'])}</p><div class="li-meta">{e(a['author'])} · {e(a['published'])} · {e(a['read_time'])}</div></div></article>'''
         for i, a in enumerate(related)
@@ -2925,6 +2965,153 @@ def articles_page(conn, user, q="", category="", tag="", featured=None):
                   extra_head=extra_head)
 
 
+def format_editorial_body(raw_body):
+    raw_body = (raw_body or "").strip()
+    if not raw_body:
+        return ""
+    blocks = [b.strip() for b in re.split(r"\n\s*\n", raw_body) if b.strip()]
+    out = []
+    for block in blocks:
+        lines = [l.strip() for l in block.splitlines() if l.strip()]
+        img_matches = [re.match(r"^!\[(.*?)\]\((.*?)\)$", l) for l in lines]
+        # Multi-image gallery (2 or more photos together)
+        if all(img_matches) and len(img_matches) > 1:
+            grid_items = []
+            for m in img_matches:
+                cap = m.group(1).strip()
+                src = m.group(2).strip()
+                grid_items.append(f'''
+                <figure style="margin:0;display:flex;flex-direction:column;">
+                  <img src="{e(src)}" alt="{e(cap or 'Article Photo')}" style="width:100%;height:260px;object-fit:cover;border-radius:12px;box-shadow:0 4px 16px rgba(0,0,0,0.06);display:block;" loading="lazy">
+                  {f'<figcaption style="font-size:12.5px;color:#64748b;margin-top:7px;font-style:italic;text-align:center;">{e(cap)}</figcaption>' if cap else ''}
+                </figure>''')
+            out.append(f'''
+            <div class="editorial-image-gallery" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(260px, 1fr));gap:16px;margin:32px 0;">
+              {"".join(grid_items)}
+            </div>''')
+            continue
+
+        img_match = re.match(r"^!\[(.*?)\]\((.*?)\)$", block)
+        if img_match:
+            cap = img_match.group(1).strip()
+            src = img_match.group(2).strip()
+            out.append(f'''
+            <figure class="editorial-inline-figure" style="margin:28px 0;">
+              <img src="{e(src)}" alt="{e(cap or 'Article Image')}" class="editorial-inline-image" style="width:100%;max-height:500px;object-fit:cover;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.08);display:block;" loading="lazy">
+              {f'<figcaption class="editorial-inline-caption" style="font-size:13px;color:#64748b;margin-top:8px;font-style:italic;text-align:center;">{e(cap)}</figcaption>' if cap else ''}
+            </figure>''')
+            continue
+        if block.startswith("<img") or "<img" in block:
+            out.append(f'<div class="editorial-inline-figure" style="margin:28px 0;">{block}</div>')
+            continue
+        if block.startswith("### "):
+            out.append(f'<h3 class="editorial-subheading" style="font-size:19px;font-weight:700;color:#0f172a;margin:28px 0 12px;">{e(block[4:])}</h3>')
+            continue
+        if block.startswith("## "):
+            out.append(f'<h2 class="editorial-subheading" style="font-size:24px;font-weight:800;color:#0f172a;margin:34px 0 14px;">{e(block[3:])}</h2>')
+            continue
+        if block.startswith("# "):
+            out.append(f'<h2 class="editorial-subheading" style="font-size:26px;font-weight:800;color:#0f172a;margin:36px 0 16px;">{e(block[2:])}</h2>')
+            continue
+        if block.startswith("> "):
+            out.append(f'''
+            <blockquote class="editorial-pull-quote" style="border-left:4px solid #3874ff;padding:14px 22px;margin:28px 0;background:#f0f7ff;border-radius:0 10px 10px 0;">
+              <p class="editorial-quote-p" style="font-size:16px;font-weight:600;color:#1e3a8a;margin:0;">{e(block[2:].strip())}</p>
+            </blockquote>''')
+            continue
+        out.append(f'<p class="editorial-para" style="font-size:16.5px;line-height:1.8;color:#334155;margin-bottom:22px;">{e(block)}</p>')
+    return "".join(out)
+
+
+
+# Module-level constant: preset metadata for featured articles
+EDITORIAL_PRESETS = {
+    "the-2026-state-of-tech-salaries": {
+        "hero_img": "/static/images/editorial_tech_salaries_hd.png",
+        "hero_caption": "Global technology compensation benchmarks reflect skyrocketing premiums for specialized AI and distributed systems engineers. (Photo: Tech Intelligence Global Desk)",
+        "kicker_pill": "SPECIAL INVESTIGATION",
+        "topic_tag": "COMPENSATION & TALENT",
+        "author_avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80",
+        "author_role": "Editor-in-Chief · Tech Intelligence Desk",
+        "author_bio": "Investigative tech columnist and contributor specializing in distributed engineering compensation, cloud infrastructure economics, and enterprise foundation models.",
+        "readers": "18,900 readers",
+        "sub_1": "The Macro Shift in Engineering Compensation & AI Specialization",
+        "sub_2": "High-Concurrency vs. Generalist Development Demand",
+        "sub_3": "Global Tax Treaties & Cross-Border Equity Realities",
+        "sub_4": "What Engineering Leaders Are Prioritizing for 2026",
+        "inline_img1": "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=1200&q=80",
+        "inline_cap1": "Infrastructure scaling and GPU scheduling clusters are driving massive capital investments across multinational computing facilities. (Photo: Cloud Insights)",
+        "inline_img2": "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=1200&q=80",
+        "inline_cap2": "Collaborative systems engineering teams are transitioning from monoliths to event-driven compound architectures. (Photo: Sandbox Intelligence)",
+        "stats": [
+            ("2.4x", "Premium for Distributed Systems"),
+            ("+28%", "YoY Senior Systems Pay Surge"),
+            ("$380k+", "Median Staff Total Package"),
+            ("1,200", "Tech Organizations Surveyed")
+        ],
+        "quote_text": "Companies that attempt to compensate high-concurrency systems engineers at standard web developer bands are experiencing near 100% offer rejection rates. The talent market has definitively spoken.",
+        "quote_cite": "Sarah Jenkins — GitLab Head of Talent",
+        "tags": ["TechSalaries2026", "DistributedSystems", "EngineeringCompensation", "AIEngineering", "EquityPackages"],
+        "sources": "Sources & Fact Verification: Cross-referenced against 1,200 verified corporate payroll datasets, SEC Form 10-K disclosures, and candidate placement offer records across Tier-1 technology hubs."
+    },
+    "cross-border-tech-hiring": {
+        "hero_img": "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=1200&q=80",
+        "hero_caption": "Multinational tech enterprises navigate shifting bilateral tax treaties and cross-border IP licensing agreements. (Photo: Sandbox Global Policy Desk)",
+        "kicker_pill": "POLICY & REMOTE TRENDS",
+        "topic_tag": "GLOBAL WORKFORCE",
+        "author_avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80",
+        "author_role": "Global Policy Desk & Compensation Analysts",
+        "author_bio": "Specializing in international labor compliance, cross-border corporate taxation, and asynchronous talent management frameworks.",
+        "readers": "12,450 readers",
+        "sub_1": "OECD 2026 Economic Nexus Regulations & Permanent Establishment Thresholds",
+        "sub_2": "The Surge in Direct Multi-Currency & Equity Compensation",
+        "sub_3": "Mitigating Permanent Establishment (PE) Risk in Remote Clusters",
+        "sub_4": "Structuring Compliant Contracts across Southeast Asia and the US",
+        "inline_img1": "https://images.unsplash.com/photo-1507679799987-c73779587ccf?auto=format&fit=crop&w=1200&q=80",
+        "inline_cap1": "Cross-border legal and payroll frameworks must balance local social security mandates with competitive USD-denominated compensation packages. (Photo: Financial Gazette)",
+        "inline_img2": "https://images.unsplash.com/photo-1497215728101-856f4ea42174?auto=format&fit=crop&w=1200&q=80",
+        "inline_cap2": "Distributed engineering headquarters in Singapore, Ho Chi Minh City, and Tokyo continue to attract top-tier remote talent. (Photo: Asia Tech Chronicle)",
+        "stats": [
+            ("45", "Bilateral Treaties Modernized"),
+            ("62%", "Tech Firms with Multi-Country R&D"),
+            ("183 Days", "Strict Physical Nexus Limit"),
+            ("2.4x", "Surge in Direct Multi-Currency Payroll")
+        ],
+        "quote_text": "Engineering leaders can no longer treat international tax and labor compliance as an afterthought. Designing tax-optimized, legally resilient contracts is now as vital as software architecture.",
+        "quote_cite": "David Sterling — Global Policy Analyst",
+        "tags": ["RemoteHiring", "TaxTreaties", "GlobalTalent", "Compliance2026", "CrossBorderPayroll"],
+        "sources": "Sources & Fact Verification: OECD International Tax Directives (2026 Revision), ASEAN Digital Economic Integration Framework, and primary filings across 45 national labor ministries."
+    },
+    "gitlab-autonomous-ai-duo": {
+        "hero_img": "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=1200&q=80",
+        "hero_caption": "GitLab showcases autonomous agentic workflows integrating code review, vulnerability mitigation, and CI/CD pipelines. (Photo: GitLab DevSecOps)",
+        "kicker_pill": "AUTONOMOUS DEV WORKFLOWS",
+        "topic_tag": "ARTIFICIAL INTELLIGENCE",
+        "author_avatar": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=200&q=80",
+        "author_role": "Principal AI Researcher & DevSecOps Contributor",
+        "author_bio": "Author and machine learning systems engineer focused on autonomous agentic development, compiler optimizations, and automated vulnerability triage.",
+        "readers": "14,800 readers",
+        "sub_1": "From Code Autocomplete to Autonomous Agent Orchestration",
+        "sub_2": "Automating Vulnerability Patching in Production Pipelines",
+        "sub_3": "Developer Sentiment and the Future of Pull Request Velocity",
+        "sub_4": "Enterprise Governance and Guardrails for Autonomous Agents",
+        "inline_img1": "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=1200&q=80",
+        "inline_cap1": "Cloud-native CI/CD runners process automated test suites generated by agentic orchestration models. (Photo: Cloud World)",
+        "inline_img2": "https://images.unsplash.com/photo-1531482615713-2afd69097998?auto=format&fit=crop&w=1200&q=80",
+        "inline_cap2": "Engineers review multi-modal agent suggestions with complete git commit history and audit trails. (Photo: AI Dev Insights)",
+        "stats": [
+            ("4.8x", "Faster Pull Request Resolution"),
+            ("78%", "Automated Security Patch Rate"),
+            ("99.2%", "Static Analysis Precision"),
+            ("14k+", "Organizations Enrolled in Beta")
+        ],
+        "quote_text": "The next frontier in software engineering is not writing code faster; it is enabling autonomous agents to verify, secure, and deliver features while humans focus on high-level architecture.",
+        "quote_cite": "Sarah Jenkins — GitLab Principal AI Researcher",
+        "tags": ["AutonomousAI", "DevSecOps", "GitLabDuo", "SoftwareEngineering", "AIAgents"],
+        "sources": "Sources & Fact Verification: GitLab Enterprise Benchmark Suite, Autonomous Code Completion Field Reports (Q3 2026), and developer telemetry across 14,000 corporate repositories."
+    }
+}
+
 def article_detail_page(conn, user, article, related):
     slug = article.get("slug") or "article"
     title = article.get("title") or "Technology Editorial"
@@ -2934,93 +3121,8 @@ def article_detail_page(conn, user, article, related):
     read_time = article.get("read_time") or "7 min read"
     excerpt = article.get("excerpt") or "In-depth investigation and industry intelligence."
     
-    # 1. Preset Rich Metadata for Featured Articles & High-Quality Fallbacks
-    editorial_presets = {
-        "the-2026-state-of-tech-salaries": {
-            "hero_img": "/static/images/editorial_tech_salaries_hd.png",
-            "hero_caption": "Global technology compensation benchmarks reflect skyrocketing premiums for specialized AI and distributed systems engineers. (Photo: Tech Intelligence Global Desk)",
-            "kicker_pill": "SPECIAL INVESTIGATION",
-            "topic_tag": "COMPENSATION & TALENT",
-            "author_avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80",
-            "author_role": "Editor-in-Chief · Tech Intelligence Desk",
-            "author_bio": "Investigative tech columnist and contributor specializing in distributed engineering compensation, cloud infrastructure economics, and enterprise foundation models.",
-            "readers": "18,900 readers",
-            "sub_1": "The Macro Shift in Engineering Compensation & AI Specialization",
-            "sub_2": "High-Concurrency vs. Generalist Development Demand",
-            "sub_3": "Global Tax Treaties & Cross-Border Equity Realities",
-            "sub_4": "What Engineering Leaders Are Prioritizing for 2026",
-            "inline_img1": "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=1200&q=80",
-            "inline_cap1": "Infrastructure scaling and GPU scheduling clusters are driving massive capital investments across multinational computing facilities. (Photo: Cloud Insights)",
-            "inline_img2": "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=1200&q=80",
-            "inline_cap2": "Collaborative systems engineering teams are transitioning from monoliths to event-driven compound architectures. (Photo: Sandbox Intelligence)",
-            "stats": [
-                ("2.4x", "Premium for Distributed Systems"),
-                ("+28%", "YoY Senior Systems Pay Surge"),
-                ("$380k+", "Median Staff Total Package"),
-                ("1,200", "Tech Organizations Surveyed")
-            ],
-            "quote_text": "Companies that attempt to compensate high-concurrency systems engineers at standard web developer bands are experiencing near 100% offer rejection rates. The talent market has definitively spoken.",
-            "quote_cite": "Sarah Jenkins — GitLab Head of Talent",
-            "tags": ["TechSalaries2026", "DistributedSystems", "EngineeringCompensation", "AIEngineering", "EquityPackages"],
-            "sources": "Sources & Fact Verification: Cross-referenced against 1,200 verified corporate payroll datasets, SEC Form 10-K disclosures, and candidate placement offer records across Tier-1 technology hubs."
-        },
-        "cross-border-tech-hiring": {
-            "hero_img": "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=1200&q=80",
-            "hero_caption": "Multinational tech enterprises navigate shifting bilateral tax treaties and cross-border IP licensing agreements. (Photo: Sandbox Global Policy Desk)",
-            "kicker_pill": "POLICY & REMOTE TRENDS",
-            "topic_tag": "GLOBAL WORKFORCE",
-            "author_avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80",
-            "author_role": "Global Policy Desk & Compensation Analysts",
-            "author_bio": "Specializing in international labor compliance, cross-border corporate taxation, and asynchronous talent management frameworks.",
-            "readers": "12,450 readers",
-            "sub_1": "OECD 2026 Economic Nexus Regulations & Permanent Establishment Thresholds",
-            "sub_2": "The Surge in Direct Multi-Currency & Equity Compensation",
-            "sub_3": "Mitigating Permanent Establishment (PE) Risk in Remote Clusters",
-            "sub_4": "Structuring Compliant Contracts across Southeast Asia and the US",
-            "inline_img1": "https://images.unsplash.com/photo-1507679799987-c73779587ccf?auto=format&fit=crop&w=1200&q=80",
-            "inline_cap1": "Cross-border legal and payroll frameworks must balance local social security mandates with competitive USD-denominated compensation packages. (Photo: Financial Gazette)",
-            "inline_img2": "https://images.unsplash.com/photo-1497215728101-856f4ea42174?auto=format&fit=crop&w=1200&q=80",
-            "inline_cap2": "Distributed engineering headquarters in Singapore, Ho Chi Minh City, and Tokyo continue to attract top-tier remote talent. (Photo: Asia Tech Chronicle)",
-            "stats": [
-                ("45", "Bilateral Treaties Modernized"),
-                ("62%", "Tech Firms with Multi-Country R&D"),
-                ("183 Days", "Strict Physical Nexus Limit"),
-                ("2.4x", "Surge in Direct Multi-Currency Payroll")
-            ],
-            "quote_text": "Engineering leaders can no longer treat international tax and labor compliance as an afterthought. Designing tax-optimized, legally resilient contracts is now as vital as software architecture.",
-            "quote_cite": "David Sterling — Global Policy Analyst",
-            "tags": ["RemoteHiring", "TaxTreaties", "GlobalTalent", "Compliance2026", "CrossBorderPayroll"],
-            "sources": "Sources & Fact Verification: OECD International Tax Directives (2026 Revision), ASEAN Digital Economic Integration Framework, and primary filings across 45 national labor ministries."
-        },
-        "gitlab-autonomous-ai-duo": {
-            "hero_img": "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=1200&q=80",
-            "hero_caption": "GitLab showcases autonomous agentic workflows integrating code review, vulnerability mitigation, and CI/CD pipelines. (Photo: GitLab DevSecOps)",
-            "kicker_pill": "AUTONOMOUS DEV WORKFLOWS",
-            "topic_tag": "ARTIFICIAL INTELLIGENCE",
-            "author_avatar": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=200&q=80",
-            "author_role": "Principal AI Researcher & DevSecOps Contributor",
-            "author_bio": "Author and machine learning systems engineer focused on autonomous agentic development, compiler optimizations, and automated vulnerability triage.",
-            "readers": "14,800 readers",
-            "sub_1": "From Code Autocomplete to Autonomous Agent Orchestration",
-            "sub_2": "Automating Vulnerability Patching in Production Pipelines",
-            "sub_3": "Developer Sentiment and the Future of Pull Request Velocity",
-            "sub_4": "Enterprise Governance and Guardrails for Autonomous Agents",
-            "inline_img1": "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=1200&q=80",
-            "inline_cap1": "Cloud-native CI/CD runners process automated test suites generated by agentic orchestration models. (Photo: Cloud World)",
-            "inline_img2": "https://images.unsplash.com/photo-1531482615713-2afd69097998?auto=format&fit=crop&w=1200&q=80",
-            "inline_cap2": "Engineers review multi-modal agent suggestions with complete git commit history and audit trails. (Photo: AI Dev Insights)",
-            "stats": [
-                ("4.8x", "Faster Pull Request Resolution"),
-                ("78%", "Automated Security Patch Rate"),
-                ("99.2%", "Static Analysis Precision"),
-                ("14k+", "Organizations Enrolled in Beta")
-            ],
-            "quote_text": "The next frontier in software engineering is not writing code faster; it is enabling autonomous agents to verify, secure, and deliver features while humans focus on high-level architecture.",
-            "quote_cite": "Sarah Jenkins — GitLab Principal AI Researcher",
-            "tags": ["AutonomousAI", "DevSecOps", "GitLabDuo", "SoftwareEngineering", "AIAgents"],
-            "sources": "Sources & Fact Verification: GitLab Enterprise Benchmark Suite, Autonomous Code Completion Field Reports (Q3 2026), and developer telemetry across 14,000 corporate repositories."
-        }
-    }
+    # 1. Preset Rich Metadata — loaded from module-level constant
+    editorial_presets = EDITORIAL_PRESETS
 
     # Fallback preset for all other articles in database
     default_meta = {
@@ -3053,18 +3155,22 @@ def article_detail_page(conn, user, article, related):
     }
 
     meta = editorial_presets.get(slug)
+    is_preset = (meta is not None)
     if not meta:
         meta = default_meta.copy()
-        if article.get("thumb"):
-            meta["hero_img"] = article.get("thumb")
-        if article.get("tag") == "Logistic Waves Today" or article.get("category") == "Logistic Waves Today":
-            meta["kicker_pill"] = "LOGISTIC WAVES TODAY · VIDEO BROADCAST"
-            meta["topic_tag"] = "DAILY LOGISTICS INTELLIGENCE"
-            meta["readers"] = f"{article.get('read_time', '24 min')} watch"
-            meta["author_role"] = f"Guest Speaker / {article.get('author')}"
-            meta["quote_text"] = article.get("excerpt") or ""
-            meta["quote_cite"] = f"{article.get('author')} — Executive Briefing"
-            meta["tags"] = ["LogisticWavesToday", "Aviation", "Maritime", "SupplyChain", "Mobility2026"]
+    else:
+        meta = meta.copy()
+
+    if article.get("thumb"):
+        meta["hero_img"] = article.get("thumb")
+    if article.get("tag") == "Logistic Waves Today" or article.get("category") == "Logistic Waves Today":
+        meta["kicker_pill"] = "LOGISTIC WAVES TODAY · VIDEO BROADCAST"
+        meta["topic_tag"] = "DAILY LOGISTICS INTELLIGENCE"
+        meta["readers"] = f"{article.get('read_time', '24 min')} watch"
+        meta["author_role"] = f"Guest Speaker / {article.get('author')}"
+        meta["quote_text"] = article.get("excerpt") or ""
+        meta["quote_cite"] = f"{article.get('author')} — Executive Briefing"
+        meta["tags"] = ["LogisticWavesToday", "Aviation", "Maritime", "SupplyChain", "Mobility2026"]
 
     # 2. Extract or format paragraphs
     raw_body = article.get("body") or ""
@@ -3088,6 +3194,37 @@ def article_detail_page(conn, user, article, related):
         "As we look ahead, the gap between organizations that institutionalize modern developer ergonomics and those relying on legacy paradigms will only widen.",
         "For engineers, specializing in high-concurrency systems, foundation model fine-tuning, and robust distributed state management remains the highest-leverage career investment."
     ]
+
+    custom_body_html = format_editorial_body(raw_body)
+    if custom_body_html and (not is_preset or len(raw_body) > 350):
+        story_inner_html = f'''
+        <p class="editorial-lead-para" style="font-size:18px;font-weight:500;line-height:1.75;color:#1e293b;margin-bottom:26px;">{e(excerpt)}</p>
+        {custom_body_html}
+        '''
+    else:
+        story_inner_html = f'''
+        <p class="editorial-lead-para">{e(lead_para)}</p>
+        <h2 class="editorial-subheading">{meta["sub_1"]}</h2>
+        {"".join(f'<p class="editorial-para">{e(p)}</p>' for p in paras_1)}
+        <h2 class="editorial-subheading">{meta["sub_2"]}</h2>
+        {"".join(f'<p class="editorial-para">{e(p)}</p>' for p in paras_2)}
+        <figure class="editorial-inline-figure">
+          <img src="{meta["inline_img1"]}" alt="Technology Infrastructure" class="editorial-inline-image">
+          <figcaption class="editorial-inline-caption">{meta["inline_cap1"]}</figcaption>
+        </figure>
+        <h2 class="editorial-subheading">{meta["sub_3"]}</h2>
+        {"".join(f'<p class="editorial-para">{e(p)}</p>' for p in paras_3)}
+        <blockquote class="editorial-pull-quote">
+          <p class="editorial-quote-p">{meta["quote_text"]}</p>
+          <cite class="editorial-quote-cite">{meta["quote_cite"]}</cite>
+        </blockquote>
+        <h2 class="editorial-subheading">{meta["sub_4"]}</h2>
+        {"".join(f'<p class="editorial-para">{e(p)}</p>' for p in paras_4)}
+        <figure class="editorial-inline-figure">
+          <img src="{meta["inline_img2"]}" alt="Enterprise Architecture" class="editorial-inline-image">
+          <figcaption class="editorial-inline-caption">{meta["inline_cap2"]}</figcaption>
+        </figure>
+        '''
 
     # 3. Stat Card HTML
     stat_cells_html = "".join(f'''
@@ -3237,54 +3374,7 @@ def article_detail_page(conn, user, article, related):
 
             <!-- Story Narrative Body -->
             <div class="editorial-story-body">
-              
-              <!-- Lead Paragraph -->
-              <p class="editorial-lead-para">{e(lead_para)}</p>
-
-              <!-- Subheading 1 -->
-              <h2 class="editorial-subheading">{meta["sub_1"]}</h2>
-              {"".join(f'<p class="editorial-para">{e(p)}</p>' for p in paras_1)}
-
-              <!-- Stat Metrics Card -->
-              <div class="editorial-stat-card">
-                <div class="stat-card-title">
-                  <i class="fa-solid fa-chart-line" style="color: #0284c7; margin-right: 8px;"></i> Verified Market Metrics
-                </div>
-                <div class="stat-metrics-grid">
-                  {stat_cells_html}
-                </div>
-              </div>
-
-              <!-- Subheading 2 -->
-              <h2 class="editorial-subheading">{meta["sub_2"]}</h2>
-              {"".join(f'<p class="editorial-para">{e(p)}</p>' for p in paras_2)}
-
-              <!-- Mid-Article Inline Media Figure 1 with Caption -->
-              <figure class="editorial-inline-figure">
-                <img src="{meta["inline_img1"]}" alt="Technology Infrastructure" class="editorial-inline-image">
-                <figcaption class="editorial-inline-caption">{meta["inline_cap1"]}</figcaption>
-              </figure>
-
-              <!-- Subheading 3 -->
-              <h2 class="editorial-subheading">{meta["sub_3"]}</h2>
-              {"".join(f'<p class="editorial-para">{e(p)}</p>' for p in paras_3)}
-
-              <!-- Pull Quote -->
-              <blockquote class="editorial-pull-quote">
-                <p class="editorial-quote-p">{meta["quote_text"]}</p>
-                <cite class="editorial-quote-cite">{meta["quote_cite"]}</cite>
-              </blockquote>
-
-              <!-- Subheading 4 -->
-              <h2 class="editorial-subheading">{meta["sub_4"]}</h2>
-              {"".join(f'<p class="editorial-para">{e(p)}</p>' for p in paras_4)}
-
-              <!-- Mid-Article Inline Media Figure 2 with Caption -->
-              <figure class="editorial-inline-figure">
-                <img src="{meta["inline_img2"]}" alt="Enterprise Architecture" class="editorial-inline-image">
-                <figcaption class="editorial-inline-caption">{meta["inline_cap2"]}</figcaption>
-              </figure>
-
+              {story_inner_html}
               <!-- Tags Strip -->
               <div class="editorial-tags-strip">
                 <span class="tags-label"><i class="fa-solid fa-tags" style="color: #0284c7; margin-right: 4px;"></i> Related Topics:</span>
@@ -4612,6 +4702,7 @@ def auth_page(kind, next_path="", error="", message="", preset_role="candidate")
           <form method="post" action="{action}" id="authMainForm">
             <input type="hidden" name="next" value="{e(next_path)}">
             <input type="hidden" name="role" id="authRoleInput" value="{preset_role}">
+            {csrf_input()}
 
             {signup_name_field}
 
@@ -4798,7 +4889,7 @@ def tracker_page(conn, user, applications, message=""):
     rows = "".join(
         f'''<tr><td><a href="/job/{e(a['job_slug'])}/{a['job_id']}">{e(a['title'])}</a><span>{e(a['company_name'])}</span></td>
         <td>{e(a['location'])}</td><td>{e(a['salary_display'])}</td><td><span class="status-pill">{e(a['status'])}</span></td><td>{e(a['created_at'][:10])}</td>
-        <td><form method="post" action="/tracker/delete" class="application-delete-form" data-application-id="{a['id']}"><input type="hidden" name="id" value="{a['id']}"><button class="btn btn-quiet-danger" type="submit">Withdraw</button></form></td></tr>'''
+        <td><form method="post" action="/tracker/delete" class="application-delete-form" data-application-id="{a['id']}"><input type="hidden" name="id" value="{a['id']}">{csrf_input()}<button class="btn btn-quiet-danger" type="submit">Withdraw</button></form></td></tr>'''
         for a in applications
     ) or '<tr><td colspan="6">No applications yet. Find a role and submit your first application.</td></tr>'
     msg = f'<div class="form-success">{icon("check", 16)} {e(message)}</div>' if message else ""
@@ -4817,11 +4908,11 @@ def alerts_page(conn, user, alerts, company_slug="", message="", error=""):
         f'''<div class="alert-row" data-alert-row="{a['id']}"><div class="alert-row-summary">{icon("bell", 20)}<div><strong>{e(a['query'])}</strong><span>{e(a['frequency'])} · created {e(a['created_at'][:10])}</span></div></div>
         <div class="alert-row-actions"><details class="alert-edit"><summary class="btn btn-outline">Edit</summary>
           <form method="post" action="/alerts/update" class="alert-edit-form" data-alert-id="{a['id']}">
-            <input type="hidden" name="id" value="{a['id']}"><label>Alert name<input name="query" value="{e(a['query'])}" required></label>
+            <input type="hidden" name="id" value="{a['id']}">{csrf_input()}<label>Alert name<input name="query" value="{e(a['query'])}" required></label>
             <label>Frequency {select("frequency", ["Daily", "Weekly", "Monthly"], a["frequency"], "", "")}</label>
             <button class="btn btn-primary" type="submit">Save changes</button></form>
         </details><form method="post" action="/alerts/delete" class="alert-delete-form" data-alert-id="{a['id']}">
-          <input type="hidden" name="id" value="{a['id']}"><button class="icon-btn danger" type="submit" aria-label="Delete alert">{icon("trash", 18)}</button></form></div></div>'''
+          <input type="hidden" name="id" value="{a['id']}">{csrf_input()}<button class="icon-btn danger" type="submit" aria-label="Delete alert">{icon("trash", 18)}</button></form></div></div>'''
         for a in alerts
     ) or empty_state("No alerts yet", "Create a job alert and we will keep your search close.", "/jobs", "Browse jobs")
     msg = (
@@ -4834,6 +4925,7 @@ def alerts_page(conn, user, alerts, company_slug="", message="", error=""):
         {msg}<div class="account-alert-list">{rows}</div></div>
       <div class="content-card"><h2>Create a new alert</h2>
       <form method="post" action="/alerts">
+        {csrf_input()}
         <div class="alert-create-form"><label>Alert name<input name="query" value="{e(preset)}" required></label>
           <label>Frequency {select("frequency", ["Daily", "Weekly", "Monthly"], "Daily", "", "")}</label>
           <button class="btn btn-primary" type="submit">{icon("bell", 16)} Create alert</button></div>
@@ -4849,6 +4941,7 @@ def profile_page(conn, user, stats, message=""):
       <div class="content-card" id="settings"><div class="card-head"><div><h2>Profile details</h2>
         <p>Help employers understand who you are and what you are looking for.</p></div></div>{msg}
         <form method="post" action="/profile" class="stacked-form">
+          {csrf_input()}
           <label>Full name<input name="name" value="{e(user['name'])}" required></label>
           <label>Headline<input name="headline" value="{e(user['headline'] or '')}" placeholder="e.g. Senior Product Designer"></label>
           <label>Location<input name="location" value="{e(user['location'] or '')}" placeholder="City, State"></label>
