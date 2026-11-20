@@ -488,11 +488,14 @@
     if (!btn) return;
     const id = btn.dataset.companyId;
     if (!getLoggedIn()) { loginRedirect(); return; }
+    const wasFollowed = btn.classList.contains("followed");
+    setFollowState(id, !wasFollowed);
     try {
       const data = await jsonPost("/api/follow/" + id + "/toggle", {});
       setFollowState(id, !!data.followed);
       showToast(data.followed ? "Company followed." : "Company unfollowed.");
     } catch (err) {
+      setFollowState(id, wasFollowed);
       if (err.message !== "login required") showToast(err.message, true);
     }
   });
