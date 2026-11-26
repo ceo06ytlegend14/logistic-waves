@@ -138,6 +138,7 @@
   gap: 18px;
   overflow-x: auto;
   scroll-behavior: smooth;
+  scroll-snap-type: x mandatory;
   padding-bottom: 6px;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
@@ -152,6 +153,7 @@
   flex: 0 0 calc(20% - 15px);
   min-width: 225px;
   max-width: 255px;
+  scroll-snap-align: start;
   background: transparent;
   border: none;
   padding: 0;

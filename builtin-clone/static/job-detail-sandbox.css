@@ -887,6 +887,30 @@
   .role-actions-row {
     flex-direction: column;
   }
+  .company-stats-grid,
+  .company-gallery-grid {
+    grid-template-columns: 1fr;
+  }
+  .similar-job-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .similar-job-cats {
+    max-width: 100%;
+    white-space: normal;
+  }
+  .similar-job-right {
+    text-align: left;
+    min-width: 0;
+    width: 100%;
+    border-left: none;
+    border-top: 1px solid var(--border-light);
+    padding-left: 0;
+    padding-top: 8px;
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 12px;
+  }
 }
 
 /* USER DESIGN RULE */

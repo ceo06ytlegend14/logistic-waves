@@ -65,7 +65,7 @@ def render_image_uploader_field(target_id, preview_id, label="Article Image / Co
         "</label>"
         "<div style='display:flex;gap:12px;align-items:flex-start;background:#f8fafc;padding:12px;border:1px solid #e2e8f0;border-radius:10px;'>"
         "<div style='width:110px;height:75px;border-radius:8px;border:1px solid #cbd5e1;background:#ffffff;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;'>"
-        "<img id='" + preview_id + "' src='" + val + "' style='width:100%;height:100%;object-fit:cover;display:block;' onerror=\"this.src='/static/images/fw_today_1.jpg'\">"
+        "<img id='" + preview_id + "' src='" + val + "' alt='Thumbnail preview' decoding='async' style='width:100%;height:100%;object-fit:cover;display:block;' onerror=\"this.onerror=null;this.src='/static/images/fw_today_1.jpg'\">"
         "</div>"
         "<div style='flex:1;display:flex;flex-direction:column;gap:8px;'>"
         "<div style='display:flex;gap:8px;'>"
@@ -690,7 +690,7 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
         )
         return (
             "<tr>"
-            "<td style='width:72px;'><img src='" + thumb + "' class='table-thumb' alt='thumb'></td>"
+            "<td style='width:72px;'><img src='" + thumb + "' width='64' height='40' loading='lazy' decoding='async' class='table-thumb' alt='thumb' onerror=\"this.onerror=null;this.src='/static/images/fw_today_1.jpg';\"></td>"
             + second_col +
             "<td style='white-space:nowrap;'>" + e(v['duration'] or '15:00 min') + "</td>"
             "<td style='white-space:nowrap;color:#64748b;'>" + e(v['published']) + "</td>"

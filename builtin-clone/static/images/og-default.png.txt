@@ -1,3 +1,0 @@
-PLACEHOLDER: Create default Open Graph image (1200x630px)
-Content: Sandbox logo + "Tech Careers, News & Opportunities"
-Background: Modern gradient or tech-themed design

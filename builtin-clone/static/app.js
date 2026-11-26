@@ -4,6 +4,65 @@
 
   const getLoggedIn = () => document.body.dataset.loggedIn === "true";
 
+  const FALLBACK_COVER = "/static/images/editorial_laptop_dashboard.jpg";
+  const FALLBACK_AVATAR = "/static/images/default_user_avatar.png";
+
+  function applyImgFallback(img) {
+    if (!img || img.tagName !== "IMG" || img.dataset.fbDone === "1") return;
+    img.dataset.fbDone = "1";
+    const explicit = img.getAttribute("data-fallback-src");
+    if (explicit) {
+      img.src = explicit;
+      return;
+    }
+    const kind = img.getAttribute("data-fallback-kind") || "";
+    const src = img.getAttribute("src") || "";
+    const cls = img.className || "";
+    if (kind === "brand" || src.includes("/static/images/brands/")) {
+      const parent = img.parentElement;
+      const altText = (img.getAttribute("alt") || "CO").trim();
+      const words = altText.split(/\s+/).filter(Boolean);
+      const derived = words.length > 1
+        ? (words[0][0] + words[1][0]).toUpperCase()
+        : altText.slice(0, 2).toUpperCase() || "CO";
+      const initials = img.getAttribute("data-initials") || derived;
+      const bg = img.getAttribute("data-color") || "#003366";
+      const badge = document.createElement("span");
+      badge.textContent = initials;
+      badge.setAttribute("aria-hidden", "true");
+      badge.style.cssText =
+        "width:100%;height:100%;min-width:44px;min-height:44px;background:" + bg +
+        ";color:#fff;display:inline-flex;align-items:center;justify-content:center;" +
+        "font-weight:800;font-size:22px;border-radius:10px;";
+      if (parent && (parent.classList.contains("company-logo") ||
+          parent.classList.contains("best-job-logo") ||
+          parent.classList.contains("dir-logo-box") ||
+          parent.classList.contains("opp-company-logo") ||
+          parent.id === "hero-logo-box")) {
+        img.replaceWith(badge);
+        return;
+      }
+      img.src = FALLBACK_COVER;
+      return;
+    }
+    if (kind === "avatar" || cls.includes("avatar") || src.includes("/avatars/")) {
+      img.src = FALLBACK_AVATAR;
+      return;
+    }
+    img.src = FALLBACK_COVER;
+  }
+
+  function sweepBrokenImages(scope) {
+    (scope || document).querySelectorAll("img").forEach(img => {
+      if (img.complete && img.naturalWidth === 0) applyImgFallback(img);
+    });
+  }
+
+  document.addEventListener("error", ev => {
+    if (ev.target && ev.target.tagName === "IMG") applyImgFallback(ev.target);
+  }, true);
+  sweepBrokenImages(document);
+
   function escapeHtml(value) {
     return String(value == null ? "" : value)
       .replace(/&/g, "&amp;")
@@ -259,6 +318,7 @@
 
       // Run any inline scripts inside the newly injected content
       executeInjectedScripts(currentMain);
+      sweepBrokenImages(currentMain);
 
       // Update URL in browser history
       if (pushState) {

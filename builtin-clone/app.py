@@ -246,7 +246,7 @@ def route(conn, method, path, query, payload, user, token, host, client_ip="", c
         if not target.is_file():
             return Response("Not found", status=404, content_type="text/plain; charset=utf-8")
         ctype = mimetypes.guess_type(str(target))[0] or "application/octet-stream"
-        cache_ctrl = "public, max-age=31536000, immutable" if ctype and ("javascript" in ctype or "css" in ctype) else "public, max-age=86400"
+        cache_ctrl = "public, max-age=31536000, immutable" if ctype and ("javascript" in ctype or "css" in ctype) else "public, max-age=604800"
         return Response(target.read_bytes(), content_type=ctype,
                         headers={"Cache-Control": cache_ctrl})
 
@@ -263,7 +263,7 @@ def route(conn, method, path, query, payload, user, token, host, client_ip="", c
         if not target.is_file():
             return Response("Not found", status=404, content_type="text/plain; charset=utf-8")
         ctype = mimetypes.guess_type(str(target))[0] or "application/octet-stream"
-        cache_ctrl = "public, max-age=31536000, immutable" if ctype and ("javascript" in ctype or "css" in ctype) else "public, max-age=86400"
+        cache_ctrl = "public, max-age=31536000, immutable" if ctype and ("javascript" in ctype or "css" in ctype) else "public, max-age=604800"
         return Response(target.read_bytes(), content_type=ctype,
                         headers={"Cache-Control": cache_ctrl})
 
@@ -281,7 +281,7 @@ def route(conn, method, path, query, payload, user, token, host, client_ip="", c
             return Response("Not found", status=404, content_type="text/plain; charset=utf-8")
         ctype = mimetypes.guess_type(str(target))[0] or "application/octet-stream"
         return Response(target.read_bytes(), content_type=ctype,
-                        headers={"Cache-Control": "public, max-age=86400"})
+                        headers={"Cache-Control": "public, max-age=604800"})
 
     if path == "/favicon.ico":
         return Response("", status=204, content_type="image/x-icon")

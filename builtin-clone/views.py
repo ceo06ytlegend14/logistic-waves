@@ -154,7 +154,7 @@ def brand_logo():
     return (
         '<a class="brand brand-logistic-waves" href="/" aria-label="Logistics Waves">'
         '<span class="brand-diamond-wrap">'
-        '<img class="brand-diamond-logo" src="/static/images/logo_emblem.png?v=20261114_shaped" alt="Logistics Waves">'
+        '<img class="brand-diamond-logo" src="/static/images/logo_emblem.png?v=20261114_shaped" alt="Logistics Waves" width="40" height="42" decoding="async" fetchpriority="high">'
         '</span>'
         '<span class="brand-text-lw">'
         '<span class="brand-title-row">'
@@ -164,6 +164,30 @@ def brand_logo():
         '<span class="brand-sub-row">GLOBAL LOGISTICS</span>'
         '</span>'
         '</a>'
+    )
+
+
+def _brand_logo_markup(slug, name, initials="CO", color="#244fe7", size=84, img_id="", lazy=True):
+    brand_svg = STATIC / "images" / "brands" / f"{slug}.svg" if slug else None
+    if brand_svg and not brand_svg.is_file() and initials:
+        init_svg = STATIC / "images" / "brands" / f"{initials.lower()}.svg"
+        if init_svg.is_file():
+            brand_svg = init_svg
+    if brand_svg and brand_svg.is_file():
+        id_attr = f' id="{e(img_id)}"' if img_id else ""
+        load_attr = ' loading="lazy"' if lazy else ""
+        return (
+            f'<img src="/static/images/brands/{e(brand_svg.name)}" alt="{e(name)}"{id_attr}'
+            f' width="{size}" height="{size}" decoding="async"{load_attr}'
+            f' data-fallback-kind="brand" data-initials="{e(initials or "CO")}" data-color="{e(color or "#003366")}"'
+            f' style="width:100%;height:100%;max-width:{size}px;max-height:{size}px;object-fit:contain;background:transparent;border:none;">'
+        )
+    text_color = contrast_text(color)
+    return (
+        f'<div style="width:{size}px;height:{size}px;min-width:{size}px;min-height:{size}px;'
+        f'background:{e(color or "#003366")};color:{e(text_color)};display:flex;align-items:center;'
+        f'justify-content:center;font-weight:800;font-size:{max(14, int(size * 0.31))}px;border-radius:10px;border:none;">'
+        f'{e(initials or "CO")}</div>'
     )
 
 
@@ -178,7 +202,7 @@ def company_logo(company, size=84, extra=""):
             return (
                 f'<span class="company-logo brand-img-logo {extra}" style="width:{size}px;height:{size}px;min-width:{size}px;min-height:{size}px;display:inline-flex;'
                 f'align-items:center;justify-content:center;background:transparent;border:none;box-shadow:none;padding:0;overflow:hidden;" aria-hidden="true">'
-                f'<img src="/static/images/brands/{e(slug)}.svg" alt="{e(name)}" style="width:100%;height:100%;max-width:{size}px;max-height:{size}px;object-fit:contain;background:transparent;border:none;"></span>'
+                f'{_brand_logo_markup(slug, name, initials=initials, color=color, size=size)}</span>'
             )
     text = contrast_text(color)
     return (
@@ -330,12 +354,12 @@ def header(user, active=""):
         account = f'''
         <div class="user-dropdown">
           <button class="user-avatar" type="button" aria-label="Account menu">
-            <img class="user-avatar-img" src="{avatar_src}" alt="Profile">
+            <img class="user-avatar-img" src="{avatar_src}" alt="Profile" width="36" height="36" decoding="async" data-fallback-kind="avatar">
           </button>
           <div class="dropdown-menu">
             <div class="dropdown-head">
               <div class="dropdown-user-row">
-                <img class="dropdown-avatar-thumb" src="{avatar_src}" alt="Profile">
+                <img class="dropdown-avatar-thumb" src="{avatar_src}" alt="Profile" width="38" height="38" decoding="async" data-fallback-kind="avatar">
                 <div class="dropdown-user-info">
                   <strong>{e(user["name"])}</strong>
                   <span>{e(user["email"])}</span>
@@ -477,8 +501,8 @@ def layout(title, body, user=None, active="", description="", page_class="", ext
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@700;800&family=Montserrat:wght@700;800;900&family=Syncopate:wght@700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/styles.css?v=20261126_apple_btn2">
-  <link rel="stylesheet" href="/static/home-recreation.css?v=20261114_sidebar">
+  <link rel="stylesheet" href="/static/styles.css?v=20261126_perf">
+  <link rel="stylesheet" href="/static/home-recreation.css?v=20261126_perf">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   {extra_head}
 </head>
@@ -487,7 +511,7 @@ def layout(title, body, user=None, active="", description="", page_class="", ext
   <main id="main-content">{body}</main>
   {footer()}
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/static/app.js?v=20261113_01" defer></script>
+  <script src="/static/app.js?v=20261126_perf" defer></script>
 </body>
 </html>'''
 
@@ -726,7 +750,7 @@ def logistic_waves_today_section(conn):
         cards_html.append(f'''
         <article class="fwt-card" data-episode-id="{ep['id']}">
           <div class="fwt-thumb-wrap" onclick="openFwtModal({ep['id']});">
-            <img src="{ep['thumb']}" alt="{e(ep['title'])}" class="fwt-thumb-img" loading="lazy">
+            <img src="{ep['thumb']}" alt="{e(ep['title'])}" class="fwt-thumb-img" width="480" height="270" loading="lazy" decoding="async">
             <div class="fwt-play-btn" aria-hidden="true">
               <i class="fa-solid fa-play"></i>
             </div>
@@ -783,7 +807,7 @@ def logistic_waves_today_section(conn):
         </div>
         <div class="fwt-modal-body">
           <div class="fwt-modal-player-box">
-            <img src="/static/images/fw_today_1.jpg" id="fwtModalPoster" class="fwt-modal-player-bg" alt="Video poster">
+            <img src="/static/images/fw_today_1.jpg" id="fwtModalPoster" class="fwt-modal-player-bg" alt="Video poster" width="760" height="428" loading="lazy" decoding="async">
             <div class="fwt-modal-play-overlay">
               <div class="fwt-big-play-btn" onclick="startFwtPreview();" id="fwtModalPlayBtn">
                 <i class="fa-solid fa-play"></i>
@@ -900,11 +924,7 @@ def home_page(conn, user):
     for j in best_jobs:
         company_slug = j.get("company_slug") or "company"
         company_name = j.get("company_name") or "Company"
-        brand_svg = STATIC / "images" / "brands" / f"{company_slug}.svg"
-        if brand_svg.is_file():
-            logo_markup = f'<img src="/static/images/brands/{company_slug}.svg" alt="{e(company_name)}" style="width:100%;height:100%;max-width:84px;max-height:84px;object-fit:contain;background:transparent;border:none;">'
-        else:
-            logo_markup = f'<div style="width:84px;height:84px;min-width:84px;min-height:84px;background:{e(j.get("company_color") or "#003366")};color:#ffffff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:26px;border-radius:10px;border:none;">{e(j.get("company_initials") or "CO")}</div>'
+        logo_markup = _brand_logo_markup(company_slug, company_name, initials=j.get("company_initials") or "CO", color=j.get("company_color") or "#003366")
 
         best_jobs_html.append(f'''
         <a href="/job/{e(j.get('slug') or 'job')}/{j['id']}" class="best-job-card">
@@ -930,15 +950,7 @@ def home_page(conn, user):
     for comp in dir_companies:
         c_slug = comp["slug"]
         c_name = comp["name"]
-        brand_svg = STATIC / "images" / "brands" / f"{c_slug}.svg"
-        if not brand_svg.is_file() and comp.get("initials"):
-            init_svg = STATIC / "images" / "brands" / f"{comp.get('initials').lower()}.svg"
-            if init_svg.is_file():
-                brand_svg = init_svg
-        if brand_svg.is_file():
-            logo_markup = f'<img src="/static/images/brands/{brand_svg.name}" alt="{e(c_name)}" style="width:100%;height:100%;max-width:84px;max-height:84px;object-fit:contain;background:transparent;border:none;">'
-        else:
-            logo_markup = f'<div style="width:84px;height:84px;min-width:84px;min-height:84px;background:{e(comp.get("color") or "#003366")};color:#ffffff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:26px;border-radius:10px;border:none;">{e(comp.get("initials") or "CO")}</div>'
+        logo_markup = _brand_logo_markup(c_slug, c_name, initials=comp.get("initials") or "CO", color=comp.get("color") or "#003366")
 
         tags = [x.strip() for x in (comp.get("industries") or "Technology,Cloud,Enterprise").split(",") if x.strip()]
         tags_markup = "".join(f'<span class="dir-tag-pill">{e(t)}</span>' for t in tags[:3])
@@ -976,16 +988,12 @@ def home_page(conn, user):
         o_slug = opp.get("company_slug") or "company"
         o_name = opp.get("company_name") or "Company"
         cover_img = opp_covers[idx % len(opp_covers)]
-        brand_svg = STATIC / "images" / "brands" / f"{o_slug}.svg"
-        if brand_svg.is_file():
-            logo_markup = f'<img src="/static/images/brands/{o_slug}.svg" alt="{e(o_name)}" style="width:100%;height:100%;max-width:84px;max-height:84px;object-fit:contain;background:transparent;border:none;">'
-        else:
-            logo_markup = f'<div style="width:84px;height:84px;min-width:84px;min-height:84px;background:{e(opp.get("company_color") or "#003366")};color:#ffffff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:26px;border-radius:10px;border:none;">{e(opp.get("company_initials") or "CO")}</div>'
+        logo_markup = _brand_logo_markup(o_slug, o_name, initials=opp.get("company_initials") or "CO", color=opp.get("company_color") or "#003366")
 
         opp_cards_html.append(f'''
         <article class="opp-card">
           <div class="opp-card-cover">
-            <img src="{cover_img}" alt="{e(opp['title'])}" loading="lazy">
+            <img src="{cover_img}" alt="{e(opp['title'])}" width="800" height="364" loading="lazy" decoding="async">
           </div>
           <div class="opp-card-body">
             <div class="opp-card-head">
@@ -1067,7 +1075,7 @@ def home_page(conn, user):
         stacked_html = "".join(f'''
                 <article class="stacked-story">
                   <a href="/articles/{e(a['slug'])}" class="stacked-img-wrap">
-                    <img src="{e(_ed_img(a, i + 1))}" alt="{e(a['title'])}" loading="lazy">
+                    <img src="{e(_ed_img(a, i + 1))}" alt="{e(a['title'])}" width="400" height="225" loading="lazy" decoding="async">
                   </a>
                   <span class="article-kicker">{e((a.get('category') or 'EDITORIAL').upper())}</span>
                   <h3 class="stacked-title">
@@ -1078,7 +1086,7 @@ def home_page(conn, user):
         lead_html = f'''
               <article class="article-lead-card">
                 <a href="/articles/{e(lead_art['slug'])}" class="article-lead-img-wrap">
-                  <img src="{e(_ed_img(lead_art, 0))}" alt="{e(lead_art['title'])}" loading="lazy">
+                  <img src="{e(_ed_img(lead_art, 0))}" alt="{e(lead_art['title'])}" width="720" height="405" loading="lazy" decoding="async">
                 </a>
                 <div class="article-lead-content">
                   <span class="article-kicker">{e((lead_art.get('tag') or lead_art.get('category') or 'FEATURED').upper())}</span>
@@ -1096,7 +1104,7 @@ def home_page(conn, user):
                   <h4 class="recent-row-title">{e(a['title'])}</h4>
                   <span class="article-author-tag" style="font-size: 9.5px;">{e((a.get('author') or 'Editorial Staff').upper())}</span>
                 </div>
-                <img src="{e(_ed_img(a, i))}" class="recent-thumb-img" alt="{e(a['title'])}" loading="lazy">
+                <img src="{e(_ed_img(a, i))}" class="recent-thumb-img" alt="{e(a['title'])}" width="96" height="68" loading="lazy" decoding="async">
               </a>''' for i, a in enumerate(recent_arts))
         picks_inner_html = f'''
             <div class="todays-picks-layout">
@@ -1163,7 +1171,7 @@ def home_page(conn, user):
           <!-- Left: Featured Logistics Employer Showcase Card -->
           <div class="poster-card-wrap lw-poster-showcase">
             <div class="lw-poster-bg-wrap">
-              <img src="/static/images/poster_glass_hq.jpg" alt="Top Logistics Companies" class="lw-poster-bg-img">
+              <img src="/static/images/poster_glass_hq.jpg" alt="Top Logistics Companies" class="lw-poster-bg-img" width="640" height="960" loading="lazy" decoding="async">
               <div class="lw-poster-gradient-overlay"></div>
             </div>
             <div class="lw-poster-content">
@@ -1174,7 +1182,7 @@ def home_page(conn, user):
                 </div>
                 <div class="lw-poster-brand-logo">
                   <span class="lw-poster-emblem-wrap">
-                    <img src="/static/images/logo_emblem.png" alt="Logistics Waves">
+                    <img src="/static/images/logo_emblem.png" alt="Logistics Waves" width="28" height="30" loading="lazy" decoding="async">
                   </span>
                   <span class="lw-poster-brand-text">LOGISTICS WAVES</span>
                 </div>
@@ -1195,10 +1203,10 @@ def home_page(conn, user):
 
               <div class="lw-poster-social-proof">
                 <div class="lw-poster-avatars">
-                  <img src="/static/images/avatars/user1.jpg" alt="Professional" class="lw-poster-avatar">
-                  <img src="/static/images/avatars/user2.jpg" alt="Professional" class="lw-poster-avatar">
-                  <img src="/static/images/avatars/user3.jpg" alt="Professional" class="lw-poster-avatar">
-                  <img src="/static/images/avatars/user4.jpg" alt="Professional" class="lw-poster-avatar">
+                  <img src="/static/images/avatars/user1.jpg" alt="Professional" class="lw-poster-avatar" width="32" height="32" loading="lazy" decoding="async" data-fallback-kind="avatar">
+                  <img src="/static/images/avatars/user2.jpg" alt="Professional" class="lw-poster-avatar" width="32" height="32" loading="lazy" decoding="async" data-fallback-kind="avatar">
+                  <img src="/static/images/avatars/user3.jpg" alt="Professional" class="lw-poster-avatar" width="32" height="32" loading="lazy" decoding="async" data-fallback-kind="avatar">
+                  <img src="/static/images/avatars/user4.jpg" alt="Professional" class="lw-poster-avatar" width="32" height="32" loading="lazy" decoding="async" data-fallback-kind="avatar">
                   <span class="lw-poster-count-pill">+{c['jobs']}</span>
                 </div>
                 <div class="lw-poster-proof-text">Open roles across {c['companies']} active employers</div>
@@ -1584,7 +1592,7 @@ def linkedin_company_detail_page(conn, user, company, tab, jobs=None, related=No
         for c in similar
     )
     post_cards = "".join(
-        f'''<article class="li-post">{f'<img src="{e(a["thumb"])}" alt="{e(a["title"])}" style="width:100%;height:150px;object-fit:cover;border-radius:8px;display:block;" loading="lazy">' if a.get('thumb') else photo_placeholder(a['accent'], "Add post image", a['slug'], i, 150)}
+        f'''<article class="li-post">{f'<img src="{e(a["thumb"])}" alt="{e(a["title"])}" width="480" height="150" decoding="async" style="width:100%;height:150px;object-fit:cover;border-radius:8px;display:block;" loading="lazy">' if a.get('thumb') else photo_placeholder(a['accent'], "Add post image", a['slug'], i, 150)}
           <div class="li-post-body"><a class="li-post-title" href="/articles/{e(a['slug'])}">{e(a['title'])}</a>
           <p>{e(a['excerpt'])}</p><div class="li-meta">{e(a['author'])} · {e(a['published'])} · {e(a['read_time'])}</div></div></article>'''
         for i, a in enumerate(related)
@@ -1729,11 +1737,7 @@ def job_detail_page(conn, user, job, similar):
     company_offices = company.get("offices") or 5
     company_desc = company.get("description") or f"{company_name} is an accredited leader in {job.get('category') or 'multimodal logistics'}."
 
-    brand_logo_file = STATIC / "images" / "brands" / f"{company_slug}.svg"
-    if brand_logo_file.is_file():
-        logo_html = f'<img src="/static/images/brands/{company_slug}.svg" alt="{e(company_name)}" id="hero-logo-img" style="width:100%;height:100%;max-width:84px;max-height:84px;object-fit:contain;background:transparent;border:none;">'
-    else:
-        logo_html = f'<div style="width:84px;height:84px;min-width:84px;min-height:84px;background:{e(company_color)};color:#ffffff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:26px;border-radius:10px;border:none;">{e(company_initials)}</div>'
+    logo_html = _brand_logo_markup(company_slug, company_name, initials=company_initials, color=company_color, img_id="hero-logo-img", lazy=False)
 
     job_title = job["title"]
     location = job.get("location") or "Ho Chi Minh City, VN"
@@ -1876,11 +1880,11 @@ def job_detail_page(conn, user, job, similar):
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="/static/styles.css?v=20261126_apple_btn2">
-  <link rel="stylesheet" href="/static/home-recreation.css?v=20261114_sidebar">
+  <link rel="stylesheet" href="/static/styles.css?v=20261126_perf">
+  <link rel="stylesheet" href="/static/home-recreation.css?v=20261126_perf">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link rel="stylesheet" href="/static/thesandbox-css/builtin-theme.css">
-  <link rel="stylesheet" href="/static/job-detail-sandbox.css">
+  <link rel="stylesheet" href="/static/job-detail-sandbox.css?v=20261126_perf">
 </head>
 <body data-logged-in="{'true' if user else 'false'}">
 
@@ -2068,7 +2072,7 @@ def job_detail_page(conn, user, job, similar):
               {e(team_quote)}
             </div>
             <div class="quote-navy-card">
-              <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80" alt="Team member" class="quote-avatar" id="team-quote-avatar">
+              <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80" alt="Team member" class="quote-avatar" id="team-quote-avatar" width="56" height="56" loading="lazy" decoding="async" data-fallback-kind="avatar">
               <div>
                 <div class="quote-person-name" id="team-quote-name">{e(quote_name)}</div>
                 <div class="quote-person-title" id="team-quote-title">{e(quote_title)}</div>
@@ -2077,12 +2081,12 @@ def job_detail_page(conn, user, job, similar):
           </div>
 
           <div class="quote-faces-row">
-            <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=80&q=80" alt="Team member" class="quote-face-avatar">
-            <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=80&q=80" alt="Team member" class="quote-face-avatar">
-            <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=80&q=80" alt="Team member" class="quote-face-avatar">
-            <img src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=80&q=80" alt="Team member" class="quote-face-avatar">
-            <img src="https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=80&q=80" alt="Team member" class="quote-face-avatar">
-            <img src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=80&q=80" alt="Team member" class="quote-face-avatar">
+            <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=80&q=80" alt="Team member" class="quote-face-avatar" width="40" height="40" loading="lazy" decoding="async" data-fallback-kind="avatar">
+            <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=80&q=80" alt="Team member" class="quote-face-avatar" width="40" height="40" loading="lazy" decoding="async" data-fallback-kind="avatar">
+            <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=80&q=80" alt="Team member" class="quote-face-avatar" width="40" height="40" loading="lazy" decoding="async" data-fallback-kind="avatar">
+            <img src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=80&q=80" alt="Team member" class="quote-face-avatar" width="40" height="40" loading="lazy" decoding="async" data-fallback-kind="avatar">
+            <img src="https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=80&q=80" alt="Team member" class="quote-face-avatar" width="40" height="40" loading="lazy" decoding="async" data-fallback-kind="avatar">
+            <img src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=80&q=80" alt="Team member" class="quote-face-avatar" width="40" height="40" loading="lazy" decoding="async" data-fallback-kind="avatar">
           </div>
         </div>
       </div>
@@ -2515,7 +2519,7 @@ def job_detail_page(conn, user, job, similar):
   <!-- Built In Standard Site Footer -->
   {footer()}
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/static/app.js" defer></script>
+  <script src="/static/app.js?v=20261126_perf" defer></script>
 </body>
 </html>'''
     return html_content
@@ -2584,7 +2588,7 @@ def salary_detail_page(conn, user, salary, related_jobs):
 # ---------- articles ----------
 
 def articles_page(conn, user, q="", category="", tag="", featured=None):
-    extra_head = '''<link rel="stylesheet" href="/static/article.css?v=20261112_14">
+    extra_head = '''<link rel="stylesheet" href="/static/article.css?v=20261126_perf">
     <style>
       #view-article {
         display: block !important;
@@ -2610,7 +2614,7 @@ def articles_page(conn, user, q="", category="", tag="", featured=None):
         cards = "".join(
             f'''<article class="lw-db-card" style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;display:flex;flex-direction:column;transition:all 0.2s;">
               <a href="/articles/{e(a['slug'])}" style="display:block;height:175px;overflow:hidden;background:#f1f5f9;">
-                <img src="{e(_article_cover_url(a, i))}" alt="{e(a['title'])}" style="width:100%;height:100%;object-fit:cover;display:block;" loading="lazy">
+                <img src="{e(_article_cover_url(a, i))}" alt="{e(a['title'])}" width="400" height="175" decoding="async" style="width:100%;height:100%;object-fit:cover;display:block;" loading="lazy">
               </a>
               <div style="padding:16px;display:flex;flex-direction:column;gap:8px;flex:1;">
                 <div style="font-size:11px;font-weight:700;color:#0284c7;text-transform:uppercase;letter-spacing:0.05em;">{e(a.get('category') or 'Editorial')} &middot; {e(a.get('tag') or 'Article')}</div>
@@ -2675,7 +2679,7 @@ def articles_page(conn, user, q="", category="", tag="", featured=None):
             date = a.get("published") or ""
             excerpt = a.get("excerpt") or ""
             cards_html.append(f'''<article class="video-card">
-<a class="video-media" href="/articles/{e(slug)}"><img alt="{e(title)}" src="{e(thumb)}" loading="lazy"><span class="play"></span></a>
+<a class="video-media" href="/articles/{e(slug)}"><img alt="{e(title)}" src="{e(thumb)}" width="320" height="190" loading="lazy" decoding="async"><span class="play"></span></a>
 <span class="cat">Logistic Wave Today</span>
 <h3><a href="/articles/{e(slug)}">{e(title)}</a></h3>
 <div class="date">{e(date)}</div>
@@ -2693,7 +2697,7 @@ def articles_page(conn, user, q="", category="", tag="", featured=None):
         latest_cards = "".join(
             f'''<article class="lw-db-card" style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;display:flex;flex-direction:column;transition:all 0.2s;">
               <a href="/articles/{e(a['slug'])}" style="display:block;height:165px;overflow:hidden;background:#f1f5f9;">
-                <img src="{e(_article_cover_url(a, i))}" alt="{e(a['title'])}" style="width:100%;height:100%;object-fit:cover;display:block;" loading="lazy">
+                <img src="{e(_article_cover_url(a, i))}" alt="{e(a['title'])}" width="400" height="175" decoding="async" style="width:100%;height:100%;object-fit:cover;display:block;" loading="lazy">
               </a>
               <div style="padding:14px 16px;display:flex;flex-direction:column;gap:6px;flex:1;">
                 <span style="font-size:11px;font-weight:700;color:#0284c7;text-transform:uppercase;letter-spacing:0.05em;">{e(a.get('category') or 'Editorial')}</span>
@@ -2748,7 +2752,7 @@ def format_editorial_body(raw_body):
                     continue
                 grid_items.append(f'''
                 <figure style="margin:0;display:flex;flex-direction:column;">
-                  <img src="{e(src)}" alt="{e(cap or 'Article Photo')}" style="width:100%;height:260px;object-fit:cover;border-radius:12px;box-shadow:0 4px 16px rgba(0,0,0,0.06);display:block;" loading="lazy">
+                  <img src="{e(src)}" alt="{e(cap or 'Article Photo')}" width="400" height="260" decoding="async" style="width:100%;height:260px;object-fit:cover;border-radius:12px;box-shadow:0 4px 16px rgba(0,0,0,0.06);display:block;" loading="lazy">
                   {f'<figcaption style="font-size:12.5px;color:#64748b;margin-top:7px;font-style:italic;text-align:center;">{e(cap)}</figcaption>' if cap else ''}
                 </figure>''')
             if grid_items:
@@ -2765,7 +2769,7 @@ def format_editorial_body(raw_body):
             if src:
                 out.append(f'''
             <figure class="editorial-inline-figure" style="margin:28px 0;">
-              <img src="{e(src)}" alt="{e(cap or 'Article Image')}" class="editorial-inline-image" style="width:100%;max-height:500px;object-fit:cover;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.08);display:block;" loading="lazy">
+              <img src="{e(src)}" alt="{e(cap or 'Article Image')}" class="editorial-inline-image" width="800" height="450" decoding="async" style="width:100%;max-height:500px;object-fit:cover;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.08);display:block;" loading="lazy">
               {f'<figcaption class="editorial-inline-caption" style="font-size:13px;color:#64748b;margin-top:8px;font-style:italic;text-align:center;">{e(cap)}</figcaption>' if cap else ''}
             </figure>''')
             continue
@@ -2992,7 +2996,7 @@ def article_detail_page(conn, user, article, related):
         sidebar_items_html.append(f'''
         <a href="/articles/{e(s_slug)}" class="sidebar-popular-item">
           <div class="sidebar-item-thumb-wrap">
-            <img src="{s_thumb}" alt="{e(s_title)}" class="sidebar-item-thumb" loading="lazy">
+            <img src="{s_thumb}" alt="{e(s_title)}" class="sidebar-item-thumb" width="96" height="66" loading="lazy" decoding="async">
           </div>
           <div class="sidebar-item-content">
             <h4 class="sidebar-item-title">{e(s_title)}</h4>
@@ -3041,7 +3045,7 @@ def article_detail_page(conn, user, article, related):
             <!-- Author Byline Bar -->
             <div class="editorial-byline-bar">
               <div class="byline-left">
-                <img src="{meta["author_avatar"]}" alt="{e(author)}" class="byline-avatar">
+                <img src="{meta["author_avatar"]}" alt="{e(author)}" class="byline-avatar" width="40" height="40" decoding="async" data-fallback-kind="avatar">
                 <div class="byline-meta-text">
                   <div class="byline-author-name">{e(author)}</div>
                   <div class="byline-sub-role">{e(meta["author_role"])}</div>
@@ -3087,7 +3091,7 @@ def article_detail_page(conn, user, article, related):
 
             <!-- Hero Media Figure with Caption -->
             <figure class="editorial-hero-figure">
-              <img src="{meta["hero_img"]}" alt="{e(title)}" class="editorial-hero-image">
+              <img src="{meta["hero_img"]}" alt="{e(title)}" class="editorial-hero-image" width="800" height="450" decoding="async" fetchpriority="high">
               <figcaption class="editorial-hero-caption">{meta["hero_caption"]}</figcaption>
             </figure>
 
@@ -3102,7 +3106,7 @@ def article_detail_page(conn, user, article, related):
 
               <!-- Author Bio Card -->
               <div class="editorial-author-card">
-                <img src="{meta["author_avatar"]}" alt="{e(author)}" class="author-card-avatar">
+                <img src="{meta["author_avatar"]}" alt="{e(author)}" class="author-card-avatar" width="64" height="64" loading="lazy" decoding="async" data-fallback-kind="avatar">
                 <div class="author-card-info">
                   <h4 class="author-card-name">{e(author)}</h4>
                   <div class="author-card-role">{e(meta["author_role"])}</div>
@@ -3123,7 +3127,7 @@ def article_detail_page(conn, user, article, related):
               <!-- Top Featured Popular Card (Large Image with Title Overlay) -->
               <a href="/articles/{e(feat_slug)}" class="sidebar-popular-hero">
                 <div class="sidebar-hero-media">
-                  <img src="{feat_img}" alt="{e(feat_title)}" class="sidebar-hero-img" loading="lazy">
+                  <img src="{feat_img}" alt="{e(feat_title)}" class="sidebar-hero-img" width="350" height="200" loading="lazy" decoding="async">
                   <div class="sidebar-hero-overlay">
                     <h4 class="sidebar-hero-headline">{e(feat_title)}</h4>
                     <div class="sidebar-hero-date">
@@ -3642,7 +3646,7 @@ def courses_page(conn, user, f=None):
             cards_html.append(f'''
             <article class="course-simple-card" onclick="openCourseModal(\'{cid}\');">
               <div class="course-simple-thumb">
-                <img src="{e(c["thumb"])}" alt="{e(c["title"])}" loading="lazy">
+                <img src="{e(c["thumb"])}" alt="{e(c["title"])}" width="480" height="270" loading="lazy" decoding="async">
                 <div class="course-center-play">
                   <i class="fa-solid fa-play"></i>
                 </div>
@@ -3729,7 +3733,7 @@ def courses_page(conn, user, f=None):
         <div class="course-modal-body">
           <div class="course-player-side">
             <div class="course-screen-box">
-              <img src="/static/images/editorial_laptop_dashboard.jpg" alt="Preview" id="modalVideoPoster">
+              <img src="/static/images/editorial_laptop_dashboard.jpg" alt="Preview" id="modalVideoPoster" width="840" height="472" loading="lazy" decoding="async">
               <div class="course-screen-overlay">
                 <span style="background:rgba(0,0,0,0.7);padding:3px 8px;border-radius:4px;font-size:11px;color:#38bdf8;font-weight:700;align-self:flex-start;">HD 1080p</span>
                 <div class="course-screen-play-btn" onclick="toggleModalPlay();">
@@ -3806,7 +3810,7 @@ def courses_page(conn, user, f=None):
             chaptersList.innerHTML = c.chapters.map((ch, idx) => `
               <div class="course-playlist-item${{idx === 0 ? " active" : ""}}" onclick="selectModalChapter(this, '${{ch.title.replace(/'/g, "\\\'")}}', '${{ch.duration}}');">
                 <div class="course-item-thumb">
-                  <img src="${{c.thumb}}" alt="Thumb">
+                  <img src="${{c.thumb}}" alt="Thumb" width="100" height="56" loading="lazy" decoding="async">
                 </div>
                 <div style="flex:1;min-width:0;">
                   <div class="course-item-title">${{ch.title}}</div>
@@ -3817,7 +3821,7 @@ def courses_page(conn, user, f=None):
           }} else {{
             chaptersList.innerHTML = `
               <div class="course-playlist-item active">
-                <div class="course-item-thumb"><img src="${{c.thumb}}" alt="Thumb"></div>
+                <div class="course-item-thumb"><img src="${{c.thumb}}" alt="Thumb" width="100" height="56" loading="lazy" decoding="async"></div>
                 <div style="flex:1;min-width:0;">
                   <div class="course-item-title">Full Video Masterclass</div>
                   <div class="course-item-duration">${{c.duration}}</div>
@@ -3904,7 +3908,7 @@ def courses_page(conn, user, f=None):
     </script>
     '''
 
-    extra_css = '<link rel="stylesheet" href="/static/courses.css?v=20261104_fw">';
+    extra_css = '<link rel="stylesheet" href="/static/courses.css?v=20261126_perf">';
     return layout("Engineering Courses & Masterclasses", body, user, active="courses", page_class="course-simple-page", description="Browse video courses and engineering lessons.", extra_head=extra_css)
 
 
@@ -4398,7 +4402,7 @@ def auth_page(kind, next_path="", error="", message="", preset_role="candidate")
           
           <!-- Brand Logo at top of form -->
           <div class="auth-brand-badge">
-            <img src="/static/images/logo_emblem.png" alt="Logistics Waves" class="auth-brand-logo-img">
+            <img src="/static/images/logo_emblem.png" alt="Logistics Waves" class="auth-brand-logo-img" width="44" height="46" decoding="async">
             <span class="auth-brand-title">LOGISTICS WAVES</span>
           </div>
 
@@ -4472,11 +4476,11 @@ def auth_page(kind, next_path="", error="", message="", preset_role="candidate")
           <!-- SSO Buttons -->
           <div class="auth-sso-row">
             <button type="button" class="sso-btn" onclick="window.showToast ? showToast('Google Workspace SSO is not enabled. Sign in with email and password.') : null">
-              <img src="/static/images/google_icon.png" alt="Google" class="sso-icon" width="20" height="20">
+              <img src="/static/images/google_icon.png" alt="Google" class="sso-icon" width="20" height="20" decoding="async">
               <span>Google</span>
             </button>
             <button type="button" class="sso-btn" onclick="window.showToast ? showToast('LinkedIn SSO is enabled for verified corporate members.') : null">
-              <img src="/static/images/linkedin_icon.png" alt="LinkedIn" class="sso-icon" width="20" height="20">
+              <img src="/static/images/linkedin_icon.png" alt="LinkedIn" class="sso-icon" width="20" height="20" decoding="async">
               <span>LinkedIn</span>
             </button>
           </div>
@@ -4556,7 +4560,7 @@ def account_shell(user, active, title, subtitle, content):
       </div>
       <div class="account-layout">
         <aside class="account-sidebar" aria-label="Workspace navigation">
-          <div class="account-identity"><img class="account-avatar-img" src="/static/images/default_user_avatar.png" alt="Profile">
+          <div class="account-identity"><img class="account-avatar-img" src="/static/images/default_user_avatar.png" alt="Profile" width="56" height="56" decoding="async" data-fallback-kind="avatar">
             <div><strong>{e(user["name"])}</strong><small>{e(user["headline"] or user["role"].title())}</small></div>
           </div>
           <nav class="account-nav">{nav}</nav>

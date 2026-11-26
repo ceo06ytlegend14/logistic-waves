@@ -1114,6 +1114,8 @@
   scrollbar-width: none !important;
   -ms-overflow-style: none !important;
   scroll-behavior: smooth !important;
+  scroll-snap-type: x mandatory !important;
+  -webkit-overflow-scrolling: touch !important;
   padding-bottom: 6px !important;
 }
 
@@ -1130,10 +1132,28 @@
 #view-article .carousel-track .card {
   flex: 0 0 255px !important;
   width: 255px !important;
+  scroll-snap-align: start !important;
   display: flex !important;
   flex-direction: column !important;
   border-radius: 6px !important;
   overflow: hidden !important;
+}
+
+@media (hover: none), (max-width: 860px) {
+  #view-article .carousel-nav-btn {
+    opacity: 0.92 !important;
+    visibility: visible !important;
+  }
+}
+
+@media (max-width: 640px) {
+  #view-article .carousel-track {
+    gap: 14px !important;
+  }
+  #view-article .carousel-track .card {
+    flex: 0 0 min(245px, 76vw) !important;
+    width: min(245px, 76vw) !important;
+  }
 }
 
 #view-article .carousel-track .card .card-media {
