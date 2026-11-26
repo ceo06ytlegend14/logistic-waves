@@ -296,7 +296,7 @@ def header(user, active=""):
     if user:
         initials = "".join(w[0] for w in user["name"].split()[:2]).upper()
         admin_link = ""
-        if user.get("role") in ("admin", "employer"):
+        if user.get("role") == "admin":
             admin_link = '<a href="/admin" style="color:#034f9a;font-weight:600;"><i class="fa-solid fa-gauge-high" style="font-size:13px;width:15px;margin-right:6px;"></i> Admin Dashboard</a>'
         avatar_src = user.get("avatar") or "/static/images/default_user_avatar.png"
         account = f'''
@@ -947,7 +947,7 @@ def logistic_waves_today_section(conn):
           <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid #e2e8f0; padding-top:14px; margin-top:14px;">
             <div style="display:flex; align-items:center; gap:14px;">
               <span style="font-size:12px; color:#64748b;">Series: <strong>Logistic Waves Today &bull; Daily Logistics Intelligence</strong></span>
-              <a href="#" id="fwtModalArticleBtn" class="fwt-read-more-link" style="font-size:12.5px; font-weight:700; color:#0066cc; text-decoration:none;">Open Full Article &rarr;</a>
+              <a href="/article-blogs" id="fwtModalArticleBtn" class="fwt-read-more-link" style="font-size:12.5px; font-weight:700; color:#0066cc; text-decoration:none;">Open Full Article &rarr;</a>
             </div>
             <button type="button" class="fwt-read-more-link" onclick="shareCurrentModal();" style="display:inline-flex; align-items:center; gap:6px;">
               <i class="fa-solid fa-share-nodes"></i> Share Episode
@@ -971,6 +971,7 @@ def logistic_waves_today_section(conn):
 
         window.openFwtModal = function(id) {{
           const ep = FWT_DATA.find(x => x.id === id) || FWT_DATA[0];
+          if (!ep) return;
           activeFwtId = ep.id;
           document.getElementById('fwtModalTitle').textContent = ep.title;
           document.getElementById('fwtModalBadge').textContent = ep.badge || 'SPECIAL EPISODE';
@@ -2295,8 +2296,8 @@ def sandbox_job_detail_page(conn, user, job, similar):
               <span class="new-dot"></span>
               New
             </span>
-            <button type="button" class="flagship-save-btn" id="hero-save-btn" title="Save job" onclick="toggleSaveHeroJob && toggleSaveHeroJob(this)">
-              <i class="fa-regular fa-bookmark"></i>
+            <button type="button" class="flagship-save-btn{' saved' if db_saved else ''}" id="hero-save-btn" title="Save job" onclick="toggleSaveHeroJob && toggleSaveHeroJob(this)">
+              <i class="{e(save_btn_icon)}"></i>
             </button>
           </div>
         </div>
@@ -2467,7 +2468,7 @@ def sandbox_job_detail_page(conn, user, job, similar):
           </div>
 
           <div style="margin-top: 16px;">
-            <a href="#" class="insight-link" id="benefits-learn-more-link" onclick="showToast('Loading benefits guide...'); return false;">Learn more about {e(company_name)}'s Compensation &amp; Benefits &rarr;</a>
+            <a href="/company/{e(company_slug)}/benefits" class="insight-link" id="benefits-learn-more-link">Learn more about {e(company_name)}'s Compensation &amp; Benefits &rarr;</a>
           </div>
         </div>
       </div>
@@ -2478,12 +2479,12 @@ def sandbox_job_detail_page(conn, user, job, similar):
           <span id="insights-header-label">{e(company_name)} Insights</span>
         </div>
         <div class="insights-list">
-          <a href="#" class="insight-link" onclick="showToast('Loading company workplace intelligence report...'); return false;">What's It Like to Work at {e(company_name)}?</a>
-          <a href="#" class="insight-link" onclick="showToast('Loading company culture values breakdown...'); return false;">{e(company_name)} Culture &amp; Values</a>
-          <a href="#" class="insight-link" onclick="showToast('Loading career advancement ladder metrics...'); return false;">{e(company_name)} Career Growth &amp; Development</a>
-          <a href="#" class="insight-link" onclick="showToast('Loading employee balance review data...'); return false;">What's the Work-Life Balance Like at {e(company_name)}?</a>
-          <a href="#" class="insight-link" onclick="showToast('Loading executive leadership bios...'); return false;">{e(company_name)} Leadership &amp; Management</a>
-          <a href="#" class="insight-link" onclick="showToast('Loading annual growth & stability dossier...'); return false;">{e(company_name)} Company Growth, Stability &amp; Outlook</a>
+          <a href="/company/{e(company_slug)}/insights" class="insight-link">What's It Like to Work at {e(company_name)}?</a>
+          <a href="/company/{e(company_slug)}/culture" class="insight-link">{e(company_name)} Culture &amp; Values</a>
+          <a href="/company/{e(company_slug)}/people" class="insight-link">{e(company_name)} Career Growth &amp; Development</a>
+          <a href="/company/{e(company_slug)}/offices" class="insight-link">What's the Work-Life Balance Like at {e(company_name)}?</a>
+          <a href="/company/{e(company_slug)}/people" class="insight-link">{e(company_name)} Leadership &amp; Management</a>
+          <a href="/company/{e(company_slug)}/insights" class="insight-link">{e(company_name)} Company Growth, Stability &amp; Outlook</a>
         </div>
         
         <div class="job-utility-links">
@@ -2495,10 +2496,10 @@ def sandbox_job_detail_page(conn, user, job, similar):
             <i class="fa-solid fa-building"></i>
             <span>View {e(company_name)} Profile</span>
           </a>
-          <a href="#" onclick="showToast('Listing flagged for editorial audit.'); return false;">
+          <button type="button" style="background:none;border:none;padding:0;font:inherit;color:inherit;cursor:pointer;display:inline-flex;align-items:center;gap:6px;" onclick="showToast('Listing flagged for editorial review.');">
             <i class="fa-regular fa-flag"></i>
             <span>Report Job</span>
-          </a>
+          </button>
         </div>
       </div>
 
@@ -2620,12 +2621,8 @@ def sandbox_job_detail_page(conn, user, job, similar):
       </div>
     </div>
     </div>
-  </main>
 
-  <!-- Built In Standard Site Footer -->
-  {footer()}
-
-  <!-- Quick Application Modal (Easy Apply) -->
+  <!-- Quick Application Modal (Easy Apply) - kept inside #main-content for SPA navigation -->
   <div class="modal-backdrop" id="modal-apply" role="dialog" aria-modal="true" aria-labelledby="apply-modal-title" style="display: none;">
     <div class="modal-container" style="max-width: 580px;">
       <div class="modal-header">
@@ -2682,120 +2679,148 @@ def sandbox_job_detail_page(conn, user, job, similar):
   <div id="sbx-toast" class="sbx-toast" style="display: none;"></div>
 
   <script>
-    const currentJobId = {job['id']};
-    const currentJobTitle = {json.dumps(job_title)};
-    const currentCompany = {json.dumps(company_name)};
+    (function() {{
+      const jobId = {job['id']};
+      const jobTitle = {json.dumps(job_title)};
+      const jobSkills = {json.dumps(skills)};
 
-    function toggleLangMenu() {{
-      const m = document.getElementById('lang-dropdown-menu');
-      if (m) m.style.display = m.style.display === 'none' ? 'block' : 'none';
-    }}
-    function switchLang(lang) {{
-      const l = document.getElementById('lang-current-label');
-      if (l) l.textContent = lang === 'vn' ? 'Tiếng Việt' : 'English';
-      toggleLangMenu();
-      showToast(lang === 'vn' ? 'Đã đổi ngôn ngữ sang Tiếng Việt' : 'Language switched to English');
-    }}
-    function toggleUserMenu() {{
-      const m = document.getElementById('user-menu-dropdown');
-      if (m) m.style.display = m.style.display === 'none' ? 'block' : 'none';
-    }}
-    function handlePrimaryApply() {{
-      const modal = document.getElementById('modal-apply');
-      if (modal) modal.style.display = 'flex';
-    }}
-    function closeApplyModal() {{
-      const modal = document.getElementById('modal-apply');
-      if (modal) modal.style.display = 'none';
-    }}
-    function showToast(msg) {{
-      let t = document.getElementById('sbx-toast');
-      if (!t) return;
-      t.innerHTML = '<i class=\"fa-solid fa-circle-check\" style=\"color:#10b981;\"></i> <span>' + msg + '</span>';
-      t.style.display = 'flex';
-      t.style.opacity = '1';
-      clearTimeout(window.__toastTimer);
-      window.__toastTimer = setTimeout(() => {{
-        t.style.opacity = '0';
-        setTimeout(() => {{ t.style.display = 'none'; }}, 300);
-      }}, 3500);
-    }}
-    function toggleReadMore(btn) {{
-      const extra = document.getElementById('desc-extra-content');
-      if (!extra) return;
-      const isHidden = extra.style.display === 'none';
-      if (isHidden) {{
-        extra.style.display = 'block';
-        btn.innerHTML = '<span>Collapse Description</span> <i class=\"fa-solid fa-chevron-up\"></i>';
-      }} else {{
-        extra.style.display = 'none';
-        btn.innerHTML = '<span>Read Full Description</span> <i class=\"fa-solid fa-chevron-down\"></i>';
+      function redirectToLogin() {{
+        const nextUrl = window.location.pathname + window.location.search;
+        window.location.href = '/auth/login?next=' + encodeURIComponent(nextUrl);
       }}
-    }}
-    function handleAiCvUpload(input) {{
-      if (input.files && input.files[0]) {{
-        const file = input.files[0];
-        const fb = document.getElementById('ai-analysis-feedback');
-        if (fb) {{
-          fb.style.display = 'block';
-          fb.innerHTML = '<div style=\"font-weight:800;display:flex;align-items:center;gap:6px;margin-bottom:4px;color:#1e3a8a;\"><i class=\"fa-solid fa-circle-check\" style=\"color:#2563eb;\"></i><span>Match Score: 94% &bull; Strong Fit</span></div><div>Analyzed <strong>' + file.name + '</strong> (' + (file.size/1024).toFixed(1) + ' KB): Your background matches the requirements for ' + currentJobTitle + '!</div>';
+
+      window.toggleLangMenu = function() {{
+        const m = document.getElementById('lang-dropdown-menu');
+        if (m) m.style.display = m.style.display === 'none' ? 'block' : 'none';
+      }};
+      window.switchLang = function(lang) {{
+        const l = document.getElementById('lang-current-label');
+        if (l) l.textContent = lang === 'vn' ? 'Tiếng Việt' : 'English';
+        window.toggleLangMenu();
+        window.showToast(lang === 'vn' ? 'Đã đổi ngôn ngữ sang Tiếng Việt' : 'Language switched to English');
+      }};
+      window.toggleUserMenu = function() {{
+        const m = document.getElementById('user-menu-dropdown');
+        if (m) m.style.display = m.style.display === 'none' ? 'block' : 'none';
+      }};
+      window.handlePrimaryApply = function() {{
+        const modal = document.getElementById('modal-apply');
+        if (modal) modal.style.display = 'flex';
+      }};
+      window.openApplyModal = function(ev) {{
+        if (ev) ev.preventDefault();
+        window.handlePrimaryApply();
+      }};
+      window.closeApplyModal = function() {{
+        const modal = document.getElementById('modal-apply');
+        if (modal) modal.style.display = 'none';
+      }};
+
+      const _origToast = window.showToast;
+      window.showToast = function(msg, isError) {{
+        if (typeof _origToast === 'function' && document.getElementById('toast')) {{
+          _origToast(msg, isError);
+          return;
         }}
-        showToast('AI analysis complete: 94% match profile.');
+        const t = document.getElementById('sbx-toast');
+        if (!t) return;
+        const iconCls = isError ? 'fa-circle-exclamation' : 'fa-circle-check';
+        const iconColor = isError ? '#ef4444' : '#10b981';
+        t.innerHTML = '<i class="fa-solid ' + iconCls + '" style="color:' + iconColor + ';"></i> <span>' + msg + '</span>';
+        t.style.display = 'flex';
+        t.style.opacity = '1';
+        clearTimeout(window.__toastTimer);
+        window.__toastTimer = setTimeout(() => {{
+          t.style.opacity = '0';
+          setTimeout(() => {{ t.style.display = 'none'; }}, 300);
+        }}, 3500);
+      }};
+
+      window.toggleReadMore = function(btn) {{
+        const extra = document.getElementById('desc-extra-content');
+        if (!extra) return;
+        const isHidden = extra.style.display === 'none';
+        if (isHidden) {{
+          extra.style.display = 'block';
+          btn.innerHTML = '<span>Collapse Description</span> <i class="fa-solid fa-chevron-up"></i>';
+        }} else {{
+          extra.style.display = 'none';
+          btn.innerHTML = '<span>Read Full Description</span> <i class="fa-solid fa-chevron-down"></i>';
+        }}
+      }};
+
+      window.handleAiCvUpload = function(input) {{
+        if (input.files && input.files[0]) {{
+          const file = input.files[0];
+          const fb = document.getElementById('ai-analysis-feedback');
+          const fname = file.name.toLowerCase();
+          const matched = jobSkills.filter(s => fname.includes(s.toLowerCase().split(' ')[0]));
+          const score = Math.min(96, 72 + Math.min(20, matched.length * 6) + (file.size > 15000 ? 4 : 0));
+          const skillNote = matched.length ? ('Matched keywords: ' + matched.join(', ')) : ('Target skills: ' + jobSkills.slice(0, 4).join(', '));
+          if (fb) {{
+            fb.style.display = 'block';
+            fb.innerHTML = '<div style="font-weight:800;display:flex;align-items:center;gap:6px;margin-bottom:4px;color:#1e3a8a;"><i class="fa-solid fa-circle-check" style="color:#2563eb;"></i><span>Estimated Fit Score: ' + score + '%</span></div><div>Analyzed <strong>' + file.name.replace(/</g, '&lt;') + '</strong> (' + (file.size/1024).toFixed(1) + ' KB) for ' + jobTitle + '. ' + skillNote + '.</div>';
+          }}
+          window.showToast('CV analysis complete (' + score + '% alignment).');
+        }}
+      }};
+
+      function applySaveVisual(saved) {{
+        const label = document.getElementById('save-btn-label');
+        const icon = document.getElementById('save-btn-icon');
+        const heroBtn = document.getElementById('hero-save-btn');
+        if (label) label.textContent = saved ? 'Saved' : 'Save';
+        if (icon) icon.className = saved ? 'fa-solid fa-bookmark' : 'fa-regular fa-bookmark';
+        if (heroBtn) {{
+          heroBtn.classList.toggle('saved', !!saved);
+          const hi = heroBtn.querySelector('i');
+          if (hi) hi.className = saved ? 'fa-solid fa-bookmark' : 'fa-regular fa-bookmark';
+        }}
       }}
-    }}
-    function handleSaveJob() {{
-      const label = document.getElementById('save-btn-label');
-      const icon = document.getElementById('save-btn-icon');
-      fetch('/api/saved/' + currentJobId + '/toggle')
-        .then(r => r.json())
-        .then(data => {{
-          if (data.ok) {{
-            if (data.saved) {{
-              if (label) label.textContent = 'Saved';
-              if (icon) icon.className = 'fa-solid fa-bookmark';
-              showToast('Job saved to your profile');
-            }} else {{
-              if (label) label.textContent = 'Save';
-              if (icon) icon.className = 'fa-regular fa-bookmark';
-              showToast('Job removed from saved list');
-            }}
-          }} else {{
-            const isSaved = label && label.textContent === 'Saved';
-            if (isSaved) {{
-              if (label) label.textContent = 'Save';
-              if (icon) icon.className = 'fa-regular fa-bookmark';
-              showToast('Job removed from saved list');
-            }} else {{
-              if (label) label.textContent = 'Saved';
-              if (icon) icon.className = 'fa-solid fa-bookmark';
-              showToast('Job saved to your list');
-            }}
-          }}
+
+      window.handleSaveJob = function() {{
+        const label = document.getElementById('save-btn-label');
+        const wasSaved = label && label.textContent === 'Saved';
+        applySaveVisual(!wasSaved);
+        fetch('/api/saved/' + jobId + '/toggle', {{
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {{'Content-Type': 'application/json'}},
+          body: '{{}}'
         }})
-        .catch(() => {{
-          const isSaved = label && label.textContent === 'Saved';
-          if (isSaved) {{
-            if (label) label.textContent = 'Save';
-            if (icon) icon.className = 'fa-regular fa-bookmark';
-            showToast('Job removed from saved list');
-          }} else {{
-            if (label) label.textContent = 'Saved';
-            if (icon) icon.className = 'fa-solid fa-bookmark';
-            showToast('Job saved to your list');
-          }}
-        }});
-    }}
-    document.addEventListener('DOMContentLoaded', () => {{
+          .then(async r => {{
+            if (r.status === 401) {{
+              applySaveVisual(wasSaved);
+              window.showToast('Please sign in to save jobs.', true);
+              setTimeout(redirectToLogin, 700);
+              return null;
+            }}
+            const data = await r.json();
+            if (!r.ok || !data.ok) throw new Error(data.error || 'Could not update saved state.');
+            return data;
+          }})
+          .then(data => {{
+            if (!data) return;
+            applySaveVisual(!!data.saved);
+            window.showToast(data.saved ? 'Job saved to your profile.' : 'Job removed from saved list.');
+          }})
+          .catch(err => {{
+            applySaveVisual(wasSaved);
+            window.showToast(err.message || 'Unable to save right now.', true);
+          }});
+      }};
+      window.toggleSaveHeroJob = window.handleSaveJob;
+
       const form = document.getElementById('form-job-apply');
       if (form) {{
-        form.addEventListener('submit', (e) => {{
-          e.preventDefault();
-          const name = document.getElementById('apply-input-name').value.trim();
-          const email = document.getElementById('apply-input-email').value.trim();
-          const phone = document.getElementById('apply-input-phone').value.trim();
-          const note = document.getElementById('apply-input-note').value.trim();
+        form.addEventListener('submit', async (ev) => {{
+          ev.preventDefault();
+          const name = (document.getElementById('apply-input-name')?.value || '').trim();
+          const email = (document.getElementById('apply-input-email')?.value || '').trim();
+          const phone = (document.getElementById('apply-input-phone')?.value || '').trim();
+          const note = (document.getElementById('apply-input-note')?.value || '').trim();
           if (!name || !email) {{
-            alert('Please fill in your name and email.');
+            window.showToast('Please fill in your full name and email.', true);
             return;
           }}
           const submitBtn = document.getElementById('btn-submit-job-apply');
@@ -2803,31 +2828,43 @@ def sandbox_job_detail_page(conn, user, job, similar):
             submitBtn.disabled = true;
             submitBtn.innerHTML = 'Submitting...';
           }}
-          fetch('/api/apply/' + currentJobId, {{
-            method: 'POST',
-            headers: {{'Content-Type': 'application/json'}},
-            body: JSON.stringify({{note: note, name: name, email: email, phone: phone}})
-          }}).then(r => r.json()).then(data => {{
-            closeApplyModal();
+          try {{
+            const res = await fetch('/api/apply/' + jobId, {{
+              method: 'POST',
+              credentials: 'same-origin',
+              headers: {{'Content-Type': 'application/json'}},
+              body: JSON.stringify({{note: note || (name + ' <' + email + '>' + (phone ? ' · ' + phone : ''))}})
+            }});
+            if (res.status === 401) {{
+              window.showToast('Please sign in to submit your application.', true);
+              setTimeout(redirectToLogin, 750);
+              return;
+            }}
+            const data = await res.json();
+            if (!res.ok || !data.ok) throw new Error(data.error || 'Application failed.');
+            window.closeApplyModal();
             const heroApply = document.getElementById('btn-hero-easy-apply');
             if (heroApply) {{
               heroApply.classList.add('btn-applied-disabled');
-              heroApply.innerHTML = '<i class=\"fa-solid fa-check\"></i> <span>Application Submitted</span>';
+              heroApply.innerHTML = '<i class="fa-solid fa-check"></i> <span>Application Submitted</span>';
             }}
-            showToast('🎉 Application submitted! Tracked in your dashboard.');
-          }}).catch(() => {{
-            closeApplyModal();
-            const heroApply = document.getElementById('btn-hero-easy-apply');
-            if (heroApply) {{
-              heroApply.classList.add('btn-applied-disabled');
-              heroApply.innerHTML = '<i class=\"fa-solid fa-check\"></i> <span>Application Submitted</span>';
+            window.showToast(data.already ? 'You already applied — view in Tracker.' : 'Application submitted and saved to Tracker!');
+          }} catch (err) {{
+            window.showToast(err.message || 'Unable to submit application.', true);
+          }} finally {{
+            if (submitBtn) {{
+              submitBtn.disabled = false;
+              submitBtn.innerHTML = '<span>Submit Application</span> &rarr;';
             }}
-            showToast('🎉 Application submitted (Local Prototype)!');
-          }});
+          }}
         }});
       }}
-    }});
+    }})();
   </script>
+  </main>
+
+  <!-- Built In Standard Site Footer -->
+  {footer()}
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="/static/app.js" defer></script>
 </body>
@@ -4045,139 +4082,143 @@ def courses_page(conn, user, f=None):
     </div>
 
     <script>
-      const COURSES_LOOKUP = {courses_lookup_json};
-      let isPlaying = false;
-      let progressTimer = null;
-      let curProgress = 35;
+      (function() {{
+        const COURSES_LOOKUP = {courses_lookup_json};
+        let isPlaying = false;
+        let progressTimer = null;
+        let curProgress = 35;
 
-      function scrollCourseLine(lineId, dir) {{
-        const el = document.getElementById(lineId);
-        if (!el) return;
-        const scrollAmount = 260 * 2;
-        el.scrollBy({{ left: dir * scrollAmount, behavior: "smooth" }});
-      }}
+        window.scrollCourseLine = function(lineId, dir) {{
+          const el = document.getElementById(lineId);
+          if (!el) return;
+          const scrollAmount = 260 * 2;
+          el.scrollBy({{ left: dir * scrollAmount, behavior: "smooth" }});
+        }};
 
-      function updateScrollTrack(lineId) {{
-        const el = document.getElementById(lineId);
-        const thumb = document.getElementById("thumb-" + lineId);
-        if (!el || !thumb) return;
-        const maxScroll = el.scrollWidth - el.clientWidth;
-        if (maxScroll <= 0) {{
-          thumb.style.left = "0px";
-          return;
-        }}
-        const pct = el.scrollLeft / maxScroll;
-        const maxLeft = 100 - 40;
-        thumb.style.left = (pct * maxLeft) + "px";
-      }}
+        window.updateScrollTrack = function(lineId) {{
+          const el = document.getElementById(lineId);
+          const thumb = document.getElementById("thumb-" + lineId);
+          if (!el || !thumb) return;
+          const maxScroll = el.scrollWidth - el.clientWidth;
+          if (maxScroll <= 0) {{
+            thumb.style.left = "0px";
+            return;
+          }}
+          const pct = el.scrollLeft / maxScroll;
+          const maxLeft = 100 - 40;
+          thumb.style.left = (pct * maxLeft) + "px";
+        }};
 
-      function openCourseModal(courseId) {{
-        const c = COURSES_LOOKUP[courseId];
-        if (!c) return;
+        window.openCourseModal = function(courseId) {{
+          const c = COURSES_LOOKUP[courseId];
+          if (!c) return;
 
-        document.getElementById("modalTitle").textContent = c.title;
-        document.getElementById("modalVideoPoster").src = c.thumb;
-        document.getElementById("modalMeta").textContent = c.channel + " • " + c.instructor + " • " + c.duration;
-        document.getElementById("modalDesc").textContent = c.desc;
-        document.getElementById("modalTimeCounter").textContent = "00:00 / " + c.duration;
+          document.getElementById("modalTitle").textContent = c.title;
+          document.getElementById("modalVideoPoster").src = c.thumb;
+          document.getElementById("modalMeta").textContent = c.channel + " • " + c.instructor + " • " + c.duration;
+          document.getElementById("modalDesc").textContent = c.desc;
+          document.getElementById("modalTimeCounter").textContent = "00:00 / " + c.duration;
 
-        const chaptersList = document.getElementById("modalChaptersList");
-        if (c.chapters && c.chapters.length) {{
-          chaptersList.innerHTML = c.chapters.map((ch, idx) => `
-            <div class="course-playlist-item${{idx === 0 ? " active" : ""}}" onclick="selectModalChapter(this, '${{ch.title.replace(/'/g, "\\\'")}}', '${{ch.duration}}');">
-              <div class="course-item-thumb">
-                <img src="${{c.thumb}}" alt="Thumb">
+          const chaptersList = document.getElementById("modalChaptersList");
+          if (c.chapters && c.chapters.length) {{
+            chaptersList.innerHTML = c.chapters.map((ch, idx) => `
+              <div class="course-playlist-item${{idx === 0 ? " active" : ""}}" onclick="selectModalChapter(this, '${{ch.title.replace(/'/g, "\\\'")}}', '${{ch.duration}}');">
+                <div class="course-item-thumb">
+                  <img src="${{c.thumb}}" alt="Thumb">
+                </div>
+                <div style="flex:1;min-width:0;">
+                  <div class="course-item-title">${{ch.title}}</div>
+                  <div class="course-item-duration">${{ch.duration}}</div>
+                </div>
               </div>
-              <div style="flex:1;min-width:0;">
-                <div class="course-item-title">${{ch.title}}</div>
-                <div class="course-item-duration">${{ch.duration}}</div>
+            `).join("");
+          }} else {{
+            chaptersList.innerHTML = `
+              <div class="course-playlist-item active">
+                <div class="course-item-thumb"><img src="${{c.thumb}}" alt="Thumb"></div>
+                <div style="flex:1;min-width:0;">
+                  <div class="course-item-title">Full Video Masterclass</div>
+                  <div class="course-item-duration">${{c.duration}}</div>
+                </div>
               </div>
-            </div>
-          `).join("");
-        }} else {{
-          chaptersList.innerHTML = `
-            <div class="course-playlist-item active">
-              <div class="course-item-thumb"><img src="${{c.thumb}}" alt="Thumb"></div>
-              <div style="flex:1;min-width:0;">
-                <div class="course-item-title">Full Video Masterclass</div>
-                <div class="course-item-duration">${{c.duration}}</div>
-              </div>
-            </div>
-          `;
+            `;
+          }}
+
+          const modal = document.getElementById("courseModalBackdrop");
+          modal.classList.add("active");
+          document.body.style.overflow = "hidden";
+        }};
+
+        window.closeCourseModal = function() {{
+          const modal = document.getElementById("courseModalBackdrop");
+          if (modal) modal.classList.remove("active");
+          document.body.style.overflow = "";
+          pauseModalPlay();
+        }};
+
+        window.handleModalBackdropClick = function(e) {{
+          if (e.target.id === "courseModalBackdrop") window.closeCourseModal();
+        }};
+
+        window.selectModalChapter = function(item, title, duration) {{
+          document.querySelectorAll(".course-playlist-item").forEach(el => el.classList.remove("active"));
+          item.classList.add("active");
+          document.getElementById("modalTitle").textContent = title;
+          document.getElementById("modalTimeCounter").textContent = "00:00 / " + duration;
+          curProgress = 0;
+          updateModalProgress(0);
+          startModalPlay();
+        }};
+
+        window.toggleModalPlay = function() {{
+          if (isPlaying) pauseModalPlay();
+          else startModalPlay();
+        }};
+
+        function startModalPlay() {{
+          isPlaying = true;
+          const iconEl = document.getElementById("modalPlayIcon");
+          if (iconEl) iconEl.className = "fa-solid fa-pause";
+          if (progressTimer) clearInterval(progressTimer);
+          progressTimer = setInterval(() => {{
+            curProgress += 0.5;
+            if (curProgress > 100) curProgress = 0;
+            updateModalProgress(curProgress);
+          }}, 500);
         }}
 
-        const modal = document.getElementById("courseModalBackdrop");
-        modal.classList.add("active");
-        document.body.style.overflow = "hidden";
-      }}
-
-      function closeCourseModal() {{
-        const modal = document.getElementById("courseModalBackdrop");
-        modal.classList.remove("active");
-        document.body.style.overflow = "";
-        pauseModalPlay();
-      }}
-
-      function handleModalBackdropClick(e) {{
-        if (e.target.id === "courseModalBackdrop") closeCourseModal();
-      }}
-
-      function selectModalChapter(item, title, duration) {{
-        document.querySelectorAll(".course-playlist-item").forEach(el => el.classList.remove("active"));
-        item.classList.add("active");
-        document.getElementById("modalTitle").textContent = title;
-        document.getElementById("modalTimeCounter").textContent = "00:00 / " + duration;
-        curProgress = 0;
-        updateModalProgress(0);
-        startModalPlay();
-      }}
-
-      function toggleModalPlay() {{
-        if (isPlaying) pauseModalPlay();
-        else startModalPlay();
-      }}
-
-      function startModalPlay() {{
-        isPlaying = true;
-        document.getElementById("modalPlayIcon").className = "fa-solid fa-pause";
-        if (progressTimer) clearInterval(progressTimer);
-        progressTimer = setInterval(() => {{
-          curProgress += 0.5;
-          if (curProgress > 100) curProgress = 0;
-          updateModalProgress(curProgress);
-        }}, 500);
-      }}
-
-      function pauseModalPlay() {{
-        isPlaying = false;
-        document.getElementById("modalPlayIcon").className = "fa-solid fa-play";
-        if (progressTimer) {{
-          clearInterval(progressTimer);
-          progressTimer = null;
+        function pauseModalPlay() {{
+          isPlaying = false;
+          const iconEl = document.getElementById("modalPlayIcon");
+          if (iconEl) iconEl.className = "fa-solid fa-play";
+          if (progressTimer) {{
+            clearInterval(progressTimer);
+            progressTimer = null;
+          }}
         }}
-      }}
 
-      function updateModalProgress(pct) {{
-        const el = document.getElementById("modalProgressFill");
-        if (el) el.style.width = pct + "%";
-      }}
+        function updateModalProgress(pct) {{
+          const el = document.getElementById("modalProgressFill");
+          if (el) el.style.width = pct + "%";
+        }}
 
-      function shareCourse(title) {{
-        navigator.clipboard ? navigator.clipboard.writeText(window.location.href) : null;
-        alert('Course link copied: "' + title + '"');
-      }}
+        window.shareCourse = function(title) {{
+          if (navigator.clipboard) navigator.clipboard.writeText(window.location.href);
+          if (typeof window.showToast === "function") window.showToast('Course link copied: "' + title + '"');
+        }};
 
-      function filterSimpleCourses() {{
-        const q = (document.getElementById("courseSimpleSearch").value || "").trim().toLowerCase();
-        document.querySelectorAll(".course-simple-card").forEach(card => {{
-          const text = card.textContent.toLowerCase();
-          card.style.display = (!q || text.includes(q)) ? "flex" : "none";
+        window.filterSimpleCourses = function() {{
+          const q = (document.getElementById("courseSimpleSearch").value || "").trim().toLowerCase();
+          document.querySelectorAll(".course-simple-card").forEach(card => {{
+            const text = card.textContent.toLowerCase();
+            card.style.display = (!q || text.includes(q)) ? "flex" : "none";
+          }});
+        }};
+
+        document.addEventListener("keydown", (e) => {{
+          if (e.key === "Escape") window.closeCourseModal();
         }});
-      }}
-
-      document.addEventListener("keydown", (e) => {{
-        if (e.key === "Escape") closeCourseModal();
-      }});
+      }})();
     </script>
     '''
 
@@ -4748,11 +4789,11 @@ def auth_page(kind, next_path="", error="", message="", preset_role="candidate")
 
           <!-- SSO Buttons -->
           <div class="auth-sso-row">
-            <button type="button" class="sso-btn" onclick="alert('Google sign-in is enabled for registered Google Workspace accounts.')">
+            <button type="button" class="sso-btn" onclick="window.showToast ? showToast('Google Workspace SSO is configured for verified enterprise domains. Use email & password or demo accounts below.') : null">
               <img src="/static/images/google_icon.png" alt="Google" class="sso-icon" width="20" height="20">
               <span>Google</span>
             </button>
-            <button type="button" class="sso-btn" onclick="alert('LinkedIn sign-in is enabled for verified corporate accounts.')">
+            <button type="button" class="sso-btn" onclick="window.showToast ? showToast('LinkedIn SSO is enabled for verified corporate members.') : null">
               <img src="/static/images/linkedin_icon.png" alt="LinkedIn" class="sso-icon" width="20" height="20">
               <span>LinkedIn</span>
             </button>
@@ -4800,7 +4841,9 @@ def auth_page(kind, next_path="", error="", message="", preset_role="candidate")
       }}
 
       function forgotPasswordHint() {{
-        alert('Password reset instructions have been sent to your registered email address.');
+        if (typeof window.showToast === 'function') {{
+          window.showToast('Use your email & password or contact admin@logisticwaves.com for reset.');
+        }}
       }}
     </script>
     '''
@@ -4816,6 +4859,8 @@ def account_shell(user, active, title, subtitle, content):
     ]
     if user.get("role") == "employer":
         links.append(("Employer portal", "/employers", "employer", "building"))
+    if user.get("role") == "admin":
+        links.append(("Admin dashboard", "/admin", "admin", "chart"))
     nav = "".join(
         f'<a class="account-nav-link{" active" if key == active else ""}" href="{e(href)}"'
         f'{" aria-current=page" if key == active else ""}>{icon(icon_name, 17)}<span>{e(label)}</span></a>'
@@ -5065,5 +5110,5 @@ def not_found_page(user, path):
     return layout("Page not found", body, user, description="The requested page was not found.")
 
 
-def admin_dashboard_page(conn, user, message="", error="", tab="overview", page=1):
-    return admin_views.render_admin_dashboard(conn, user, message=message, error=error, tab=tab, page=page)
+def admin_dashboard_page(conn, user, message="", error="", tab="overview", page=1, q=""):
+    return admin_views.render_admin_dashboard(conn, user, message=message, error=error, tab=tab, page=page, q=q)

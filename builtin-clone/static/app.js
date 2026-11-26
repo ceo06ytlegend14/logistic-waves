@@ -117,6 +117,7 @@
       const url = new URL(urlString, window.location.origin);
       if (url.origin !== window.location.origin) return false;
       if (url.pathname.startsWith("/api/")) return false;
+      if (url.pathname.startsWith("/admin")) return false;
       if (url.pathname.startsWith("/logout")) return false;
       if (url.pathname.endsWith(".xml") || url.pathname.endsWith(".txt") || url.pathname.endsWith(".pdf")) return false;
       return true;
@@ -220,10 +221,14 @@
         document.body.dataset.loggedIn = doc.body.dataset.loggedIn;
       }
 
-      // Update primary navigation active links
+      // Update primary navigation active links & header account actions
       const newNav = doc.querySelector(".main-nav");
       const curNav = document.querySelector(".main-nav");
       if (newNav && curNav) curNav.innerHTML = newNav.innerHTML;
+
+      const newHeaderActions = doc.querySelector(".header-actions");
+      const curHeaderActions = document.querySelector(".header-actions");
+      if (newHeaderActions && curHeaderActions) curHeaderActions.innerHTML = newHeaderActions.innerHTML;
 
       const newMobileNav = doc.querySelector(".mobile-nav");
       const curMobileNav = document.querySelector(".mobile-nav");

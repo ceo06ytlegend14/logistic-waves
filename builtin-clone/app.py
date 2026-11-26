@@ -556,7 +556,8 @@ def route(conn, method, path, query, payload, user, token, host, client_ip=""):
         err = query.get("err") or query.get("error", "")
         tab = query.get("tab", "overview")
         page = get_int(query.get("page", "1"), 1, 1, 10000)
-        return Response(views.admin_dashboard_page(conn, user, message=msg, error=err, tab=tab, page=page))
+        q = query.get("q", "").strip()
+        return Response(views.admin_dashboard_page(conn, user, message=msg, error=err, tab=tab, page=page, q=q))
 
     if path == "/admin/seed" and method == "POST":
         action = payload.get("action", "")

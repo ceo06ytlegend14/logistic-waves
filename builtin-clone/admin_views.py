@@ -392,22 +392,71 @@ def render_edit_modals(all_companies):
         "  if (sb) sb.classList.remove('mobile-open');\n"
         "  if (ov) ov.classList.remove('active');\n"
         "}\n"
+        "function filterAdminTable(query) {\n"
+        "  var q = (query || '').trim().toLowerCase();\n"
+        "  document.querySelectorAll('.clean-table tbody').forEach(function(tbody) {\n"
+        "    var rows = Array.from(tbody.querySelectorAll('tr:not(.admin-empty-filter-row)'));\n"
+        "    var shown = 0;\n"
+        "    rows.forEach(function(r) {\n"
+        "      var match = !q || r.textContent.toLowerCase().indexOf(q) !== -1;\n"
+        "      r.style.display = match ? '' : 'none';\n"
+        "      if (match) shown++;\n"
+        "    });\n"
+        "    var emptyRow = tbody.querySelector('.admin-empty-filter-row');\n"
+        "    if (q && shown === 0 && rows.length > 0) {\n"
+        "      if (!emptyRow) {\n"
+        "        emptyRow = document.createElement('tr');\n"
+        "        emptyRow.className = 'admin-empty-filter-row';\n"
+        "        emptyRow.innerHTML = \"<td colspan='8' style='text-align:center;padding:24px;color:#64748b;'>No visible rows match your filter. Press <strong>Enter</strong> to search the full database.</td>\";\n"
+        "        tbody.appendChild(emptyRow);\n"
+        "      }\n"
+        "      emptyRow.style.display = '';\n"
+        "    } else if (emptyRow) {\n"
+        "      emptyRow.style.display = 'none';\n"
+        "    }\n"
+        "  });\n"
+        "}\n"
+        "function toggleAdminNotifMenu(ev) {\n"
+        "  if (ev) ev.preventDefault();\n"
+        "  var m = document.getElementById('adminNotifMenu');\n"
+        "  var u = document.getElementById('adminUserMenu');\n"
+        "  if (u) u.style.display = 'none';\n"
+        "  if (m) m.style.display = m.style.display === 'block' ? 'none' : 'block';\n"
+        "}\n"
+        "function toggleAdminUserMenu() {\n"
+        "  var m = document.getElementById('adminUserMenu');\n"
+        "  var n = document.getElementById('adminNotifMenu');\n"
+        "  if (n) n.style.display = 'none';\n"
+        "  if (m) m.style.display = m.style.display === 'block' ? 'none' : 'block';\n"
+        "}\n"
+        "document.addEventListener('click', function(ev) {\n"
+        "  if (!ev.target.closest('#adminNotifWrap')) {\n"
+        "    var n = document.getElementById('adminNotifMenu');\n"
+        "    if (n) n.style.display = 'none';\n"
+        "  }\n"
+        "  if (!ev.target.closest('#adminUserWrap')) {\n"
+        "    var u = document.getElementById('adminUserMenu');\n"
+        "    if (u) u.style.display = 'none';\n"
+        "  }\n"
+        "});\n"
         "</script>\n"
     )
 
-def _render_pagination(tab: str, page: int, total: int, per_page: int = 20) -> str:
+def _render_pagination(tab: str, page: int, total: int, per_page: int = 20, q: str = "") -> str:
     """Render server-side pagination controls for admin tables."""
+    import urllib.parse as _up
+    q_suffix = f"&amp;q={_up.quote(q)}" if q else ""
     total_pages = max(1, (total + per_page - 1) // per_page)
     if total_pages <= 1:
         return ""
     page = max(1, min(page, total_pages))
     prev_btn = (
-        f"<a href='/admin?tab={e(tab)}&amp;page={page - 1}' class='btn-ctrl btn-ctrl-light' style='padding:5px 12px;font-size:12px;'>&laquo; Prev</a>"
+        f"<a href='/admin?tab={e(tab)}&amp;page={page - 1}{q_suffix}' class='btn-ctrl btn-ctrl-light' style='padding:5px 12px;font-size:12px;'>&laquo; Prev</a>"
         if page > 1 else
         "<span class='btn-ctrl btn-ctrl-light' style='padding:5px 12px;font-size:12px;opacity:.45;cursor:not-allowed;'>&laquo; Prev</span>"
     )
     next_btn = (
-        f"<a href='/admin?tab={e(tab)}&amp;page={page + 1}' class='btn-ctrl btn-ctrl-light' style='padding:5px 12px;font-size:12px;'>Next &raquo;</a>"
+        f"<a href='/admin?tab={e(tab)}&amp;page={page + 1}{q_suffix}' class='btn-ctrl btn-ctrl-light' style='padding:5px 12px;font-size:12px;'>Next &raquo;</a>"
         if page < total_pages else
         "<span class='btn-ctrl btn-ctrl-light' style='padding:5px 12px;font-size:12px;opacity:.45;cursor:not-allowed;'>Next &raquo;</span>"
     )
@@ -419,8 +468,9 @@ def _render_pagination(tab: str, page: int, total: int, per_page: int = 20) -> s
     )
 
 
-def render_admin_dashboard(conn, user, message="", error="", tab="overview", page=1):
+def render_admin_dashboard(conn, user, message="", error="", tab="overview", page=1, q=""):
     page = max(1, int(page or 1))
+    q = (q or "").strip()
     per_page = 20
     offset = (page - 1) * per_page
 
@@ -444,7 +494,10 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
     total_jobs_count   = counts.pop("total_jobs", 0)
     users_count        = counts.get("users", 0)
 
-    # Lazy-tab querying: only fetch rows needed for the active tab
+    like = f"%{db._escape_like(q)}%" if q else None
+    tab_total = None
+
+    # Lazy-tab querying: only fetch rows needed for the active tab (with optional ?q= server search)
     today_videos = []
     all_articles = []
     all_jobs = []
@@ -456,69 +509,152 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
 
     if tab in ("overview", "videos"):
         v_limit = 5 if tab == "overview" else 100
-        today_videos = [dict(r) for r in conn.execute(
-            "SELECT id, slug, title, author, guest, duration, thumb, published, category, excerpt, body, tag, is_today, read_time "
-            "FROM articles WHERE tag='Logistic Waves Today' OR is_today=1 ORDER BY id DESC LIMIT ?",
-            (v_limit,)
-        ).fetchall()]
+        if like and tab == "videos":
+            today_videos = [dict(r) for r in conn.execute(
+                "SELECT id, slug, title, author, guest, duration, thumb, published, category, excerpt, body, tag, is_today, read_time "
+                "FROM articles WHERE (tag='Logistic Waves Today' OR is_today=1) AND (title LIKE ? ESCAPE '\\' OR guest LIKE ? ESCAPE '\\' OR category LIKE ? ESCAPE '\\') "
+                "ORDER BY id DESC LIMIT ?",
+                (like, like, like, v_limit)
+            ).fetchall()]
+        else:
+            today_videos = [dict(r) for r in conn.execute(
+                "SELECT id, slug, title, author, guest, duration, thumb, published, category, excerpt, body, tag, is_today, read_time "
+                "FROM articles WHERE tag='Logistic Waves Today' OR is_today=1 ORDER BY id DESC LIMIT ?",
+                (v_limit,)
+            ).fetchall()]
 
     if tab == "articles":
-        all_articles = [dict(r) for r in conn.execute(
-            "SELECT id, slug, title, category, tag, author, published, is_today, read_time, duration, guest, thumb, excerpt, body "
-            "FROM articles ORDER BY id DESC LIMIT ? OFFSET ?",
-            (per_page, offset)
-        ).fetchall()]
+        if like:
+            tab_total = conn.execute(
+                "SELECT COUNT(*) FROM articles WHERE title LIKE ? ESCAPE '\\' OR category LIKE ? ESCAPE '\\' OR author LIKE ? ESCAPE '\\'",
+                (like, like, like)
+            ).fetchone()[0]
+            all_articles = [dict(r) for r in conn.execute(
+                "SELECT id, slug, title, category, tag, author, published, is_today, read_time, duration, guest, thumb, excerpt, body "
+                "FROM articles WHERE title LIKE ? ESCAPE '\\' OR category LIKE ? ESCAPE '\\' OR author LIKE ? ESCAPE '\\' "
+                "ORDER BY id DESC LIMIT ? OFFSET ?",
+                (like, like, like, per_page, offset)
+            ).fetchall()]
+        else:
+            tab_total = counts["articles"]
+            all_articles = [dict(r) for r in conn.execute(
+                "SELECT id, slug, title, category, tag, author, published, is_today, read_time, duration, guest, thumb, excerpt, body "
+                "FROM articles ORDER BY id DESC LIMIT ? OFFSET ?",
+                (per_page, offset)
+            ).fetchall()]
 
     if tab in ("overview", "jobs"):
         j_limit = 5 if tab == "overview" else per_page
         j_offset = 0 if tab == "overview" else offset
-        all_jobs = [dict(r) for r in conn.execute(
-            "SELECT id, slug, title, company_id, company_slug, company_name, category, level, workplace, location, salary_min, salary_max, salary_display, skills, description, posted_at "
-            "FROM jobs ORDER BY id DESC LIMIT ? OFFSET ?",
-            (j_limit, j_offset)
-        ).fetchall()]
+        if like and tab == "jobs":
+            total_jobs_count = conn.execute(
+                "SELECT COUNT(*) FROM jobs WHERE title LIKE ? ESCAPE '\\' OR company_name LIKE ? ESCAPE '\\' OR location LIKE ? ESCAPE '\\'",
+                (like, like, like)
+            ).fetchone()[0]
+            all_jobs = [dict(r) for r in conn.execute(
+                "SELECT id, slug, title, company_id, company_slug, company_name, category, level, workplace, location, salary_min, salary_max, salary_display, skills, description, posted_at "
+                "FROM jobs WHERE title LIKE ? ESCAPE '\\' OR company_name LIKE ? ESCAPE '\\' OR location LIKE ? ESCAPE '\\' "
+                "ORDER BY id DESC LIMIT ? OFFSET ?",
+                (like, like, like, j_limit, j_offset)
+            ).fetchall()]
+        else:
+            all_jobs = [dict(r) for r in conn.execute(
+                "SELECT id, slug, title, company_id, company_slug, company_name, category, level, workplace, location, salary_min, salary_max, salary_display, skills, description, posted_at "
+                "FROM jobs ORDER BY id DESC LIMIT ? OFFSET ?",
+                (j_limit, j_offset)
+            ).fetchall()]
 
     if tab == "companies":
-        all_companies = [dict(r) for r in conn.execute(
-            "SELECT id, slug, name, initials, color, tagline, industries, location, employees, website, description, open_jobs "
-            "FROM companies ORDER BY name ASC LIMIT ? OFFSET ?",
-            (per_page, offset)
-        ).fetchall()]
+        if like:
+            tab_total = conn.execute(
+                "SELECT COUNT(*) FROM companies WHERE name LIKE ? ESCAPE '\\' OR industries LIKE ? ESCAPE '\\' OR location LIKE ? ESCAPE '\\'",
+                (like, like, like)
+            ).fetchone()[0]
+            all_companies = [dict(r) for r in conn.execute(
+                "SELECT id, slug, name, initials, color, tagline, industries, location, employees, website, description, open_jobs "
+                "FROM companies WHERE name LIKE ? ESCAPE '\\' OR industries LIKE ? ESCAPE '\\' OR location LIKE ? ESCAPE '\\' "
+                "ORDER BY name ASC LIMIT ? OFFSET ?",
+                (like, like, like, per_page, offset)
+            ).fetchall()]
+        else:
+            tab_total = counts["companies"]
+            all_companies = [dict(r) for r in conn.execute(
+                "SELECT id, slug, name, initials, color, tagline, industries, location, employees, website, description, open_jobs "
+                "FROM companies ORDER BY name ASC LIMIT ? OFFSET ?",
+                (per_page, offset)
+            ).fetchall()]
     elif tab in ("overview", "jobs"):
         all_companies = [dict(r) for r in conn.execute(
             "SELECT slug, name FROM companies ORDER BY name ASC"
         ).fetchall()]
 
     if tab == "users":
-        all_users = [dict(r) for r in conn.execute(
-            "SELECT id, name, email, role, created_at FROM users ORDER BY id DESC LIMIT 100"
-        ).fetchall()]
+        if like:
+            all_users = [dict(r) for r in conn.execute(
+                "SELECT id, name, email, role, created_at FROM users WHERE name LIKE ? ESCAPE '\\' OR email LIKE ? ESCAPE '\\' ORDER BY id DESC LIMIT 100",
+                (like, like)
+            ).fetchall()]
+        else:
+            all_users = [dict(r) for r in conn.execute(
+                "SELECT id, name, email, role, created_at FROM users ORDER BY id DESC LIMIT 100"
+            ).fetchall()]
 
     if tab == "applications":
         try:
-            all_applications = [dict(r) for r in conn.execute(
-                "SELECT a.id, a.status, a.note, a.created_at,"
-                " j.title as job_title, j.id as job_id, j.slug as job_slug,"
-                " u.name as user_name, u.email as user_email"
-                " FROM applications a"
-                " JOIN jobs j ON a.job_id=j.id"
-                " JOIN users u ON a.user_id=u.id"
-                " ORDER BY a.id DESC LIMIT ? OFFSET ?",
-                (per_page, offset)
-            ).fetchall()]
+            if like:
+                applications_count = conn.execute(
+                    "SELECT COUNT(*) FROM applications a JOIN jobs j ON a.job_id=j.id JOIN users u ON a.user_id=u.id "
+                    "WHERE j.title LIKE ? ESCAPE '\\' OR u.name LIKE ? ESCAPE '\\' OR u.email LIKE ? ESCAPE '\\'",
+                    (like, like, like)
+                ).fetchone()[0]
+                all_applications = [dict(r) for r in conn.execute(
+                    "SELECT a.id, a.status, a.note, a.created_at,"
+                    " j.title as job_title, j.id as job_id, j.slug as job_slug,"
+                    " u.name as user_name, u.email as user_email"
+                    " FROM applications a"
+                    " JOIN jobs j ON a.job_id=j.id"
+                    " JOIN users u ON a.user_id=u.id"
+                    " WHERE j.title LIKE ? ESCAPE '\\' OR u.name LIKE ? ESCAPE '\\' OR u.email LIKE ? ESCAPE '\\'"
+                    " ORDER BY a.id DESC LIMIT ? OFFSET ?",
+                    (like, like, like, per_page, offset)
+                ).fetchall()]
+            else:
+                all_applications = [dict(r) for r in conn.execute(
+                    "SELECT a.id, a.status, a.note, a.created_at,"
+                    " j.title as job_title, j.id as job_id, j.slug as job_slug,"
+                    " u.name as user_name, u.email as user_email"
+                    " FROM applications a"
+                    " JOIN jobs j ON a.job_id=j.id"
+                    " JOIN users u ON a.user_id=u.id"
+                    " ORDER BY a.id DESC LIMIT ? OFFSET ?",
+                    (per_page, offset)
+                ).fetchall()]
         except Exception:
             pass
 
     if tab == "subscribers":
-        all_subscribers = [dict(r) for r in conn.execute(
-            "SELECT id, email, created_at FROM subscribers ORDER BY id DESC LIMIT 100"
-        ).fetchall()]
+        if like:
+            all_subscribers = [dict(r) for r in conn.execute(
+                "SELECT id, email, created_at FROM subscribers WHERE email LIKE ? ESCAPE '\\' ORDER BY id DESC LIMIT 100",
+                (like,)
+            ).fetchall()]
+        else:
+            all_subscribers = [dict(r) for r in conn.execute(
+                "SELECT id, email, created_at FROM subscribers ORDER BY id DESC LIMIT 100"
+            ).fetchall()]
 
     if tab == "salaries":
-        all_salaries = [dict(r) for r in conn.execute(
-            "SELECT id, title, category, median, low, high, samples, trend "
-            "FROM salaries ORDER BY id DESC LIMIT 100"
-        ).fetchall()]
+        if like:
+            all_salaries = [dict(r) for r in conn.execute(
+                "SELECT id, title, category, median, low, high, samples, trend "
+                "FROM salaries WHERE title LIKE ? ESCAPE '\\' OR category LIKE ? ESCAPE '\\' ORDER BY id DESC LIMIT 100",
+                (like, like)
+            ).fetchall()]
+        else:
+            all_salaries = [dict(r) for r in conn.execute(
+                "SELECT id, title, category, median, low, high, samples, trend "
+                "FROM salaries ORDER BY id DESC LIMIT 100"
+            ).fetchall()]
 
     # Alert banner
     alert_html = ""
@@ -799,11 +935,11 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
         "<button type='submit' class='btn-submit-clean'><i class='fa-solid fa-upload'></i> Publish Article</button>"
         "</form></div>"
         "<div class='table-card'>"
-        "<div class='table-header-bar'><h3 class='table-title'>All Articles &amp; Reports (" + str(counts['articles']) + ")</h3></div>"
+        "<div class='table-header-bar'><h3 class='table-title'>All Articles &amp; Reports (" + str(tab_total if tab_total is not None else counts['articles']) + ")</h3></div>"
         "<table class='clean-table'>"
         "<thead><tr><th>Title &amp; Slug</th><th>Category</th><th>Tag</th><th>Author</th><th>Date</th><th>Action</th></tr></thead>"
         "<tbody>" + articles_rows + "</tbody>"
-        "</table>" + _render_pagination("articles", page, counts["articles"], per_page) + "</div></div>"
+        "</table>" + _render_pagination("articles", page, tab_total if tab_total is not None else counts["articles"], per_page, q) + "</div></div>"
     )
 
     # ======================= JOBS TAB =======================
@@ -881,7 +1017,7 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
         "<table class='clean-table'>"
         "<thead><tr><th>Title &amp; Company</th><th>Category</th><th>Workplace</th><th>Location</th><th>Salary</th><th>Posted</th><th>Action</th></tr></thead>"
         "<tbody>" + jobs_rows + "</tbody>"
-        "</table>" + _render_pagination("jobs", page, total_jobs_count, per_page) + "</div></div>"
+        "</table>" + _render_pagination("jobs", page, total_jobs_count, per_page, q) + "</div></div>"
     )
 
     # ======================= COMPANIES TAB =======================
@@ -937,11 +1073,11 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
         "<button type='submit' class='btn-submit-clean' style='background:#8b5cf6;'><i class='fa-solid fa-plus'></i> Register Company</button>"
         "</form></div>"
         "<div class='table-card'>"
-        "<div class='table-header-bar'><h3 class='table-title'>Registered Companies (" + str(counts['companies']) + ")</h3></div>"
+        "<div class='table-header-bar'><h3 class='table-title'>Registered Companies (" + str(tab_total if tab_total is not None else counts['companies']) + ")</h3></div>"
         "<table class='clean-table'>"
         "<thead><tr><th>Company</th><th>Industry</th><th>Headquarters</th><th>Team Size</th><th>Jobs</th><th>Action</th></tr></thead>"
         "<tbody>" + companies_rows + "</tbody>"
-        "</table>" + _render_pagination("companies", page, counts["companies"], per_page) + "</div></div>"
+        "</table>" + _render_pagination("companies", page, tab_total if tab_total is not None else counts["companies"], per_page, q) + "</div></div>"
     )
 
     # ======================= USERS TAB =======================
@@ -1068,7 +1204,7 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
         "<table class='clean-table'>"
         "<thead><tr><th>Applicant</th><th>Job Position</th><th>Status</th><th>Notes</th><th>Applied</th><th>Action</th></tr></thead>"
         "<tbody>" + applications_rows + "</tbody>"
-        "</table>" + _render_pagination("applications", page, applications_count, per_page) + "</div>"
+        "</table>" + _render_pagination("applications", page, applications_count, per_page, q) + "</div>"
     )
 
     # ======================= SUBSCRIBERS TAB =======================
@@ -1249,18 +1385,37 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
         "<i class='fa-solid fa-bars'></i> Menu</button>"
         "<a href='/admin?tab=videos' class='btn-add-new'><i class='fa-solid fa-plus'></i> Add New</a>"
         "<div class='search-box'><i class='fa-solid fa-magnifying-glass'></i>"
-        "<input type='text' class='search-input' placeholder='Search...' aria-label='Search'></div>"
+        "<input type='text' class='search-input' value='" + e(q) + "' placeholder='Filter or press Enter to search...' aria-label='Search' "
+        "oninput='filterAdminTable(this.value)' "
+        "onkeydown=\"if(event.key==='Enter'){window.location='/admin?tab=" + e(tab) + "&q='+encodeURIComponent(this.value);}\"></div>"
         "</div>"
         "<div class='topbar-right'>"
-        "<div class='topbar-user'>"
+        "<div id='adminUserWrap' style='position:relative;'>"
+        "<button type='button' class='topbar-user' onclick='toggleAdminUserMenu()' style='background:none;border:none;cursor:pointer;padding:4px 8px;border-radius:10px;'>"
         "<div style='width:36px;height:36px;border-radius:50%;background:#3874ff;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;'>" + e(admin_initial) + "</div>"
         "<div class='topbar-user-info'>"
         "<span class='topbar-user-name'>" + e(admin_name) + "</span>"
         "<span class='topbar-user-role'>Admin</span>"
         "</div>"
         "<i class='fa-solid fa-chevron-down' style='font-size:11px;color:#94a3b8;'></i>"
-        "</div>"
-        "<a href='#' class='topbar-icon-btn' title='Notifications'><i class='fa-regular fa-bell'></i><span class='notification-dot'></span></a>"
+        "</button>"
+        "<div id='adminUserMenu' style='display:none;position:absolute;right:0;top:50px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 12px 30px rgba(15,23,42,.15);min-width:190px;padding:6px;z-index:2000;'>"
+        "<a href='/profile' style='display:flex;align-items:center;gap:8px;padding:8px 12px;font-size:13px;color:#1e293b;border-radius:8px;text-decoration:none;'><i class='fa-solid fa-user' style='color:#3874ff;width:16px;'></i> Member Profile</a>"
+        "<a href='/' target='_blank' style='display:flex;align-items:center;gap:8px;padding:8px 12px;font-size:13px;color:#1e293b;border-radius:8px;text-decoration:none;'><i class='fa-solid fa-globe' style='color:#10b981;width:16px;'></i> Live Website</a>"
+        "<form method='post' action='/logout' style='margin:4px 0 0;padding-top:4px;border-top:1px solid #f1f5f9;'>"
+        "<button type='submit' style='width:100%;display:flex;align-items:center;gap:8px;padding:8px 12px;font-size:13px;color:#ef4444;background:none;border:none;border-radius:8px;cursor:pointer;font-weight:600;text-align:left;'><i class='fa-solid fa-right-from-bracket' style='width:16px;'></i> Log Out</button>"
+        "</form></div></div>"
+        "<div id='adminNotifWrap' style='position:relative;'>"
+        "<button type='button' id='adminNotifBtn' onclick='toggleAdminNotifMenu(event)' class='topbar-icon-btn' title='Notifications' style='border:none;cursor:pointer;'><i class='fa-regular fa-bell'></i><span class='notification-dot'></span></button>"
+        "<div id='adminNotifMenu' style='display:none;position:absolute;right:0;top:48px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 12px 30px rgba(15,23,42,.15);width:290px;padding:12px;z-index:2000;'>"
+        "<div style='font-size:13px;font-weight:800;color:#0f172a;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;'><span>Platform Activity</span><span style='font-size:11px;color:#3874ff;'>Live DB</span></div>"
+        "<a href='/admin?tab=applications' style='display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:#f8fafc;border-radius:8px;margin-bottom:6px;text-decoration:none;color:#1e293b;font-size:12.5px;'>"
+        "<span><i class='fa-solid fa-file-signature' style='color:#8b5cf6;margin-right:6px;'></i> Job Applications</span><strong style='color:#3874ff;'>" + str(applications_count) + "</strong></a>"
+        "<a href='/admin?tab=subscribers' style='display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:#f8fafc;border-radius:8px;margin-bottom:6px;text-decoration:none;color:#1e293b;font-size:12.5px;'>"
+        "<span><i class='fa-solid fa-envelope' style='color:#10b981;margin-right:6px;'></i> Newsletter Subscribers</span><strong style='color:#10b981;'>" + str(subscribers_count) + "</strong></a>"
+        "<a href='/admin?tab=jobs' style='display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:#f8fafc;border-radius:8px;text-decoration:none;color:#1e293b;font-size:12.5px;'>"
+        "<span><i class='fa-solid fa-briefcase' style='color:#06b6d4;margin-right:6px;'></i> Active Jobs</span><strong>" + str(counts['jobs']) + "</strong></a>"
+        "</div></div>"
         "<a href='/' class='topbar-icon-btn' title='Exit to Site'><i class='fa-solid fa-arrow-right-from-bracket'></i></a>"
         "</div></header>\n"
 
@@ -1282,27 +1437,27 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
         "<button type='submit' name='action' value='clear_videos' class='btn-ctrl btn-ctrl-light' onclick=\"return confirm('Reset all Today videos?');\"><i class='fa-solid fa-trash-can'></i> Reset Videos</button>"
         "</form></div>\n"
 
-        # Stat cards
+        # Stat cards (clickable shortcuts to each section)
         "<div class='stat-cards-grid'>"
-        "<div class='stat-card'><div class='stat-card-left'>"
+        "<div class='stat-card' style='cursor:pointer;' onclick=\"window.location='/admin?tab=videos'\"><div class='stat-card-left'>"
         + circular_gauge_svg(pct_videos, "#3874ff") +
         "<div class='stat-card-info'><h4>Today<br>Videos</h4><div class='stat-number'>" + str(today_videos_count) + "</div>"
         "<div class='stat-card-trend trend-up'>Live " + mini_wave_svg("#3874ff") + "</div>"
         "</div></div><i class='fa-solid fa-ellipsis stat-card-menu'></i></div>"
 
-        "<div class='stat-card'><div class='stat-card-left'>"
+        "<div class='stat-card' style='cursor:pointer;' onclick=\"window.location='/admin?tab=articles'\"><div class='stat-card-left'>"
         + circular_gauge_svg(pct_arts, "#10b981") +
         "<div class='stat-card-info'><h4>Editorial<br>Articles</h4><div class='stat-number'>" + str(counts['articles']) + "</div>"
         "<div class='stat-card-trend trend-up'>16% &uarr; " + mini_wave_svg("#10b981") + "</div>"
         "</div></div><i class='fa-solid fa-ellipsis stat-card-menu'></i></div>"
 
-        "<div class='stat-card'><div class='stat-card-left'>"
+        "<div class='stat-card' style='cursor:pointer;' onclick=\"window.location='/admin?tab=jobs'\"><div class='stat-card-left'>"
         + circular_gauge_svg(pct_jobs, "#06b6d4") +
         "<div class='stat-card-info'><h4>Active<br>Jobs</h4><div class='stat-number'>" + str(counts['jobs']) + "</div>"
         "<div class='stat-card-trend trend-up'>12% &uarr; " + mini_wave_svg("#06b6d4") + "</div>"
         "</div></div><i class='fa-solid fa-ellipsis stat-card-menu'></i></div>"
 
-        "<div class='stat-card'><div class='stat-card-left'>"
+        "<div class='stat-card' style='cursor:pointer;' onclick=\"window.location='/admin?tab=users'\"><div class='stat-card-left'>"
         + circular_gauge_svg(pct_users, "#8b5cf6") +
         "<div class='stat-card-info'><h4>Users &amp;<br>Members</h4><div class='stat-number'>" + str(users_count) + "</div>"
         "<div class='stat-card-trend trend-up'>" + str(applications_count) + " apps " + mini_wave_svg("#8b5cf6") + "</div>"
