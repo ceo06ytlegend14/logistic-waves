@@ -906,18 +906,20 @@ def logistic_waves_today_section(conn):
     '''
 
 def home_page(conn, user):
-    c = db.counts(conn)
-    best_jobs = [db.as_dict(r) for r in conn.execute(
-        "SELECT * FROM jobs WHERE status='active' ORDER BY id ASC LIMIT 9"
-    ).fetchall()]
-    
-    dir_companies = [db.as_dict(r) for r in conn.execute(
-        "SELECT * FROM companies ORDER BY open_jobs DESC"
-    ).fetchall()]
-
-    opp_jobs = [db.as_dict(r) for r in conn.execute(
-        "SELECT * FROM jobs WHERE status='active' ORDER BY id DESC LIMIT 6"
-    ).fetchall()]
+    def _load_home_core():
+        return (
+            db.counts(conn),
+            [db.as_dict(r) for r in conn.execute(
+                "SELECT * FROM jobs WHERE status='active' ORDER BY id ASC LIMIT 9"
+            ).fetchall()],
+            [db.as_dict(r) for r in conn.execute(
+                "SELECT * FROM companies ORDER BY open_jobs DESC"
+            ).fetchall()],
+            [db.as_dict(r) for r in conn.execute(
+                "SELECT * FROM jobs WHERE status='active' ORDER BY id DESC LIMIT 6"
+            ).fetchall()],
+        )
+    c, best_jobs, dir_companies, opp_jobs = db.cached_query("home_core", 60, _load_home_core)
 
     # 3x3 Best Jobs Cards
     best_jobs_html = []
@@ -1049,11 +1051,15 @@ def home_page(conn, user):
       </div>
     </section>"""
 
-    editorial_articles = [db.as_dict(r) for r in conn.execute(
-        """SELECT * FROM articles
-           ORDER BY CASE WHEN COALESCE(is_today, 0) = 0 THEN 0 ELSE 1 END ASC, id DESC
-           LIMIT 8"""
-    ).fetchall()]
+    editorial_articles = db.cached_query(
+        "home_editorial",
+        60,
+        lambda: [db.as_dict(r) for r in conn.execute(
+            """SELECT * FROM articles
+               ORDER BY CASE WHEN COALESCE(is_today, 0) = 0 THEN 0 ELSE 1 END ASC, id DESC
+               LIMIT 8"""
+        ).fetchall()],
+    )
     _ed_img = _article_cover_url
 
     if editorial_articles:
@@ -2675,38 +2681,6 @@ def articles_page(conn, user, q="", category="", tag="", featured=None):
         dynamic_track = '<div class="carousel-track" id="carouselTrack">\n' + "\n".join(cards_html) + '\n</div>\n</div>'
         track_pattern = re.compile(r'<div class="carousel-track" id="carouselTrack">.*?</div>\s*</div>', re.DOTALL)
         hub_content = track_pattern.sub(dynamic_track, hub_content, count=1)
-
-    latest_editorial = [db.as_dict(r) for r in conn.execute(
-        "SELECT * FROM articles WHERE COALESCE(is_today, 0) = 0 ORDER BY id DESC LIMIT 6"
-    ).fetchall()]
-    if latest_editorial and '<div id="lw-hub-overview">' in hub_content:
-        latest_cards = "".join(
-            f'''<article class="lw-db-card" style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;display:flex;flex-direction:column;transition:all 0.2s;">
-              <a href="/articles/{e(a['slug'])}" style="display:block;aspect-ratio:16/9;overflow:hidden;background:#f1f5f9;">
-                <img src="{e(_article_cover_url(a, i))}" alt="{e(a['title'])}" width="400" height="175" decoding="async" style="width:100%;height:100%;object-fit:cover;display:block;" loading="lazy">
-              </a>
-              <div style="padding:14px 16px;display:flex;flex-direction:column;gap:6px;flex:1;">
-                <span style="font-size:11px;font-weight:700;color:#0284c7;text-transform:uppercase;letter-spacing:0.05em;">{e(a.get('category') or 'Editorial')}</span>
-                <h3 style="margin:0;font-size:16px;line-height:1.35;"><a href="/articles/{e(a['slug'])}" style="color:#0f172a;text-decoration:none;">{e(a['title'])}</a></h3>
-                <p style="margin:0;font-size:13px;color:#475569;line-height:1.5;flex:1;">{e(a.get('excerpt') or '')}</p>
-                <div style="font-size:11.5px;color:#64748b;padding-top:6px;border-top:1px solid #f1f5f9;">{e(a.get('author') or 'Editorial Staff')} &middot; {e(a.get('published') or '')}</div>
-              </div>
-            </article>''' for i, a in enumerate(latest_editorial)
-        )
-        latest_section = f'''<div id="lw-hub-overview">
-<section class="section container lw-db-latest-section" style="padding-top:24px;padding-bottom:8px;">
-  <div class="section-head" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
-    <h2 class="section-title" style="margin:0;">Latest Editorial Briefings</h2>
-    <form method="get" action="/article-blogs" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;max-width:100%;">
-      <input type="search" name="q" placeholder="Search briefings..." style="padding:7px 12px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;flex:1 1 170px;min-width:0;max-width:100%;">
-      <button class="btn btn-outline btn-sm" type="submit" style="flex-shrink:0;">Search</button>
-    </form>
-  </div>
-  <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(290px, 1fr));gap:18px;">
-    {latest_cards}
-  </div>
-</section>'''
-        hub_content = hub_content.replace('<div id="lw-hub-overview">', latest_section, 1)
 
     body = f'''
     <div id="view-article">

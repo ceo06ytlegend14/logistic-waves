@@ -239,18 +239,34 @@ class PgCursor:
 
 
 class PgConn:
-    def __init__(self, raw_conn):
+    def __init__(self, raw_conn, pooled=False):
         self._conn = raw_conn
         self._conn.autocommit = True
+        self._pooled = pooled
 
     def cursor(self):
         import psycopg2.extras
         return PgCursor(self._conn.cursor(cursor_factory=psycopg2.extras.DictCursor))
 
     def execute(self, sql, params=None):
-        cur = self.cursor()
-        cur.execute(sql, params)
-        return cur
+        try:
+            cur = self.cursor()
+            cur.execute(sql, params)
+            return cur
+        except Exception as ex:
+            # Reconnect once if a pooled serverless connection went stale
+            if self._pooled and ex.__class__.__name__ in ("OperationalError", "InterfaceError"):
+                db_url = os.environ.get("DATABASE_URL") or os.environ.get("POSTGRES_URL")
+                if db_url:
+                    import psycopg2
+                    global _PG_RAW_CONN
+                    _PG_RAW_CONN = psycopg2.connect(db_url, connect_timeout=10)
+                    _PG_RAW_CONN.autocommit = True
+                    self._conn = _PG_RAW_CONN
+                    cur = self.cursor()
+                    cur.execute(sql, params)
+                    return cur
+            raise
 
     def executemany(self, sql, seq_of_params):
         cur = self.cursor()
@@ -268,19 +284,51 @@ class PgConn:
             pass
 
     def close(self):
+        if self._pooled:
+            return
         try:
             self._conn.close()
         except Exception:
             pass
 
+
+_PG_RAW_CONN = None
+_TTL_CACHE = {}
+
+
+def cached_query(key, ttl_seconds, fn):
+    """Lightweight in-process TTL cache for read-heavy public catalog queries."""
+    import time
+    now = time.monotonic()
+    entry = _TTL_CACHE.get(key)
+    if entry and (now - entry[0]) < ttl_seconds:
+        return entry[1]
+    val = fn()
+    _TTL_CACHE[key] = (now, val)
+    return val
+
+
+def invalidate_cache(prefix=None):
+    if prefix is None:
+        _TTL_CACHE.clear()
+    else:
+        for k in list(_TTL_CACHE.keys()):
+            if k.startswith(prefix):
+                _TTL_CACHE.pop(k, None)
+
+
 def connect():
+    global _PG_RAW_CONN
     db_url = os.environ.get("DATABASE_URL") or os.environ.get("POSTGRES_URL")
     if db_url:
         try:
             import psycopg2
-            raw = psycopg2.connect(db_url, connect_timeout=10)
-            return PgConn(raw)
+            if _PG_RAW_CONN is None or _PG_RAW_CONN.closed:
+                _PG_RAW_CONN = psycopg2.connect(db_url, connect_timeout=10)
+                _PG_RAW_CONN.autocommit = True
+            return PgConn(_PG_RAW_CONN, pooled=True)
         except Exception as e:
+            _PG_RAW_CONN = None
             print(f"[db] Warning: Could not connect to PostgreSQL ({e}), falling back to SQLite.")
 
     if not os.environ.get("VERCEL"):
