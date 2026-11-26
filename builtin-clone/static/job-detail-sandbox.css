@@ -175,8 +175,9 @@
   color: #64748b;
   font-weight: 500;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: 4px 6px;
 }
 
 .sub-dot {
@@ -884,6 +885,9 @@
 }
 
 @media (max-width: 576px) {
+  .flagship-job-card {
+    padding: 20px 18px;
+  }
   .role-actions-row {
     flex-direction: column;
   }

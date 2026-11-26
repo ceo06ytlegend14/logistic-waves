@@ -224,13 +224,13 @@
   display:block;width:100%;text-align:center;padding:15px 18px;font-weight:700;letter-spacing:.4px;font-size:13.5px
 }
 
-#view-article .btn-outline {
+#view-article .btn-outline:not(.btn-sm) {
   display:block;width:347px;max-width:100%;margin:26px auto 0;text-align:center;
   background:#fff;border:1px solid var(--line);color:var(--ink);
   font-weight:700;font-size:14px;padding:13px 18px;border-radius:2px;
 }
 
-#view-article .btn-outline:hover {
+#view-article .btn-outline:not(.btn-sm):hover {
   border-color:var(--blue);color:var(--blue)
 }
 

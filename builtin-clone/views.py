@@ -501,7 +501,7 @@ def layout(title, body, user=None, active="", description="", page_class="", ext
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@700;800&family=Montserrat:wght@700;800;900&family=Syncopate:wght@700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/styles.css?v=20261126_perf">
+  <link rel="stylesheet" href="/static/styles.css?v=20261126_perf2">
   <link rel="stylesheet" href="/static/home-recreation.css?v=20261126_perf">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   {extra_head}
@@ -1880,11 +1880,11 @@ def job_detail_page(conn, user, job, similar):
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="/static/styles.css?v=20261126_perf">
+  <link rel="stylesheet" href="/static/styles.css?v=20261126_perf2">
   <link rel="stylesheet" href="/static/home-recreation.css?v=20261126_perf">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link rel="stylesheet" href="/static/thesandbox-css/builtin-theme.css">
-  <link rel="stylesheet" href="/static/job-detail-sandbox.css?v=20261126_perf">
+  <link rel="stylesheet" href="/static/job-detail-sandbox.css?v=20261126_perf2">
 </head>
 <body data-logged-in="{'true' if user else 'false'}">
 
@@ -2588,7 +2588,7 @@ def salary_detail_page(conn, user, salary, related_jobs):
 # ---------- articles ----------
 
 def articles_page(conn, user, q="", category="", tag="", featured=None):
-    extra_head = '''<link rel="stylesheet" href="/static/article.css?v=20261126_perf">
+    extra_head = '''<link rel="stylesheet" href="/static/article.css?v=20261126_perf2">
     <style>
       #view-article {
         display: block !important;
@@ -2711,9 +2711,9 @@ def articles_page(conn, user, q="", category="", tag="", featured=None):
 <section class="section container lw-db-latest-section" style="padding-top:24px;padding-bottom:8px;">
   <div class="section-head" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
     <h2 class="section-title" style="margin:0;">Latest Editorial Briefings</h2>
-    <form method="get" action="/article-blogs" style="display:flex;gap:8px;align-items:center;">
-      <input type="search" name="q" placeholder="Search briefings..." style="padding:7px 12px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;">
-      <button class="btn btn-outline btn-sm" type="submit">Search</button>
+    <form method="get" action="/article-blogs" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;max-width:100%;">
+      <input type="search" name="q" placeholder="Search briefings..." style="padding:7px 12px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;flex:1 1 170px;min-width:0;max-width:100%;">
+      <button class="btn btn-outline btn-sm" type="submit" style="flex-shrink:0;">Search</button>
     </form>
   </div>
   <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(290px, 1fr));gap:18px;">

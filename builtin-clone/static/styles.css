@@ -4484,20 +4484,77 @@ body {
   text-decoration: none !important;
 }
 
+@media (max-width: 860px) {
+  .site-header {
+    height: auto !important;
+  }
+  .site-header .container {
+    width: 100% !important;
+    padding: 0 14px !important;
+  }
+  .site-header .header-inner {
+    height: 66px !important;
+    gap: 10px !important;
+  }
+  .site-header .main-nav,
+  .site-header .header-auth,
+  .site-header .header-sep,
+  .site-header .employer-btn,
+  .site-header a.employer-btn,
+  .site-header .user-dropdown,
+  .site-header .header-actions > a[href="/admin"] {
+    display: none !important;
+  }
+  .site-header .header-actions {
+    gap: 6px !important;
+    flex-shrink: 0 !important;
+  }
+  .site-header .mobile-menu-btn {
+    display: inline-flex !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .site-header .brand {
+    margin-right: 4px !important;
+    min-width: 0 !important;
+  }
+  .brand-logistic-waves {
+    gap: 8px !important;
+  }
+  .site-header .brand-diamond-wrap {
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+    min-height: 34px !important;
+  }
+  .site-header .brand-lw-main,
+  .site-header .brand-lw-accent {
+    font-size: 15px !important;
+  }
+  .site-header .brand-sub-row {
+    font-size: 6.5px !important;
+    letter-spacing: 0.2em !important;
+  }
+}
+
 /* Promo Ticker Bar */
+.promo-running-bar,
 .promo-ticker {
-  background: #f1f5f9 !important;
-  border-top: 1px solid #e2e8f0 !important;
-  border-bottom: 1px solid #e2e8f0 !important;
+  background: #ffffff !important;
+  border-top: 1px solid #0071e3 !important;
+  border-bottom: 1px solid #0071e3 !important;
+  color: #0071e3 !important;
 }
 
 .promo-ticker-text {
-  color: #334155 !important;
-  font-weight: 600 !important;
+  color: #0071e3 !important;
+  font-weight: 500 !important;
 }
 
 .promo-ticker-dot {
-  color: #94a3b8 !important;
+  color: #0071e3 !important;
+  opacity: 0.6 !important;
 }
 
 /* Smoke White Footer */
