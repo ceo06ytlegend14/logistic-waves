@@ -382,7 +382,7 @@ def header(user, active=""):
         <div class="header-actions">
           <button class="icon-btn search-trigger" type="button" aria-label="Open search">{icon("search", 22)}</button>
           {account}
-          <a class="btn btn-outline-light employer-btn" href="/employers">FOR EMPLOYERS</a>
+          <a class="btn btn-outline-light employer-btn" href="/employers">For Employers</a>
           <button class="icon-btn mobile-menu-btn" type="button" aria-label="Open menu">{icon("menu", 24)}</button>
         </div>
       </div>
@@ -477,7 +477,7 @@ def layout(title, body, user=None, active="", description="", page_class="", ext
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@700;800&family=Montserrat:wght@700;800;900&family=Syncopate:wght@700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/styles.css?v=20261114_sidebar">
+  <link rel="stylesheet" href="/static/styles.css?v=20261126_apple_btn2">
   <link rel="stylesheet" href="/static/home-recreation.css?v=20261114_sidebar">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   {extra_head}
@@ -1038,10 +1038,7 @@ def home_page(conn, user):
                 Explore Insights
               </a>
               <a class="hero-btn-secondary" href="#overview" onclick="openFwtModal(0); return false;" aria-label="Watch Overview Video">
-                <span class="hero-yt-badge">
-                  <i class="fa-brands fa-youtube"></i>
-                </span>
-                <span>Watch Overview</span>
+                Watch Overview
               </a>
             </div>
 
@@ -1879,7 +1876,7 @@ def job_detail_page(conn, user, job, similar):
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="/static/styles.css?v=20261114_sidebar">
+  <link rel="stylesheet" href="/static/styles.css?v=20261126_apple_btn2">
   <link rel="stylesheet" href="/static/home-recreation.css?v=20261114_sidebar">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link rel="stylesheet" href="/static/thesandbox-css/builtin-theme.css">

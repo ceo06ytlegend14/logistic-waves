@@ -812,6 +812,8 @@ td > span { display: block; font-size: 11px; color: var(--muted); margin-top: 2p
   .page-hero { padding: 28px 0 38px; }
   .auth-card { padding: 24px; }
   .company-search-form .pill-select { flex: 1; }
+  .dict-entry { grid-template-columns: 44px 1fr; gap: 12px; padding: 14px; }
+  .dict-letter { width: 40px; height: 40px; font-size: 18px; }
 }
 
 /* ---------- LinkedIn-style company & job views ---------- */
@@ -3977,23 +3979,27 @@ body {
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
-  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%) !important;
+  background: #0071e3 !important;
   color: #ffffff !important;
-  font-family: "Plus Jakarta Sans", sans-serif !important;
-  font-size: 14.5px !important;
-  font-weight: 700 !important;
-  padding: 14px 30px !important;
-  border-radius: 9999px !important;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Plus Jakarta Sans", sans-serif !important;
+  font-size: 16px !important;
+  font-weight: 400 !important;
+  letter-spacing: -0.01em !important;
+  line-height: 1.2 !important;
+  padding: 11px 22px !important;
+  border-radius: 980px !important;
   text-decoration: none !important;
-  border: none !important;
-  box-shadow: 0 4px 16px rgba(2, 132, 199, 0.4) !important;
-  transition: all 0.2s ease !important;
+  border: 1px solid #0071e3 !important;
+  box-shadow: none !important;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease !important;
   cursor: pointer !important;
 }
 
 .smoke-white-hero .hero-btn-primary:hover {
-  transform: translateY(-1.5px) !important;
-  box-shadow: 0 6px 22px rgba(2, 132, 199, 0.5) !important;
+  background: #0077ed !important;
+  border-color: #0077ed !important;
+  transform: none !important;
+  box-shadow: none !important;
   color: #ffffff !important;
 }
 
@@ -4001,26 +4007,29 @@ body {
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
-  gap: 10px !important;
-  background: #ffffff !important;
-  border: 1.5px solid #cbd5e1 !important;
-  color: #0f172a !important;
-  font-family: "Plus Jakarta Sans", sans-serif !important;
-  font-size: 14.5px !important;
-  font-weight: 700 !important;
-  padding: 13px 26px !important;
-  border-radius: 9999px !important;
+  gap: 8px !important;
+  background: transparent !important;
+  border: 1px solid #0071e3 !important;
+  color: #0071e3 !important;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Plus Jakarta Sans", sans-serif !important;
+  font-size: 16px !important;
+  font-weight: 400 !important;
+  letter-spacing: -0.01em !important;
+  line-height: 1.2 !important;
+  padding: 11px 22px !important;
+  border-radius: 980px !important;
   text-decoration: none !important;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05) !important;
-  transition: all 0.2s ease !important;
+  box-shadow: none !important;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease !important;
   cursor: pointer !important;
 }
 
 .smoke-white-hero .hero-btn-secondary:hover {
-  background: #f8fafc !important;
-  border-color: #94a3b8 !important;
-  transform: translateY(-1.5px) !important;
-  color: #0f172a !important;
+  background: #0071e3 !important;
+  border-color: #0071e3 !important;
+  transform: none !important;
+  box-shadow: none !important;
+  color: #ffffff !important;
 }
 
 .smoke-white-hero .hero-yt-badge {
@@ -4451,23 +4460,27 @@ body {
 
 .site-header .employer-btn,
 .site-header a.employer-btn {
-  background: #eff6ff !important;
-  color: #0284c7 !important;
-  border: 1.5px solid #bfdbfe !important;
+  background: transparent !important;
+  color: #0066cc !important;
+  border: 1.5px solid #0066cc !important;
   border-radius: 9999px !important;
-  padding: 8px 18px !important;
-  font-size: 11.5px !important;
-  font-weight: 800 !important;
-  letter-spacing: 0.06em !important;
+  padding: 6px 16px !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  letter-spacing: -0.01em !important;
+  text-transform: none !important;
   transition: all 0.2s ease !important;
   text-decoration: none !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
 }
 
 .site-header .employer-btn:hover,
 .site-header a.employer-btn:hover {
-  background: #0284c7 !important;
+  background: #0066cc !important;
   color: #ffffff !important;
-  border-color: #0284c7 !important;
+  border-color: #0066cc !important;
   text-decoration: none !important;
 }
 
