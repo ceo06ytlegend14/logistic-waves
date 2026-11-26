@@ -182,6 +182,8 @@ class PgCursor:
 
     def execute(self, sql, params=None):
         pg_sql = sql.replace("?", "%s")
+        # PostgreSQL LIKE is case-sensitive whereas SQLite LIKE is case-insensitive
+        pg_sql = re.sub(r"\bLIKE\b", "ILIKE", pg_sql, flags=re.I)
         if "INSERT OR IGNORE INTO" in pg_sql.upper():
             pg_sql = re.sub(r'INSERT\s+OR\s+IGNORE\s+INTO', 'INSERT INTO', pg_sql, flags=re.I)
             if "ON CONFLICT" not in pg_sql.upper():
@@ -243,6 +245,12 @@ class PgConn:
     def execute(self, sql, params=None):
         cur = self.cursor()
         cur.execute(sql, params)
+        return cur
+
+    def executemany(self, sql, seq_of_params):
+        cur = self.cursor()
+        for params in seq_of_params:
+            cur.execute(sql, params)
         return cur
 
     def commit(self):
@@ -954,12 +962,18 @@ def user_stats(conn, user_id):
 
 
 def subscribe(conn, email):
+    norm_email = email.strip().lower()
+    if conn.execute("SELECT 1 FROM subscribers WHERE lower(email)=?", (norm_email,)).fetchone():
+        return False, "That email is already subscribed."
     try:
-        conn.execute("INSERT INTO subscribers (email,created_at) VALUES (?,?)", (email.strip().lower(), _now()))
+        conn.execute("INSERT INTO subscribers (email,created_at) VALUES (?,?)", (norm_email, _now()))
         conn.commit()
         return True, "You're subscribed."
-    except sqlite3.IntegrityError:
-        return False, "That email is already subscribed."
+    except Exception as ex:
+        msg = str(ex).lower()
+        if isinstance(ex, sqlite3.IntegrityError) or "unique" in msg or "duplicate" in msg:
+            return False, "That email is already subscribed."
+        raise
 
 
 def create_job(conn, data, user_id):
@@ -970,7 +984,6 @@ def create_job(conn, data, user_id):
     company = get_company(conn, company_slug)
     if not company:
         return None, "Choose a company from the list."
-    next_id = conn.execute("SELECT COALESCE(MAX(id),0)+1 FROM jobs").fetchone()[0]
     slug = "".join(c.lower() if c.isalnum() else "-" for c in title).strip("-")
     while "--" in slug:
         slug = slug.replace("--", "-")
@@ -981,14 +994,14 @@ def create_job(conn, data, user_id):
         return None, "Salary must be a whole number."
     if smin and smax and smin > smax:
         return None, "Maximum salary must be greater than minimum salary."
-    conn.execute(
+    cur = conn.execute(
         """INSERT INTO jobs
-           (id,slug,title,company_id,company_slug,company_name,company_initials,company_color,
+           (slug,title,company_id,company_slug,company_name,company_initials,company_color,
             category,level,workplace,location,salary_min,salary_max,salary_display,industries,
             skills,description,posted_at,posted_label,is_remote,accent,status,created_by)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (
-            next_id, slug, title, company["id"], company_slug, company["name"],
+            slug, title, company["id"], company_slug, company["name"],
             company["initials"], company["color"], data.get("category") or "Engineering",
             data.get("level") or "Mid level", data.get("workplace") or "Hybrid",
             data.get("location") or company["location"], smin, smax,
@@ -999,6 +1012,7 @@ def create_job(conn, data, user_id):
             company["color"], "active", user_id,
         ),
     )
+    next_id = cur.lastrowid
     conn.execute("UPDATE companies SET open_jobs=open_jobs+1, hiring_now=1 WHERE id=?", (company["id"],))
     conn.commit()
     return next_id, None
@@ -1067,7 +1081,7 @@ def update_employer_job(conn, user_id, job_id, data):
     if current["company_id"] != company["id"]:
         if current["status"] == "active":
             conn.execute(
-                """UPDATE companies SET open_jobs=MAX(open_jobs-1,0),
+                """UPDATE companies SET open_jobs=CASE WHEN open_jobs > 1 THEN open_jobs-1 ELSE 0 END,
                    hiring_now=CASE WHEN open_jobs<=1 THEN 0 ELSE hiring_now END
                    WHERE id=?""",
                 (current["company_id"],),
@@ -1094,7 +1108,7 @@ def archive_employer_job(conn, user_id, job_id):
         return False
     if current["status"] == "active":
         conn.execute(
-            """UPDATE companies SET open_jobs=MAX(open_jobs-1,0),
+            """UPDATE companies SET open_jobs=CASE WHEN open_jobs > 1 THEN open_jobs-1 ELSE 0 END,
                hiring_now=CASE WHEN open_jobs<=1 THEN 0 ELSE hiring_now END
                WHERE id=?""",
             (current["company_id"],),

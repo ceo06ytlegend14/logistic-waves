@@ -811,15 +811,19 @@ def route(conn, method, path, query, payload, user, token, host, client_ip=""):
         email = payload.get("email", "").strip().lower()
         password = payload.get("password", "").strip()
         role = payload.get("role", "candidate").strip()
+        if role not in ("candidate", "employer", "admin"):
+            role = "candidate"
         if name and email and password:
             uid, err = db.create_user(conn, name, email, password, role)
             if err:
                 return redirect("/admin?tab=users&err=" + urllib.parse.quote(f"Error: {err}"))
             return redirect("/admin?tab=users&msg=" + urllib.parse.quote(f"User '{name}' created successfully!"))
-        return redirect("/admin?tab=users&err=" + urllib.parse.quote("Name and email are required."))
+        return redirect("/admin?tab=users&err=" + urllib.parse.quote("Name, email, and password are required."))
 
     if path == "/admin/users/delete" and method == "POST":
         uid = get_int(payload.get("id", "0"), 0, low=0)
+        if uid == user["id"]:
+            return redirect("/admin?tab=users&err=" + urllib.parse.quote("You cannot delete your own currently signed-in admin account."))
         conn.execute("DELETE FROM sessions WHERE user_id=?", (uid,))
         conn.execute("DELETE FROM saved_jobs WHERE user_id=?", (uid,))
         conn.execute("DELETE FROM follows WHERE user_id=?", (uid,))
@@ -832,6 +836,8 @@ def route(conn, method, path, query, payload, user, token, host, client_ip=""):
     if path == "/admin/users/role" and method == "POST":
         uid = get_int(payload.get("id", "0"), 0, low=0)
         new_role = payload.get("role", "candidate").strip()
+        if uid == user["id"] and new_role != "admin":
+            return redirect("/admin?tab=users&err=" + urllib.parse.quote("You cannot remove admin privileges from your own account."))
         if new_role in ("candidate", "employer", "admin"):
             conn.execute("UPDATE users SET role=? WHERE id=?", (new_role, uid))
             conn.commit()
