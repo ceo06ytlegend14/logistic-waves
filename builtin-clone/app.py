@@ -241,7 +241,7 @@ def route(conn, method, path, query, payload, user, token, host, client_ip=""):
         return Response("", status=204, content_type="image/x-icon")
 
     if path == "/health":
-        return json_response({"ok": True, "service": "builtin-demo-clone", "stats": db.counts(conn)})
+        return json_response({"ok": True, "service": "logistic-waves", "stats": db.counts(conn)})
 
     if path == "/robots.txt":
         return Response("User-agent: *\nAllow: /\nSitemap: /sitemap.xml\n",
@@ -690,7 +690,7 @@ def route(conn, method, path, query, payload, user, token, host, client_ip=""):
                  salary_min, salary_max, f"${salary_min:,} - ${salary_max:,}", "Logistics & Technology", skills, description,
                  now_date, "Just now", 1 if "Remote" in workplace else 0, ccolor, "active")
             )
-            conn.commit()
+            db.sync_company_open_jobs(conn, cid)
             return redirect("/admin?tab=jobs&msg=" + urllib.parse.quote(f"Job listing '{title}' published!"))
         else:
             return redirect("/admin?tab=jobs&err=" + urllib.parse.quote("Selected company not found."))
@@ -698,8 +698,11 @@ def route(conn, method, path, query, payload, user, token, host, client_ip=""):
     if path == "/admin/jobs/delete" and method == "POST":
         job_id = get_int(payload.get("id", "0"), 0, low=0)
         tab = payload.get("tab", "jobs")
+        old_row = conn.execute("SELECT company_id FROM jobs WHERE id=?", (job_id,)).fetchone()
         conn.execute("DELETE FROM jobs WHERE id=?", (job_id,))
         conn.commit()
+        if old_row and old_row[0]:
+            db.sync_company_open_jobs(conn, old_row[0])
         return redirect(f"/admin?tab={tab}&msg=" + urllib.parse.quote("Job listing deleted."))
 
     if path == "/admin/jobs/update" and method == "POST":
@@ -719,6 +722,7 @@ def route(conn, method, path, query, payload, user, token, host, client_ip=""):
         description = payload.get("description", "").strip()
         level = payload.get("level", "Mid-Senior").strip()
         
+        old_row = conn.execute("SELECT company_id FROM jobs WHERE id=?", (job_id,)).fetchone()
         comp = conn.execute("SELECT id, name, initials, color FROM companies WHERE slug=?", (comp_slug,)).fetchone()
         if comp and job_id:
             cid, cname, cinit, ccolor = comp
@@ -731,6 +735,9 @@ def route(conn, method, path, query, payload, user, token, host, client_ip=""):
                  1 if "Remote" in workplace else 0, ccolor, job_id)
             )
             conn.commit()
+            db.sync_company_open_jobs(conn, cid)
+            if old_row and old_row[0] and old_row[0] != cid:
+                db.sync_company_open_jobs(conn, old_row[0])
             return redirect(f"/admin?tab={tab}&msg=" + urllib.parse.quote(f"Job '{title}' updated successfully!"))
         elif job_id:
             conn.execute(
@@ -751,7 +758,7 @@ def route(conn, method, path, query, payload, user, token, host, client_ip=""):
         location = payload.get("location", "Vietnam").strip()
         employees = get_int(payload.get("employees", "1000"), 1000)
         color = payload.get("color", "#034f9a").strip() or "#034f9a"
-        website = payload.get("website", "https://example.com").strip()
+        website = payload.get("website", "").strip()
         description = payload.get("description", "").strip()
         initials = "".join(w[0] for w in name.split()[:2]).upper() or "CO"
         slug = views.slugify(name)
@@ -788,7 +795,7 @@ def route(conn, method, path, query, payload, user, token, host, client_ip=""):
         location = payload.get("location", "Vietnam").strip()
         employees = get_int(payload.get("employees", "1000"), 1000)
         color = payload.get("color", "#034f9a").strip() or "#034f9a"
-        website = payload.get("website", "https://example.com").strip()
+        website = payload.get("website", "").strip()
         description = payload.get("description", "").strip()
         initials = "".join(w[0] for w in name.split()[:2]).upper() or "CO"
         
@@ -1090,40 +1097,40 @@ def route(conn, method, path, query, payload, user, token, host, client_ip=""):
     # ---------- static informational pages ----------
     if path == "/about":
         return Response(views.simple_page(
-            "About This Demo", "Project overview",
-            "A self-contained, full-stack clone built for learning and rapid prototyping.",
+            "About Logistic Waves", "Platform overview",
+            "Global logistics intelligence, industry careers, and employer insights in one unified platform.",
             [
-                ("What is this?", "This is an independent demo inspired by the public layout and information architecture of a tech job board. It is not affiliated with, endorsed by, or connected to the original site."),
-                ("What works", "Job and company search, filters, pagination, account sign-up and login, saved jobs, followed companies, applications, a tracker, job alerts, salary pages, articles and an employer portal that publishes new jobs into a SQLite database."),
-                ("What is placeholder", "Company logos are generated as colored initial tiles, photos are inline SVG illustrations, and all copy is sample content. Add your own assets in static/ and your own content in seed.py."),
-                ("Tech stack", "Python standard library HTTP server, SQLite, server-rendered HTML, vanilla CSS and JavaScript. No build step and no external runtime dependencies."),
+                ("What is Logistic Waves?", "Logistic Waves connects supply chain, maritime, freight forwarding, and engineering professionals with vetted employers and industry reporting."),
+                ("Core capabilities", "Searchable jobs and company directories, compensation benchmarks, editorial articles, video briefings, candidate application tracking, job alerts, an employer workspace, and an Admin CMS."),
+                ("Content management", "All articles, broadcasts, job listings, companies, and salary benchmarks are managed directly from the Admin Dashboard and persisted in the database."),
+                ("Tech stack", "Python standard library WSGI server, SQLite / PostgreSQL storage, server-rendered HTML, and responsive vanilla CSS and JavaScript."),
             ], user))
     if path == "/contact":
         return Response(views.simple_page(
-            "Contact", "Say hello",
-            "This is a demo workspace, so there is no live support inbox.",
+            "Contact", "Get in touch",
+            "Reach our editorial and employer partnerships team.",
             [
-                ("Customize the clone", "Edit files in /home/user/builtin-clone. Replace seed.py content, static assets and styles to match your own brand."),
-                ("Report a bug", "Use the chat to describe the page and behavior you expected; the code can be adjusted in the workspace."),
-                ("Assets", "Drop your own logos, photos and favicon into static/ and update the references in views.py and styles.css."),
+                ("Editorial inquiries", "Submit news tips, supply chain research, or press releases to the Logistic Waves editorial desk."),
+                ("Employer support", "Use the Employer Portal or Admin Dashboard to manage company profiles and active job listings."),
+                ("Technical issues", "Report broken links or account issues directly to the platform administrator."),
             ], user))
     if path == "/privacy":
         return Response(views.simple_page(
-            "Privacy Policy", "Demo notice",
-            "A sample policy page for this workspace clone.",
+            "Privacy Policy", "Account & data handling",
+            "How Logistic Waves stores and protects account activity.",
             [
-                ("Demo data", "Accounts, applications and alerts are stored locally in a SQLite file inside this workspace. Do not enter real personal information."),
-                ("Cookies", "One HttpOnly session cookie keeps you signed in. No analytics or advertising trackers are used."),
-                ("Production use", "Replace this page with a reviewed policy before deploying a real product."),
+                ("Account data", "User profiles, saved jobs, applications, and job alerts are stored in the platform database with PBKDF2-HMAC-SHA256 salted password hashes."),
+                ("Cookies & security", "A single HttpOnly, SameSite=Lax session cookie keeps you signed in, paired with HMAC-SHA256 CSRF protection on state-changing requests."),
+                ("Session control", "You can sign out at any time to invalidate your active session token."),
             ], user))
     if path == "/terms":
         return Response(views.simple_page(
-            "Terms of Use", "Demo notice",
-            "A sample terms page for this workspace clone.",
+            "Terms of Use", "Platform guidelines",
+            "Standard terms governing access to Logistic Waves.",
             [
-                ("Purpose", "This project demonstrates a full-stack website clone for learning and prototyping only."),
-                ("No affiliation", "It is not affiliated with the original website. Trademarks, logos and editorial content are represented by placeholders."),
-                ("No warranty", "Sample data and demo accounts are provided as-is and may be reset at any time."),
+                ("Authorized use", "Job listings, editorial reports, and salary benchmarks are provided for legitimate career research and recruiting."),
+                ("Content ownership", "Companies and editors are responsible for the accuracy of posted job specifications and published articles."),
+                ("Availability", "Platform administrators may moderate, archive, or update listings at any time."),
             ], user))
 
     if path == "/node/add/company":
@@ -1133,7 +1140,7 @@ def route(conn, method, path, query, payload, user, token, host, client_ip=""):
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "BuiltInDemo/1.0"
+    server_version = "LogisticWaves/1.0"
     protocol_version = "HTTP/1.1"
 
     def log_message(self, fmt, *args):
@@ -1229,7 +1236,7 @@ class Handler(BaseHTTPRequestHandler):
             traceback.print_exc()
             try:
                 body = views.layout("Something went wrong",
-                                    '<section class="container narrow-page"><div class="empty-state"><h1>Something went wrong</h1><p>The demo server hit an unexpected error. Check the server log in the terminal/preview panel.</p><a class="btn btn-primary" href="/">Back to home</a></div></section>',
+                                    '<section class="container narrow-page"><div class="empty-state"><h1>Something went wrong</h1><p>An unexpected error occurred while processing your request. Please try again.</p><a class="btn btn-primary" href="/">Back to home</a></div></section>',
                                     None)
                 self._send(Response(body, status=500))
             except Exception:
@@ -1267,7 +1274,7 @@ class Server(ThreadingHTTPServer):
 def main():
     db.init_db()
     server = Server(("0.0.0.0", PORT), Handler)
-    print(f"Built In demo clone running at http://0.0.0.0:{PORT}", flush=True)
+    print(f"Logistic Waves running at http://0.0.0.0:{PORT}", flush=True)
     print("Demo accounts: candidate@demo.com / demo1234  |  employer@demo.com / demo1234", flush=True)
     while True:
         try:

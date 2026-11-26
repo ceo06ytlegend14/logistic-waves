@@ -221,10 +221,10 @@ def breadcrumb(items):
 
 def promo_ticker():
     messages = [
-        "Over 2,400+ verified tech and logistics jobs open today across 180+ top global employers",
-        "Saigon Newport, Gemadept, Viconship and DHL are actively hiring remote positions",
-        "Employers: Post your role in 2 minutes and connect with 50,000+ qualified candidates",
-        "2026 Best Places to Work rankings officially announced ? explore winning workplaces",
+        "Verified engineering, logistics, and supply chain roles open across top global employers",
+        "Saigon Newport, Gemadept, Viconship, and DHL are actively hiring across port and remote hubs",
+        "Employers: Publish and manage open positions directly from your workspace",
+        "2026 Best Places to Work rankings announced \u2014 explore winning workplaces",
         "Certified tech and logistics training courses now enrolling for 2026",
     ]
     def render_items(aria_hidden=False):
@@ -436,7 +436,7 @@ def footer():
 
 
 def layout(title, body, user=None, active="", description="", page_class="", extra_head=""):
-    desc = description or "A working demo clone of a tech job board and company research platform."
+    desc = description or "Logistic Waves \u2014 technology & logistics jobs, employer intelligence, and industry editorial."
     return f'''<!doctype html>
 <html lang="en">
 <head>
@@ -515,47 +515,21 @@ def job_card(job, compact=False):
     </article>'''
 
 
-def company_card(company, conn, user=None, breakdown=None, variant=0):
-    followed = bool(company.get("followed"))
-    cid = company["id"]
-    breakdown = breakdown if breakdown is not None else db.company_job_breakdown(conn, company["slug"])
-    industries = [x.strip() for x in (company.get("industries") or "").split(",") if x.strip()]
-    open_jobs = company.get("open_jobs") or 0
-    bands = "".join(
-        f'<a class="position-band-link" href="{url("/jobs", company_slug=company["slug"], category=b["category"])}">{e(b["category"])} ({b["n"]})</a>'
-        for b in breakdown[:4]
-    )
-    return f'''
-    <article class="company-card" style="--accent:{e(company['color'])}" id="company-{cid}">
-      <div class="company-card-main">
-        <div class="company-card-head">
-          {company_logo(company, 84)}
-          <div>
-            <a class="company-name" href="/company/{e(company['slug'])}">{e(company['name'])}</a>
-            <p class="company-industries">{" • ".join(e(x) for x in industries[:5])}</p>
-          </div>
-        </div>
-        <div class="company-meta">
-          <span>{icon("pin", 14)} {e(company.get("offices"))} Offices</span>
-          <span>{icon("users", 14)} {thousands(company.get("employees"))} Employees</span>
-          <a href="/company/{e(company['slug'])}/benefits">{icon("trophy", 14)} {e(company.get("benefits"))} Benefits</a>
-          <a href="/company/{e(company['slug'])}/teams">{icon("users", 14)} See Our Teams</a>
-          <span class="hiring-now"><i></i> Hiring Now</span>
-        </div>
-        <h4 class="company-tagline">{e(company.get("tagline"))}</h4>
-        <p class="company-desc">{e(company.get("description"))}</p>
-        <div class="position-band">
-          <strong>{e(open_jobs)} Open Positions:</strong> {bands or '<span>Explore open roles</span>'}
-        </div>
-      </div>
-      <div class="company-card-side">
-        {photo_placeholder(company["color"], "Add your photo", company["slug"], variant, 176)}
-        <button class="btn btn-outline btn-block follow-btn{' followed' if followed else ''}" type="button" data-company-id="{cid}" aria-pressed="{'true' if followed else 'false'}">
-          {icon("heart", 17)} <span>{'SAVED' if followed else 'SAVE'}</span>
-        </button>
-        <a class="btn btn-outline btn-block" href="{url('/alerts', company=company['slug'])}">{icon("bell", 17)} CREATE JOB ALERT</a>
-      </div>
-    </article>'''
+_ARTICLE_FALLBACK_COVERS = [
+    "/static/images/editorial_laptop_dashboard.jpg",
+    "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1497215728101-856f4ea42174?auto=format&fit=crop&w=800&q=80",
+]
+
+
+def _article_cover_url(article, idx=0):
+    thumb = (article.get("thumb") or "").strip() if article else ""
+    if thumb and not thumb.startswith("#"):
+        return thumb
+    return _ARTICLE_FALLBACK_COVERS[idx % len(_ARTICLE_FALLBACK_COVERS)]
 
 
 def article_card(article, featured=False, variant=0):
@@ -743,102 +717,6 @@ def signin_required(next_path, title="Sign in to continue"):
 
 # ---------- home ----------
 
-def _hv2_job_visual(job):
-    accent = job.get("accent") or job.get("company_color") or "#244fe7"
-    color = job.get("company_color") or accent
-    initials = job.get("company_initials") or "?"
-    return f"""
-    <div class="hv2-job-visual" style="--hv2-accent:{e(accent)};--hv2-logo:{e(color)}">
-      <span class="hv2-visual-kicker">NEW ROLE</span>
-      <span class="hv2-visual-logo" style="--logo-bg:{e(color)};--logo-fg:{e(contrast_text(color))}">{e(initials)}</span>
-      <span class="hv2-visual-shape shape-a"></span>
-      <span class="hv2-visual-shape shape-b"></span>
-      <span class="hv2-visual-caption">{e(job.get("category"))}</span>
-    </div>"""
-
-
-def _hv2_job_card(job):
-    desc = job.get("description") or ""
-    short = desc[:145].rsplit(" ", 1)[0] + "…" if len(desc) > 145 else desc
-    skills = [x.strip() for x in (job.get("skills") or "").split(",") if x.strip()][:3]
-    chips = "".join(f'<span class="hv2-chip">{e(s)}</span>' for s in skills)
-    job_url = f'/job/{e(job["slug"])}/{job["id"]}'
-    return f"""
-    <article class="hv2-job-card" id="home-job-{job['id']}">
-      {_hv2_job_visual(job)}
-      <div class="hv2-job-body">
-        <div class="hv2-job-top">
-          <span class="hv2-job-company">{e(job.get('company_name'))}</span>
-          <span class="hv2-job-time">{e(job.get('posted_label') or 'Recently')}</span>
-        </div>
-        <h3 class="hv2-job-title">{e(job.get('title'))}</h3>
-        <p class="hv2-job-desc">{e(short)}</p>
-        <div class="hv2-job-meta">
-          <span>{icon('pin', 13)} {e(job.get('location'))}</span>
-          <span>{icon('money', 13)} {e(job.get('salary_display'))}</span>
-        </div>
-        <div class="hv2-job-tags">{chips}</div>
-        <details class="hv2-job-details">
-          <summary>Details {icon('chevron', 14)}</summary>
-          <div class="hv2-job-detail-body">
-            <p><strong>Workplace:</strong> {e(job.get('workplace'))} · <strong>Level:</strong> {e(job.get('level'))}</p>
-            <p>{e(job.get('description'))}</p>
-            <a class="hv2-text-link" href="{job_url}">Open full job page {icon('arrow', 14)}</a>
-          </div>
-        </details>
-      </div>
-    </article>"""
-
-
-def _hv2_article_card(article, badge):
-    return f"""
-    <article class="hv2-news-card">
-      <a class="hv2-news-visual" href="/articles/{e(article['slug'])}" style="--hv2-accent:{e(article['accent'])}" aria-label="{e(article['title'])}">
-        <span class="hv2-news-badge">{e(badge)}</span>
-        <span class="hv2-news-glyph">{icon('book', 36)}</span>
-      </a>
-      <div class="hv2-news-body">
-        <span class="hv2-news-kicker">{e(article['tag'])} · {e(article['read_time'])}</span>
-        <h3><a href="/articles/{e(article['slug'])}">{e(article['title'])}</a></h3>
-        <p>{e(article['excerpt'])}</p>
-        <div class="hv2-news-foot">
-          <span>{e(article['author'])}</span>
-          <a href="/articles/{e(article['slug'])}">Read {icon('arrow', 14)}</a>
-        </div>
-      </div>
-    </article>"""
-
-
-def _hv2_company_card(company, featured=False):
-    industries = [x.strip() for x in (company.get("industries") or "").split(",") if x.strip()][:3]
-    chips = "".join(f'<span class="hv2-chip">{e(x)}</span>' for x in industries)
-    cls = "hv2-company-card featured" if featured else "hv2-company-card"
-    return f"""
-    <article class="{cls}" style="--hv2-accent:{e(company['color'])}">
-      <div class="hv2-company-banner">
-        <span class="hv2-company-banner-label">{ 'COMPANY SPOTLIGHT' if featured else 'COMPANY' }</span>
-        <span class="hv2-company-banner-mark">{e(company['initials'])}</span>
-      </div>
-      <div class="hv2-company-body">
-        <div class="hv2-company-head">
-          {company_logo(company, 84, 'hv2-company-logo')}
-          <div>
-            <h3><a href="/company/{e(company['slug'])}">{e(company['name'])}</a></h3>
-            <span>{e(company['location'])} · {thousands(company['employees'])} employees</span>
-          </div>
-        </div>
-        <p>{e(company['tagline'])}</p>
-        <div class="hv2-company-chips">{chips}</div>
-        <div class="hv2-company-foot">
-          <strong>{thousands(company['open_jobs'])} open jobs</strong>
-          <a class="hv2-text-link" href="/company/{e(company['slug'])}">Profile {icon('arrow', 14)}</a>
-        </div>
-      </div>
-    </article>"""
-
-
-
-
 def logistic_waves_today_section(conn):
     import json
     # Dynamically fetch from the backend database (articles with feature 'Logistic Waves Today' or is_today=1)
@@ -922,7 +800,7 @@ def logistic_waves_today_section(conn):
         <div class="fwt-modal-header">
           <div style="display:flex; align-items:center; gap:10px;">
             <span class="fwt-badge-pill" id="fwtModalBadge">LIVE BROADCAST</span>
-            <h3 class="fwt-modal-title" id="fwtModalTitle">Episode Title</h3>
+            <h3 class="fwt-modal-title" id="fwtModalTitle">Logistic Waves Broadcast</h3>
           </div>
           <button type="button" class="fwt-modal-close" onclick="closeFwtModal();" aria-label="Close modal">&times;</button>
         </div>
@@ -933,15 +811,15 @@ def logistic_waves_today_section(conn):
               <div class="fwt-big-play-btn" onclick="startFwtPreview();" id="fwtModalPlayBtn">
                 <i class="fa-solid fa-play"></i>
               </div>
-              <span style="font-size:13px; font-weight:600; text-shadow:0 1px 4px rgba(0,0,0,0.8);" id="fwtModalStatus">Click to Stream Episode (HQ Preview)</span>
+              <span style="font-size:13px; font-weight:600; text-shadow:0 1px 4px rgba(0,0,0,0.8);" id="fwtModalStatus">Click to Stream Episode</span>
             </div>
           </div>
           <div class="fwt-modal-meta-row">
-            <span style="font-size:12.5px; color:#64748b;" id="fwtModalDate">Nov 6, 2026</span>
+            <span style="font-size:12.5px; color:#64748b;" id="fwtModalDate"></span>
             <span style="color:#cbd5e1;">&bull;</span>
-            <span style="font-size:12.5px; color:#64748b;" id="fwtModalDuration">28:14</span>
+            <span style="font-size:12.5px; color:#64748b;" id="fwtModalDuration"></span>
             <span style="color:#cbd5e1;">&bull;</span>
-            <span style="font-size:12.5px; font-weight:600; color:#1e3a8a;" id="fwtModalGuest">Guest Speaker</span>
+            <span style="font-size:12.5px; font-weight:600; color:#1e3a8a;" id="fwtModalGuest">Featured Guest</span>
           </div>
           <p class="fwt-modal-desc" id="fwtModalDesc"></p>
           <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid #e2e8f0; padding-top:14px; margin-top:14px;">
@@ -1175,7 +1053,7 @@ def home_page(conn, user):
             </h1>
             
             <p class="hero-subtitle-smoke">
-              Real-time intelligence, container visibility, and vetted industry careers connecting over 45,000+ logistics professionals worldwide.
+              Industry briefings, supply chain intelligence, and active career opportunities across logistics and technology.
             </p>
             
             <div class="hero-actions">
@@ -1199,9 +1077,64 @@ def home_page(conn, user):
           </div>
         </div>
       </div>
-    </section>
+    </section>"""
 
-    <!-- 2. Editorial Showcase: Today's Picks & Most Recent (Wired / Built In Standard) -->
+    editorial_articles = [db.as_dict(r) for r in conn.execute(
+        """SELECT * FROM articles
+           ORDER BY CASE WHEN COALESCE(is_today, 0) = 0 THEN 0 ELSE 1 END ASC, id DESC
+           LIMIT 8"""
+    ).fetchall()]
+    _ed_img = _article_cover_url
+
+    if editorial_articles:
+        lead_art = editorial_articles[0]
+        stacked_arts = editorial_articles[1:3]
+        recent_arts = editorial_articles[:5]
+        stacked_html = "".join(f'''
+                <article class="stacked-story">
+                  <a href="/articles/{e(a['slug'])}" class="stacked-img-wrap">
+                    <img src="{e(_ed_img(a, i + 1))}" alt="{e(a['title'])}" loading="lazy">
+                  </a>
+                  <span class="article-kicker">{e((a.get('category') or 'EDITORIAL').upper())}</span>
+                  <h3 class="stacked-title">
+                    <a href="/articles/{e(a['slug'])}">{e(a['title'])}</a>
+                  </h3>
+                  <span class="article-author-tag">{e((a.get('author') or 'Editorial Staff').upper())}</span>
+                </article>''' for i, a in enumerate(stacked_arts))
+        lead_html = f'''
+              <article class="article-lead-card">
+                <a href="/articles/{e(lead_art['slug'])}" class="article-lead-img-wrap">
+                  <img src="{e(_ed_img(lead_art, 0))}" alt="{e(lead_art['title'])}" loading="lazy">
+                </a>
+                <div class="article-lead-content">
+                  <span class="article-kicker">{e((lead_art.get('tag') or lead_art.get('category') or 'FEATURED').upper())}</span>
+                  <h2 class="article-lead-title">
+                    <a href="/articles/{e(lead_art['slug'])}">{e(lead_art['title'])}</a>
+                  </h2>
+                  <p class="article-lead-excerpt">{e(lead_art.get('excerpt') or '')}</p>
+                  <span class="article-author-tag">{e((lead_art.get('author') or 'Editorial Staff').upper())}</span>
+                </div>
+              </article>'''
+        recent_html = "".join(f'''
+              <a href="/articles/{e(a['slug'])}" class="recent-row-item">
+                <div class="recent-row-left">
+                  <span class="article-kicker" style="font-size: 10px;">{e((a.get('category') or 'NEWS').upper())}</span>
+                  <h4 class="recent-row-title">{e(a['title'])}</h4>
+                  <span class="article-author-tag" style="font-size: 9.5px;">{e((a.get('author') or 'Editorial Staff').upper())}</span>
+                </div>
+                <img src="{e(_ed_img(a, i))}" class="recent-thumb-img" alt="{e(a['title'])}" loading="lazy">
+              </a>''' for i, a in enumerate(recent_arts))
+        picks_inner_html = f'''
+            <div class="todays-picks-layout">
+              <div class="todays-picks-stacked">{stacked_html}</div>
+              {lead_html}
+            </div>'''
+    else:
+        picks_inner_html = empty_state("No editorial articles published yet", "Publish an article from the admin dashboard to feature it here.", '<a class="btn btn-primary" href="/article-blogs">Explore Intelligence Hub</a>')
+        recent_html = '<p style="color:#64748b;font-size:13px;">No recent articles yet.</p>'
+
+    body += f"""
+    <!-- 2. Editorial Showcase: Today's Picks & Most Recent -->
     <section class="home-editorial-section">
       <div class="container">
         <div class="editorial-grid-12">
@@ -1212,53 +1145,7 @@ def home_page(conn, user):
               <span class="editorial-sec-title">TODAY'S PICKS</span>
               <span class="editorial-dot"></span>
             </div>
-            <div class="todays-picks-layout">
-              
-              <!-- Stacked Stories (Left Column) -->
-              <div class="todays-picks-stacked">
-                <article class="stacked-story">
-                  <a href="/articles/cross-border-tech-hiring" class="stacked-img-wrap">
-                    <img src="https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=800&q=80" alt="Cross-Border Tech Hiring">
-                  </a>
-                  <span class="article-kicker">POLICY &amp; REMOTE TRENDS</span>
-                  <h3 class="stacked-title">
-                    <a href="/articles/cross-border-tech-hiring">Cross-Border Tech Hiring Guidelines &amp; Global Remote Tax Treaties for 2026</a>
-                  </h3>
-                  <span class="article-author-tag">SANDBOX EDITORIAL STAFF</span>
-                </article>
-
-                <article class="stacked-story">
-                  <a href="/articles/gitlab-autonomous-ai-duo" class="stacked-img-wrap">
-                    <img src="https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=800&q=80" alt="GitLab Autonomous AI Duo">
-                  </a>
-                  <span class="article-kicker">AUTONOMOUS DEV WORKFLOWS</span>
-                  <h3 class="stacked-title">
-                    <a href="/articles/gitlab-autonomous-ai-duo">GitLab Unveils Autonomous AI Duo: Transforming Developer Workflows from Planning to Production</a>
-                  </h3>
-                  <span class="article-author-tag">SARAH JENKINS &bull; GITLAB</span>
-                </article>
-              </div>
-
-              <!-- Lead Article (Middle Column) -->
-              <article class="article-lead-card">
-                <a href="/articles/the-2026-state-of-tech-salaries" class="article-lead-img-wrap">
-                  <img src="/static/images/editorial_laptop_dashboard.jpg" alt="State of Tech Salaries 2026">
-                </a>
-                <div class="article-lead-content">
-                  <span class="article-kicker">SPECIAL INVESTIGATION</span>
-                  <h2 class="article-lead-title">
-                    <a href="/articles/the-2026-state-of-tech-salaries">
-                      The 2026 State of Tech Salaries: Why Specialized AI &amp; Distributed Systems Engineers Command Record Premiums
-                    </a>
-                  </h2>
-                  <p class="article-lead-excerpt">
-                    An investigation across 1,200 tech organizations reveals evolving equity structures, with demand for high-concurrency systems outstripping generalist development by 2.4x.
-                  </p>
-                  <span class="article-author-tag">DAVID STERLING</span>
-                </div>
-              </article>
-
-            </div>
+            {picks_inner_html}
           </div>
 
           <!-- Right 4 Columns: Most Recent -->
@@ -1268,50 +1155,7 @@ def home_page(conn, user):
               <span class="editorial-dot"></span>
             </div>
             <div class="most-recent-list">
-              <a href="/articles/cross-border-tech-hiring" class="recent-row-item">
-                <div class="recent-row-left">
-                  <span class="article-kicker" style="font-size: 10px;">POLICY &amp; REMOTE</span>
-                  <h4 class="recent-row-title">Cross-Border Tech Hiring Guidelines &amp; Global Remote Tax Treaties for 2026</h4>
-                  <span class="article-author-tag" style="font-size: 9.5px;">SANDBOX EDITORIAL</span>
-                </div>
-                <img src="https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=300&q=80" class="recent-thumb-img" alt="Thumbnail">
-              </a>
-
-              <a href="/articles/gitlab-autonomous-ai-duo" class="recent-row-item">
-                <div class="recent-row-left">
-                  <span class="article-kicker" style="font-size: 10px;">AUTONOMOUS AI</span>
-                  <h4 class="recent-row-title">GitLab Unveils Autonomous AI Duo: Transforming Developer Workflows</h4>
-                  <span class="article-author-tag" style="font-size: 9.5px;">SARAH JENKINS</span>
-                </div>
-                <img src="https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=300&q=80" class="recent-thumb-img" alt="Thumbnail">
-              </a>
-
-              <a href="/articles/ai-coding-agents-cloud-wars" class="recent-row-item">
-                <div class="recent-row-left">
-                  <span class="article-kicker" style="font-size: 10px;">CLOUD INFRASTRUCTURE</span>
-                  <h4 class="recent-row-title">How AI Coding Agents Are Reigniting the Cloud Wars</h4>
-                  <span class="article-author-tag" style="font-size: 9.5px;">MARCUS VANCE</span>
-                </div>
-                <img src="https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=300&q=80" class="recent-thumb-img" alt="Thumbnail">
-              </a>
-
-              <a href="/articles/enterprise-ai-platforms" class="recent-row-item">
-                <div class="recent-row-left">
-                  <span class="article-kicker" style="font-size: 10px;">ENTERPRISE AI</span>
-                  <h4 class="recent-row-title">Enterprise AI: What It Is and Top Companies to Know</h4>
-                  <span class="article-author-tag" style="font-size: 9.5px;">ELINA VOSS</span>
-                </div>
-                <img src="https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=300&q=80" class="recent-thumb-img" alt="Thumbnail">
-              </a>
-
-              <a href="/articles/remote-first-companies-hiring" class="recent-row-item">
-                <div class="recent-row-left">
-                  <span class="article-kicker" style="font-size: 10px;">REMOTE WORK</span>
-                  <h4 class="recent-row-title">12 Remote-First Companies Hiring Engineers Right Now</h4>
-                  <span class="article-author-tag" style="font-size: 9.5px;">DAVID STERLING</span>
-                </div>
-                <img src="https://images.unsplash.com/photo-1497215728101-856f4ea42174?auto=format&fit=crop&w=300&q=80" class="recent-thumb-img" alt="Thumbnail">
-              </a>
+              {recent_html}
             </div>
           </div>
 
@@ -1381,9 +1225,9 @@ def home_page(conn, user):
                   <img src="/static/images/avatars/user2.jpg" alt="Professional" class="lw-poster-avatar">
                   <img src="/static/images/avatars/user3.jpg" alt="Professional" class="lw-poster-avatar">
                   <img src="/static/images/avatars/user4.jpg" alt="Professional" class="lw-poster-avatar">
-                  <span class="lw-poster-count-pill">+15K</span>
+                  <span class="lw-poster-count-pill">+{c['jobs']}</span>
                 </div>
-                <div class="lw-poster-proof-text">Professionals found their dream job</div>
+                <div class="lw-poster-proof-text">Open roles across {c['companies']} active employers</div>
               </div>
             </div>
           </div>
@@ -1551,7 +1395,7 @@ def jobs_page(conn, user, f, jobs, total, page, pages, heading=None):
       </div>
     </section>
     <section class="results-section"><div class="container">
-      <div class="results-head"><div><h1>{e(heading)}</h1><p>{thousands(total)} matching jobs in the demo dataset</p></div><span class="results-count">{thousands(total)} results</span></div>
+      <div class="results-head"><div><h1>{e(heading)}</h1><p>{thousands(total)} open positions matching your search</p></div><span class="results-count">{thousands(total)} results</span></div>
       <div class="job-list">{cards}</div>
       {pagination('/jobs', params, page, pages, total, 12)}
     </div></section>
@@ -1569,92 +1413,6 @@ def jobs_page(conn, user, f, jobs, total, page, pages, heading=None):
       </div>
     </div>'''
     return layout(heading, body, user, active="jobs", page_class="jobs-page", description=f"Browse {total} tech jobs with filters for category, experience, workplace and location.")
-
-
-def job_detail_page(conn, user, job, similar):
-    if user:
-        db_saved = job["id"] in db.saved_job_ids(conn, user["id"])
-        applied = bool(conn.execute("SELECT 1 FROM applications WHERE user_id=? AND job_id=?", (user["id"], job["id"])).fetchone())
-    else:
-        db_saved = applied = False
-    company = db.get_company(conn, job["company_slug"]) or {}
-    industries = [x.strip() for x in (job.get("industries") or "").split(",") if x.strip()]
-    skills = [x.strip() for x in (job.get("skills") or "").split(",") if x.strip()]
-    next_path = f'/job/{job.get("slug") or "job"}/{job["id"]}'
-    if applied:
-        apply_html = f'<div class="applied-success">{icon("check", 20)} <strong>Application submitted</strong><span>Track it in your <a href="/tracker">Application Tracker</a>.</span></div>'
-    elif user:
-        apply_html = f'''
-        <form id="applyForm" data-job-id="{job['id']}" class="apply-form">
-          <label>Add a note for the hiring team (optional)<textarea name="note" rows="3" placeholder="A short intro, a link to your work, or why this role excites you…"></textarea></label>
-          <button class="btn btn-primary btn-block btn-lg" type="submit">Submit Application {icon("arrow", 17)}</button>
-        </form>'''
-    else:
-        apply_html = f'''
-        <div class="signin-cta"><p>Log in to apply and track this application.</p>
-        <a class="btn btn-primary btn-block" href="{url('/auth/login', next=next_path)}">Log In to Apply</a>
-        <a class="btn btn-outline btn-block" href="{url('/auth/signup', next=next_path)}">Create Free Account</a></div>'''
-    similar_cards = "".join(job_card(j, compact=True) for j in similar)
-    body = f'''
-    <section class="detail-hero"><div class="container">
-      {breadcrumb([("Home", "/"), ("Jobs", "/jobs"), (job["title"], "")])}
-      <div class="job-detail-head">
-        {company_logo({"color": job.get("company_color"), "initials": job.get("company_initials")}, 84)}
-        <div class="job-detail-title">
-          <a class="job-company" href="/company/{e(job['company_slug'])}">{e(job['company_name'])}</a>
-          <h1>{e(job['title'])}</h1>
-          <div class="detail-chips">
-            <span>{icon("clock", 15)} {e(job['posted_label'])}</span>
-            <span>{icon("briefcase", 15)} {e(job['workplace'])}</span>
-            <span>{icon("pin", 15)} {e(job['location'])}</span>
-            <span>{icon("money", 15)} {e(job['salary_display'])}</span>
-            <span>{icon("trophy", 15)} {e(job['level'])}</span>
-          </div>
-        </div>
-        <div class="detail-actions">
-          <button class="save-btn large{' saved' if db_saved else ''}" type="button" data-job-id="{job['id']}" aria-pressed="{'true' if db_saved else 'false'}">{icon("heart", 22)} <span>{'SAVED' if db_saved else 'SAVE JOB'}</span></button>
-          <a class="btn btn-outline" href="#apply">Apply Now {icon("arrow", 16)}</a>
-        </div>
-      </div>
-    </div></section>
-    <section class="section detail-section"><div class="container detail-grid">
-      <div class="detail-main">
-        <div class="content-card"><h2>About the role</h2><p>{e(job['description'])}</p>
-          <h3>What you'll do</h3>
-          <ul class="check-list">
-            <li>{icon("check", 16)} Partner with product, design and engineering to define and deliver outcomes.</li>
-            <li>{icon("check", 16)} Break ambiguous problems into clear milestones and communicate progress.</li>
-            <li>{icon("check", 16)} Improve quality, performance and reliability through thoughtful documentation and testing.</li>
-            <li>{icon("check", 16)} Share learnings, mentor teammates and help shape the team's roadmap.</li>
-          </ul>
-          <h3>Top skills</h3><div class="tag-row">{''.join(f'<span class="tag">{e(s)}</span>' for s in skills)}</div>
-          <h3>Industries</h3><div class="tag-row">{''.join(f'<a class="tag tag-link" href="{url("/jobs", industry=x)}">{e(x)}</a>' for x in industries)}</div>
-        </div>
-        <div class="content-card" id="apply"><h2>Apply to {e(job['company_name'])}</h2>{apply_html}</div>
-        <div class="content-card"><h2>Similar jobs</h2><div class="compact-job-list">{similar_cards or '<p>No similar jobs yet.</p>'}</div></div>
-      </div>
-      <aside class="detail-side">
-        <div class="side-card"><h3>At a glance</h3>
-          <dl class="glance-list">
-            <div><dt>Category</dt><dd><a href="/jobs/{e(slugify(job['category']))}">{e(job['category'])}</a></dd></div>
-            <div><dt>Experience</dt><dd>{e(job['level'])}</dd></div>
-            <div><dt>Workplace</dt><dd>{e(job['workplace'])}</dd></div>
-            <div><dt>Location</dt><dd>{e(job['location'])}</dd></div>
-            <div><dt>Salary</dt><dd>{e(job['salary_display'])}</dd></div>
-          </dl>
-        </div>
-        <div class="side-card company-side-card">
-          {company_logo(company or {"color": job['company_color'], "initials": job['company_initials']}, 84)}
-          <h3><a href="/company/{e(job['company_slug'])}">{e(job['company_name'])}</a></h3>
-          <p>{e((company or {}).get('tagline') or 'Explore this company profile.')}</p>
-          <div class="side-meta">{icon("pin", 14)} {e((company or {}).get('location') or job['location'])}</div>
-          <div class="side-meta">{icon("users", 14)} {thousands((company or {}).get('employees') or 0)} employees</div>
-          <a class="btn btn-outline btn-block" href="/company/{e(job['company_slug'])}/jobs">View all jobs {icon("arrow", 15)}</a>
-        </div>
-        <div class="side-card tip-card">{icon("sparkle", 22)}<h3>Salary insight</h3><p>Compare this range with market data for <a href="/salaries">{e(job['category'])}</a> roles.</p></div>
-      </aside>
-    </div></section>'''
-    return layout(job["title"], body, user, active="jobs", page_class="job-detail-page", description=f"{job['title']} at {job['company_name']} — {job['location']}.")
 
 
 # ---------- companies ----------
@@ -1716,107 +1474,6 @@ def canonical_tab(tab):
     if tab.startswith("faq/"):
         return "insights"
     return TAB_ALIASES.get(tab, tab)
-
-
-def company_detail_page(conn, user, company, tab, jobs=None, related=None):
-    cid = company["id"]
-    followed = bool(user and cid in db.followed_company_ids(conn, user["id"]))
-    industries = [x.strip() for x in (company.get("industries") or "").split(",") if x.strip()]
-    perks = [x.strip() for x in (company.get("perks") or "").split(",") if x.strip()]
-    stack = [x.strip() for x in (company.get("tech_stack") or "").split(",") if x.strip()]
-    teams = [x.strip() for x in (company.get("teams") or "").split(",") if x.strip()]
-    breakdown = db.company_job_breakdown(conn, company["slug"])
-    jobs = jobs if jobs is not None else db.jobs_for_company(conn, company["slug"], 12)
-    related = related if related is not None else db.list_articles(conn, limit=3)
-    tabs = "".join(
-        f'<a class="tab{' active' if tab == key else ''}" href="/company/{e(company["slug"])}{'/' + key if key else ''}">{e(label)}{' <span class="tab-count">' + str(company['open_jobs']) + '</span>' if key == 'jobs' else ''}</a>'
-        for label, key in TABS
-    )
-    category_cards = "".join(
-        f'<a class="team-card" href="{url("/jobs", company_slug=company["slug"], category=b["category"])}"><strong>{e(b["category"])}</strong><span>{b["n"]} open roles</span>{icon("arrow", 18)}</a>'
-        for b in breakdown
-    )
-    if tab == "jobs":
-        content = f'<div class="content-card"><div class="card-head"><h2>Jobs at {e(company["name"])}</h2><span>{len(jobs)} recent roles</span></div><div class="job-list">{"".join(job_card(j) for j in jobs) or "<p>No open roles right now.</p>"}</div></div>'
-    elif tab == "offices":
-        offices = [(company["location"], "Headquarters"), ("New York, NY", "East Coast Hub"), ("Austin, TX", "Southwest Hub"), ("Remote", "Distributed Team")]
-        content = '<div class="content-card"><h2>Offices</h2><div class="office-grid">' + "".join(
-            f'<div class="office-card">{icon("building", 24)}<h3>{e(name)}</h3><span>{e(kind)}</span><p>{e(company["office_type"])} workplace · {thousands(company["employees"])} employees worldwide</p></div>'
-            for name, kind in offices
-        ) + '</div></div>'
-    elif tab == "teams":
-        content = f'<div class="content-card"><h2>Teams at {e(company["name"])}</h2><p>Explore open roles by discipline. Counts come from the live demo database.</p><div class="team-grid">{category_cards or "<p>No open roles right now.</p>"}</div><h3>Focus areas</h3><div class="tag-row">{"".join(f"<span class=\"tag\">{e(t)}</span>" for t in teams)}</div></div>'
-    elif tab == "culture":
-        content = f'''<div class="content-card"><h2>Life at {e(company["name"])}</h2>
-          <p>{e(company["description"])}</p>
-          <div class="culture-grid">
-            <div>{icon("globe", 24)}<h3>How we work</h3><p>{e(company["office_type"])} teams use documented decisions, asynchronous updates and regular feedback loops.</p></div>
-            <div>{icon("users", 24)}<h3>Growth</h3><p>Mentorship, internal mobility and learning stipends help people build durable careers.</p></div>
-            <div>{icon("lightning", 24)}<h3>Impact</h3><p>Small teams own meaningful problems from discovery through launch and iteration.</p></div>
-          </div></div>'''
-    elif tab == "benefits":
-        content = f'<div class="content-card"><h2>Perks + Benefits</h2><p>{e(company["benefits"])} benefits in this sample profile.</p><div class="perks-grid">{"".join(f"<div class=\"perk-item\">{icon('check', 16)} {e(p)}</div>" for p in perks)}</div><h3>Tech stack</h3><div class="tag-row">{"".join(f"<span class=\"tag\">{e(s)}</span>" for s in stack)}</div></div>'
-    elif tab == "articles":
-        content = f'<div class="content-card"><h2>Articles featuring {e(company["name"])}</h2><div class="article-grid">{"".join(article_card(a, variant=i) for i, a in enumerate(related))}</div></div>'
-    elif tab.startswith("faq"):
-        faq_items = [
-            ("What's It Like to Work Here?", "Teams describe a collaborative, documented and outcomes-focused environment."),
-            ("Culture & Values", "Curiosity, ownership and clear communication show up in everyday rituals."),
-            ("Inclusion & Diversity", "Employee resource groups, pay transparency and inclusive hiring practices are part of the profile."),
-            ("Career Growth & Development", "Learning stipends, mentorship and internal mobility support long-term growth."),
-            ("Compensation & Benefits", "Competitive pay, equity or bonus programs, health coverage and retirement benefits."),
-            ("Work-Life Balance", "Flexible schedules and a {office_type} policy help people do their best work."),
-        ]
-        content = '<div class="content-card"><h2>Company Insights</h2>' + "".join(
-            f'<details class="faq-item" {"open" if i == 0 else ""}><summary>{e(q)} {icon("chevron", 18)}</summary><p>{e(a.format(office_type=company["office_type"]))}</p></details>'
-            for i, (q, a) in enumerate(faq_items)
-        ) + '</div>'
-    else:
-        content = f'''
-        <div class="content-card"><h2>About {e(company["name"])}</h2>
-          <p class="lead">{e(company["tagline"])}</p><p>{e(company["description"])}</p>
-          <div class="tag-row">{"".join(f'<a class="tag tag-link" href="{url("/companies", industry=x)}">{e(x)}</a>' for x in industries)}</div>
-        </div>
-        <div class="content-card"><div class="card-head"><h2>We're Hiring!</h2><a class="text-link" href="/company/{e(company["slug"])}/jobs">View all jobs {icon("arrow", 15)}</a></div>
-          <div class="team-grid">{category_cards or "<p>No open roles right now.</p>"}</div>
-        </div>
-        <div class="content-card"><div class="card-head"><h2>Recently Posted Jobs</h2><a class="text-link" href="/company/{e(company["slug"])}/jobs">View All {icon("arrow", 15)}</a></div>
-          <div class="job-list">{"".join(job_card(j) for j in jobs[:5]) or "<p>No open roles right now.</p>"}</div>
-        </div>'''
-    body = f'''
-    <section class="company-cover" style="--cover-accent:{e(company['color'])}">
-      <div class="container"><span class="cover-badge">{icon("star", 15)} Best Places To Work 2026</span></div>
-    </section>
-    <section class="company-header"><div class="container">
-      {breadcrumb([("Home", "/"), ("Companies", "/companies"), (company["name"], "")])}
-      <div class="company-header-grid">
-        {company_logo(company, 84, 'cover-logo')}
-        <div class="company-header-info">
-          <div class="company-title-row"><h1>{e(company["name"])}</h1>
-            <button class="btn btn-outline save-company-btn follow-btn{' followed' if followed else ''}" type="button" data-company-id="{cid}" aria-pressed="{'true' if followed else 'false'}">{icon("heart", 17)} <span>{'SAVED' if followed else 'SAVE'}</span></button></div>
-          <div class="company-header-meta">{icon("pin", 15)} {e(company["location"])} <span>·</span> {thousands(company["employees"])} Total Employees <span>·</span> Year Founded: {e(company["founded"])}</div>
-        </div>
-        <a class="btn btn-outline" href="https://example.com" target="_blank" rel="noopener">View Website {icon("external", 15)}</a>
-      </div>
-      <nav class="tabs" aria-label="Company sections">{tabs}</nav>
-    </div></section>
-    <section class="section company-detail-section"><div class="container detail-grid">
-      <div class="detail-main">{content}</div>
-      <aside class="detail-side">
-        <div class="side-card"><h3>Quick facts</h3><dl class="glance-list">
-          <div><dt>Industry</dt><dd>{e(industries[0] if industries else "Technology")}</dd></div>
-          <div><dt>Company size</dt><dd>{thousands(company["employees"])} employees</dd></div>
-          <div><dt>Office type</dt><dd>{e(company["office_type"])}</dd></div>
-          <div><dt>Founded</dt><dd>{e(company["founded"])}</dd></div>
-          <div><dt>Open jobs</dt><dd>{thousands(company["open_jobs"])}</dd></div>
-        </dl></div>
-        <div class="side-card"><h3>Stay in the loop</h3><p>Get an alert when {e(company["name"])} posts a new role.</p>
-          <a class="btn btn-primary btn-block" href="{url('/alerts', company=company['slug'])}">{icon("bell", 16)} CREATE JOB ALERT</a></div>
-        <div class="side-card"><h3>Benefits snapshot</h3><ul class="mini-list">{"".join(f"<li>{icon('check', 14)} {e(p)}</li>" for p in perks[:6])}</ul>
-          <a class="text-link" href="/company/{e(company['slug'])}/benefits">See all benefits {icon("arrow", 14)}</a></div>
-      </aside>
-    </div></section>'''
-    return layout(f'{company["name"]} Careers, Perks + Culture', body, user, active="companies", page_class="company-detail-page", description=f"Explore {company['name']} jobs, culture, teams and benefits.")
 
 
 # ---------- LinkedIn-style company & job views ----------
@@ -1881,12 +1538,12 @@ def linkedin_job_card(job, compact=False):
 
 
 def _li_office_grid(company):
-    offices = [
-        (company["location"], "Headquarters"),
-        ("New York, NY", "East Coast Hub"),
-        ("Austin, TX", "Southwest Hub"),
-        ("Remote", "Distributed Team"),
-    ]
+    offices = [(company["location"], "Headquarters")]
+    office_cnt = int(company.get("offices") or 1)
+    if office_cnt > 1:
+        offices.append((f"{office_cnt} Locations", "Regional & Global Offices"))
+    policy = company.get("remote_policy") or company.get("office_type") or "Hybrid"
+    offices.append((policy, "Workplace Policy"))
     return '<div class="li-office-grid">' + "".join(
         f'''<div class="li-office">{icon("building", 20)}<div><strong>{e(name)}</strong><span>{e(kind)}</span><small>{e(company['office_type'])} workplace</small></div></div>'''
         for name, kind in offices
@@ -1958,11 +1615,21 @@ def linkedin_company_detail_page(conn, user, company, tab, jobs=None, related=No
           <p>{e(a['excerpt'])}</p><div class="li-meta">{e(a['author'])} · {e(a['published'])} · {e(a['read_time'])}</div></div></article>'''
         for i, a in enumerate(related)
     )
-    recent_jobs = "".join(linkedin_job_card(j, compact=True) for j in jobs[:4]) or '<p class="li-muted">No open roles right now.</p>'
-    all_jobs = "".join(linkedin_job_card(j) for j in jobs) or '<p class="li-muted">No open roles right now.</p>'
+    _no_jobs_msg = empty_state(
+        f"No active openings at {company['name']}",
+        "Create a job alert to get notified when new roles are published.",
+        f'<a class="li-btn li-btn-outline" href="{url("/alerts", company=company["slug"])}">Create job alert</a>',
+    )
+    recent_jobs = "".join(linkedin_job_card(j, compact=True) for j in jobs[:4]) or _no_jobs_msg
+    all_jobs = "".join(linkedin_job_card(j) for j in jobs) or _no_jobs_msg
 
-    details = [
-        ("Website", f'<a class="li-link" href="https://example.com" target="_blank" rel="noopener">example.com {icon("external", 13)}</a>'),
+    raw_website = (company.get("website") or "").strip()
+    has_website = bool(raw_website and "example.com" not in raw_website.lower())
+    website_label = re.sub(r"^https?://(www\.)?", "", raw_website).rstrip("/") if has_website else ""
+    details = []
+    if has_website:
+        details.append(("Website", f'<a class="li-link" href="{e(raw_website)}" target="_blank" rel="noopener">{e(website_label)} {icon("external", 13)}</a>'))
+    details += [
         ("Industry", e(industries[0] if industries else "Technology")),
         ("Company size", f'{thousands(company["employees"])} employees'),
         ("Headquarters", e(company["location"])),
@@ -1998,7 +1665,7 @@ def linkedin_company_detail_page(conn, user, company, tab, jobs=None, related=No
         <section class="li-card"><h2>Life at {e(company['name'])}</h2><p>{e(company['description'])}</p>{_li_culture_grid(company)}</section>'''
     elif active == "benefits":
         content = f'''
-        <section class="li-card"><h2>Perks + Benefits</h2><p class="li-muted">{e(company['benefits'])} benefits in this sample profile.</p>
+        <section class="li-card"><h2>Perks + Benefits</h2><p class="li-muted">{e(company['benefits'])} employer benefits and workplace programs.</p>
           <div class="li-perks-grid">{perks_html}</div></section>
         <section class="li-card"><h2>Tech stack</h2><div class="li-chip-row">{stack_html}</div></section>'''
     else:
@@ -2050,7 +1717,7 @@ def linkedin_company_detail_page(conn, user, company, tab, jobs=None, related=No
               {icon("plus", 16)} <span>{'Following' if followed else 'Follow'}</span>
             </button>
             <a class="li-btn li-btn-outline" href="/company/{e(company['slug'])}/jobs">{icon("briefcase", 16)} View jobs</a>
-            <a class="li-btn li-btn-subtle" href="https://example.com" target="_blank" rel="noopener">Website {icon("external", 15)}</a>
+            {f'<a class="li-btn li-btn-subtle" href="{e(raw_website)}" target="_blank" rel="noopener">Website {icon("external", 15)}</a>' if has_website else ''}
           </div>
         </div>
       </div>
@@ -2066,14 +1733,10 @@ def linkedin_company_detail_page(conn, user, company, tab, jobs=None, related=No
 
 
 def linkedin_job_detail_page(conn, user, job, similar):
-    return sandbox_job_detail_page(conn, user, job, similar)
+    return job_detail_page(conn, user, job, similar)
 
 
 def job_detail_page(conn, user, job, similar):
-    return sandbox_job_detail_page(conn, user, job, similar)
-
-
-def sandbox_job_detail_page(conn, user, job, similar):
     if user:
         db_saved = job["id"] in db.saved_job_ids(conn, user["id"])
         applied = bool(conn.execute("SELECT 1 FROM applications WHERE user_id=? AND job_id=?", (user["id"], job["id"])).fetchone())
@@ -2157,8 +1820,8 @@ def sandbox_job_detail_page(conn, user, job, similar):
             "Bachelor's degree in a relevant field or equivalent practical experience.",
         ]
         team_quote = f"“At {company_name}, driving innovation in {raw_cats[0] if raw_cats else 'our industry'} alongside an elite team gives you immediate operational impact. There's real ownership and support to do your best work every day.”"
-        quote_name = "Alex Tran"
-        quote_title = f"Lead {job.get('category') or 'Operations'}, {company_name}"
+        quote_name = f"{company_name} Team"
+        quote_title = f"{job.get('category') or 'Engineering & Operations'}"
         comp_what_we_do = company_desc
         comp_why_work = f"Join an industry leader driving modern innovation. We empower our teams with career mentoring, competitive compensation, and clear growth pathways."
         offices_desc = f"Main campus in {company_hq} and distributed collaborative teams."
@@ -2227,7 +1890,7 @@ def sandbox_job_detail_page(conn, user, job, similar):
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{e(company_name)} | {e(job_title)}</title>
   <meta name="description" content="Apply for {e(job_title)} at {e(company_name)}. {e(workplace)} role in {e(location)} with competitive compensation ({e(salary)}).">
-  <meta name="author" content="The SandBox Logistics & Tech Career Network">
+  <meta name="author" content="Logistic Waves">
   <link rel="icon" type="image/png" href="/static/favicon.png">
 
   <!-- FontAwesome Icons -->
@@ -2286,7 +1949,7 @@ def sandbox_job_detail_page(conn, user, job, similar):
               <div class="flagship-company-sub">
                 <span id="hero-department">{e(categories_text.replace("&bull;", "•").replace("&amp;bull;", "•") if categories_text else "M&E Engineering")}</span>
                 <span class="sub-dot">•</span>
-                <span id="hero-company-size">500–1,000 employees</span>
+                <span id="hero-company-size">{thousands(company_employees)} employees</span>
               </div>
             </div>
           </div>
@@ -2629,7 +2292,7 @@ def sandbox_job_detail_page(conn, user, job, similar):
         <div style="display: flex; align-items: center; gap: 10px;">
           <div class="modal-header-icon"><i class="fa-solid fa-paper-plane"></i></div>
           <div>
-            <h2 class="modal-title" id="apply-modal-title" style="font-size: 16px;">Quick Application &bull; SandBox Direct</h2>
+            <h2 class="modal-title" id="apply-modal-title" style="font-size: 16px;">Quick Application &bull; Logistic Waves</h2>
             <div class="modal-subtitle" id="apply-modal-subtitle" style="font-size: 11.5px; color: #93C5FD;">{e(job_title)}, {e(company_name)}</div>
           </div>
         </div>
@@ -2676,7 +2339,7 @@ def sandbox_job_detail_page(conn, user, job, similar):
     </div>
   </div>
 
-  <div id="sbx-toast" class="sbx-toast" style="display: none;"></div>
+
 
   <script>
     (function() {{
@@ -2722,7 +2385,7 @@ def sandbox_job_detail_page(conn, user, job, similar):
           _origToast(msg, isError);
           return;
         }}
-        const t = document.getElementById('sbx-toast');
+        const t = document.getElementById('toast');
         if (!t) return;
         const iconCls = isError ? 'fa-circle-exclamation' : 'fa-circle-check';
         const iconColor = isError ? '#ef4444' : '#10b981';
@@ -2896,16 +2559,16 @@ def salaries_page(conn, user, q="", category=""):
       </form>
     </div></section>
     <section class="section"><div class="container">
-      <div class="results-head"><div><h2>Average salaries by role</h2><p>{len(rows)} roles · sample data modeled on 2026 market ranges</p></div><span class="results-count">{len(rows)} results</span></div>
+      <div class="results-head"><div><h2>Average salaries by role</h2><p>{len(rows)} roles &middot; 2026 compensation benchmarks</p></div><span class="results-count">{len(rows)} results</span></div>
       <div class="table-card"><table class="salary-table"><thead><tr><th>Role</th><th>Salary range</th><th>Median</th><th>Reports</th><th>YoY</th></tr></thead><tbody>{table_rows}</tbody></table></div>
       <div class="info-grid">
-        <div class="info-card">{icon("chart", 26)}<h3>How we calculate</h3><p>Median base salary is shown with a low-to-high range and report count. Replace this sample dataset with your own verified compensation data before launch.</p></div>
+        <div class="info-card">{icon("chart", 26)}<h3>How we calculate</h3><p>Median base salary is displayed alongside the typical low-to-high compensation range and report count.</p></div>
         <div class="info-card">{icon("globe", 26)}<h3>Location matters</h3><p>Remote and hybrid policies can shift ranges significantly. Compare offers using both the role and the workplace policy.</p></div>
         <div class="info-card">{icon("sparkle", 26)}<h3>Negotiate with context</h3><p>Use salary ranges alongside benefits, equity and growth opportunities to evaluate the full package.</p></div>
       </div>
       <div class="faq-block"><h2>Salary FAQ</h2>
-        <details><summary>What is included in these salaries? {icon("chevron", 18)}</summary><p>Base salary only sample figures. Bonus, equity and benefits are shown separately on company profiles.</p></details>
-        <details><summary>How often is the data updated? {icon("chevron", 18)}</summary><p>This demo dataset is static. A production version would refresh from validated submissions and public sources.</p></details>
+        <details><summary>What is included in these salaries? {icon("chevron", 18)}</summary><p>Figures reflect base salary bands. Bonus, equity and benefits are detailed on employer profiles.</p></details>
+        <details><summary>How often is the data updated? {icon("chevron", 18)}</summary><p>Compensation benchmarks are maintained for 2026 alongside employer compensation records.</p></details>
         <details><summary>Can I compare by category? {icon("chevron", 18)}</summary><p>Yes — use the Job Category filter above, or browse salary detail pages from the table.</p></details>
       </div>
     </div></section>'''
@@ -2935,18 +2598,6 @@ def salary_detail_page(conn, user, salary, related_jobs):
 # ---------- articles ----------
 
 def articles_page(conn, user, q="", category="", tag="", featured=None):
-    hub_file = STATIC / "article_blogs.html"
-    if not hub_file.is_file():
-        hub_file = ROOT / "data" / "article_blogs.html"
-    
-    hub_content = ""
-    if hub_file.is_file():
-        try:
-            with open(hub_file, "r", encoding="utf-8") as f:
-                hub_content = f.read()
-        except Exception as ex:
-            hub_content = f"<!-- Error loading editorial hub: {ex} -->"
-            
     extra_head = '''<link rel="stylesheet" href="/static/article.css?v=20261112_14">
     <style>
       #view-article {
@@ -2961,26 +2612,84 @@ def articles_page(conn, user, q="", category="", tag="", featured=None):
         max-width: 1426px !important;
         margin: 0 auto !important;
       }
+      .lw-db-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+      }
     </style>'''
-    
-    # Dynamically inject backend 'Logistic Waves Today' articles into the carouselTrack
+
+    has_filter = bool((q or "").strip() or (category or "").strip() or (tag or "").strip())
+    if has_filter:
+        matched = db.list_articles(conn, q=q, category=category, tag=tag, limit=60)
+        cards = "".join(
+            f'''<article class="lw-db-card" style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;display:flex;flex-direction:column;transition:all 0.2s;">
+              <a href="/articles/{e(a['slug'])}" style="display:block;height:175px;overflow:hidden;background:#f1f5f9;">
+                <img src="{e(_article_cover_url(a, i))}" alt="{e(a['title'])}" style="width:100%;height:100%;object-fit:cover;display:block;" loading="lazy">
+              </a>
+              <div style="padding:16px;display:flex;flex-direction:column;gap:8px;flex:1;">
+                <div style="font-size:11px;font-weight:700;color:#0284c7;text-transform:uppercase;letter-spacing:0.05em;">{e(a.get('category') or 'Editorial')} &middot; {e(a.get('tag') or 'Article')}</div>
+                <h3 style="margin:0;font-size:17px;line-height:1.35;"><a href="/articles/{e(a['slug'])}" style="color:#0f172a;text-decoration:none;">{e(a['title'])}</a></h3>
+                <p style="margin:0;font-size:13.5px;color:#475569;line-height:1.5;flex:1;">{e(a.get('excerpt') or '')}</p>
+                <div style="font-size:12px;color:#64748b;padding-top:8px;border-top:1px solid #f1f5f9;">{e(a.get('author') or 'Editorial Staff')} &middot; {e(a.get('published') or '')}</div>
+              </div>
+            </article>''' for i, a in enumerate(matched)
+        )
+        filter_parts = [p for p in [f'Search: "{q}"' if q else "", category, tag] if p]
+        filter_label = " &middot; ".join(e(p) for p in filter_parts)
+        results_html = f'<div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(290px, 1fr));gap:20px;">{cards}</div>' if cards else empty_state(
+            "No articles match your filter",
+            "Try a different search term or reset filters to browse all briefings.",
+            '<a class="btn btn-primary" href="/article-blogs">Browse All Articles</a>',
+        )
+        body = f'''
+        <div id="view-article">
+          <div class="container" style="padding:36px 0 60px;">
+            <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:14px;margin-bottom:24px;border-bottom:2px solid #0f172a;padding-bottom:14px;">
+              <div>
+                <h1 style="margin:0;font-size:28px;color:#0f172a;">Articles &amp; Briefings</h1>
+                <p style="margin:6px 0 0;color:#475569;font-size:14px;">{len(matched)} matching articles ({filter_label})</p>
+              </div>
+              <form method="get" action="/article-blogs" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                <input type="search" name="q" value="{e(q)}" placeholder="Search articles..." style="padding:9px 14px;border:1px solid #cbd5e1;border-radius:6px;font-size:14px;min-width:220px;">
+                <button class="btn btn-primary btn-sm" type="submit">Filter</button>
+                <a class="btn btn-outline btn-sm" href="/article-blogs">Clear Filters</a>
+              </form>
+            </div>
+            {results_html}
+          </div>
+        </div>
+        '''
+        return layout("Articles & Briefings", body, user, active="articles",
+                      page_class="page-article-blogs",
+                      description="Search articles, industry briefings, and logistics intelligence.",
+                      extra_head=extra_head)
+
+    hub_file = STATIC / "article_blogs.html"
+    hub_content = ""
+    if hub_file.is_file():
+        try:
+            with open(hub_file, "r", encoding="utf-8") as f:
+                hub_content = f.read()
+        except Exception as ex:
+            hub_content = f"<!-- Error loading editorial hub: {ex} -->"
+
     today_articles = conn.execute(
         """SELECT id, slug, title, excerpt, author, published, category, tag, read_time, accent, thumb, is_today, duration, guest FROM articles 
            WHERE is_today = 1 OR tag = 'Logistic Waves Today' OR category = 'Logistic Waves Today'
            ORDER BY id DESC LIMIT 12"""
     ).fetchall()
-    
+
     if today_articles and '<div class="carousel-track" id="carouselTrack">' in hub_content:
         cards_html = []
         for r in today_articles:
             a = dict(r)
             slug = a.get("slug") or f"article-{a['id']}"
             title = a.get("title") or "Logistic Waves Today"
-            thumb = a.get("thumb") or a.get("accent") or "/static/images/fw_today_1.jpg"
-            date = a.get("published") or "Nov 6, 2026"
+            thumb = a.get("thumb") or "/static/images/fw_today_1.jpg"
+            date = a.get("published") or ""
             excerpt = a.get("excerpt") or ""
             cards_html.append(f'''<article class="video-card">
-<a class="video-media" href="/articles/{e(slug)}"><img alt="{e(title)}" src="{thumb}" loading="lazy"><span class="play"></span></a>
+<a class="video-media" href="/articles/{e(slug)}"><img alt="{e(title)}" src="{e(thumb)}" loading="lazy"><span class="play"></span></a>
 <span class="cat">Logistic Wave Today</span>
 <h3><a href="/articles/{e(slug)}">{e(title)}</a></h3>
 <div class="date">{e(date)}</div>
@@ -2990,6 +2699,38 @@ def articles_page(conn, user, q="", category="", tag="", featured=None):
         dynamic_track = '<div class="carousel-track" id="carouselTrack">\n' + "\n".join(cards_html) + '\n</div>\n</div>'
         track_pattern = re.compile(r'<div class="carousel-track" id="carouselTrack">.*?</div>\s*</div>', re.DOTALL)
         hub_content = track_pattern.sub(dynamic_track, hub_content, count=1)
+
+    latest_editorial = [db.as_dict(r) for r in conn.execute(
+        "SELECT * FROM articles WHERE COALESCE(is_today, 0) = 0 ORDER BY id DESC LIMIT 6"
+    ).fetchall()]
+    if latest_editorial and '<div id="lw-hub-overview">' in hub_content:
+        latest_cards = "".join(
+            f'''<article class="lw-db-card" style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;display:flex;flex-direction:column;transition:all 0.2s;">
+              <a href="/articles/{e(a['slug'])}" style="display:block;height:165px;overflow:hidden;background:#f1f5f9;">
+                <img src="{e(_article_cover_url(a, i))}" alt="{e(a['title'])}" style="width:100%;height:100%;object-fit:cover;display:block;" loading="lazy">
+              </a>
+              <div style="padding:14px 16px;display:flex;flex-direction:column;gap:6px;flex:1;">
+                <span style="font-size:11px;font-weight:700;color:#0284c7;text-transform:uppercase;letter-spacing:0.05em;">{e(a.get('category') or 'Editorial')}</span>
+                <h3 style="margin:0;font-size:16px;line-height:1.35;"><a href="/articles/{e(a['slug'])}" style="color:#0f172a;text-decoration:none;">{e(a['title'])}</a></h3>
+                <p style="margin:0;font-size:13px;color:#475569;line-height:1.5;flex:1;">{e(a.get('excerpt') or '')}</p>
+                <div style="font-size:11.5px;color:#64748b;padding-top:6px;border-top:1px solid #f1f5f9;">{e(a.get('author') or 'Editorial Staff')} &middot; {e(a.get('published') or '')}</div>
+              </div>
+            </article>''' for i, a in enumerate(latest_editorial)
+        )
+        latest_section = f'''<div id="lw-hub-overview">
+<section class="section container lw-db-latest-section" style="padding-top:24px;padding-bottom:8px;">
+  <div class="section-head" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+    <h2 class="section-title" style="margin:0;">Latest Editorial Briefings</h2>
+    <form method="get" action="/article-blogs" style="display:flex;gap:8px;align-items:center;">
+      <input type="search" name="q" placeholder="Search briefings..." style="padding:7px 12px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;">
+      <button class="btn btn-outline btn-sm" type="submit">Search</button>
+    </form>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(290px, 1fr));gap:18px;">
+    {latest_cards}
+  </div>
+</section>'''
+        hub_content = hub_content.replace('<div id="lw-hub-overview">', latest_section, 1)
 
     body = f'''
     <div id="view-article">
@@ -3079,7 +2820,7 @@ EDITORIAL_PRESETS = {
         "inline_img1": "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=1200&q=80",
         "inline_cap1": "Infrastructure scaling and GPU scheduling clusters are driving massive capital investments across multinational computing facilities. (Photo: Cloud Insights)",
         "inline_img2": "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=1200&q=80",
-        "inline_cap2": "Collaborative systems engineering teams are transitioning from monoliths to event-driven compound architectures. (Photo: Sandbox Intelligence)",
+        "inline_cap2": "Collaborative systems engineering teams are transitioning from monoliths to event-driven compound architectures. (Photo: Logistic Waves)",
         "stats": [
             ("2.4x", "Premium for Distributed Systems"),
             ("+28%", "YoY Senior Systems Pay Surge"),
@@ -3093,7 +2834,7 @@ EDITORIAL_PRESETS = {
     },
     "cross-border-tech-hiring": {
         "hero_img": "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=1200&q=80",
-        "hero_caption": "Multinational tech enterprises navigate shifting bilateral tax treaties and cross-border IP licensing agreements. (Photo: Sandbox Global Policy Desk)",
+        "hero_caption": "Multinational tech enterprises navigate shifting bilateral tax treaties and cross-border IP licensing agreements. (Photo: Global Policy Desk)",
         "kicker_pill": "POLICY & REMOTE TRENDS",
         "topic_tag": "GLOBAL WORKFORCE",
         "author_avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80",
@@ -3115,7 +2856,7 @@ EDITORIAL_PRESETS = {
             ("2.4x", "Surge in Direct Multi-Currency Payroll")
         ],
         "quote_text": "Engineering leaders can no longer treat international tax and labor compliance as an afterthought. Designing tax-optimized, legally resilient contracts is now as vital as software architecture.",
-        "quote_cite": "David Sterling — Global Policy Analyst",
+        "quote_cite": "Logistic Waves — Global Policy Desk",
         "tags": ["RemoteHiring", "TaxTreaties", "GlobalTalent", "Compliance2026", "CrossBorderPayroll"],
         "sources": "Sources & Fact Verification: OECD International Tax Directives (2026 Revision), ASEAN Digital Economic Integration Framework, and primary filings across 45 national labor ministries."
     },
@@ -3151,9 +2892,9 @@ EDITORIAL_PRESETS = {
 
 def article_detail_page(conn, user, article, related):
     slug = article.get("slug") or "article"
-    title = article.get("title") or "Technology Editorial"
-    category = article.get("category") or "Technology"
-    author = article.get("author") or "David Sterling"
+    title = article.get("title") or "Editorial Briefing"
+    category = article.get("category") or "Industry"
+    author = article.get("author") or "Editorial Staff"
     published = article.get("published") or "November 04, 2026"
     read_time = article.get("read_time") or "7 min read"
     excerpt = article.get("excerpt") or "In-depth investigation and industry intelligence."
@@ -3163,32 +2904,27 @@ def article_detail_page(conn, user, article, related):
 
     # Fallback preset for all other articles in database
     default_meta = {
-        "hero_img": f"https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=1200&q=80",
-        "hero_caption": f"Industry analysis and operational intelligence covering {category}. (Photo: Editorial Bureau)",
+        "hero_img": _article_cover_url(article, 0),
+        "hero_caption": f"{title} ({category})",
         "kicker_pill": category.upper(),
-        "topic_tag": "INDUSTRY ANALYSIS",
+        "topic_tag": category.upper(),
         "author_avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80",
-        "author_role": f"Senior {category} Analyst",
-        "author_bio": f"Investigative tech columnist and contributor covering modern enterprise software, organizational design, and market trends.",
-        "readers": "9,240 readers",
-        "sub_1": f"The Emerging Landscape in {category}",
-        "sub_2": "Key Operational Challenges and Breakthrough Strategies",
-        "sub_3": "Comparative Market Data and Industry Benchmarks",
-        "sub_4": "What Teams Should Expect Over the Next 12 Months",
+        "author_role": f"{category} Contributor",
+        "author_bio": f"Contributor covering {category.lower()} analysis, operations, and industry developments.",
+        "readers": "",
+        "sub_1": f"Overview: {category}",
+        "sub_2": "Key Operational Developments",
+        "sub_3": "Industry Outlook",
+        "sub_4": "What Comes Next",
         "inline_img1": "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=1200&q=80",
-        "inline_cap1": "Cross-functional engineering and product leaders meeting to coordinate system milestones. (Photo: Industry Press)",
+        "inline_cap1": "",
         "inline_img2": "https://images.unsplash.com/photo-1497215728101-856f4ea42174?auto=format&fit=crop&w=1200&q=80",
-        "inline_cap2": "Enterprise data systems and distributed cloud backends powering customer operations. (Photo: Tech Gazette)",
-        "stats": [
-            ("3.2x", "Efficiency Multiplier"),
-            ("+34%", "YoY Adoption Surge"),
-            ("92%", "Leader Alignment Rate"),
-            ("850+", "Organizations Surveyed")
-        ],
-        "quote_text": "Great engineering decisions start with verified, ground-truth data. Knowing how peer organizations solve high-scale concurrency and talent retention separates leaders from laggards.",
-        "quote_cite": f"{author} — Senior Contributor",
-        "tags": [category.replace(" ", ""), "TechTrends", "EnterpriseEngineering", "Innovation2026"],
-        "sources": f"Sources & Fact Verification: Primary research from corporate disclosures, verified employee benchmarks, and authenticated industry reports."
+        "inline_cap2": "",
+        "stats": [],
+        "quote_text": excerpt,
+        "quote_cite": author,
+        "tags": [category.replace(" ", ""), "LogisticWaves"],
+        "sources": ""
     }
 
     meta = editorial_presets.get(slug)
@@ -3203,8 +2939,9 @@ def article_detail_page(conn, user, article, related):
     if article.get("tag") == "Logistic Waves Today" or article.get("category") == "Logistic Waves Today":
         meta["kicker_pill"] = "LOGISTIC WAVES TODAY · VIDEO BROADCAST"
         meta["topic_tag"] = "DAILY LOGISTICS INTELLIGENCE"
-        meta["readers"] = f"{article.get('read_time', '24 min')} watch"
-        meta["author_role"] = f"Guest Speaker / {article.get('author')}"
+        meta["readers"] = f"{article.get('read_time', '15 min')}"
+        guest_name = article.get("guest") or article.get("author") or "Featured Guest"
+        meta["author_role"] = f"Featured Guest: {guest_name}"
         meta["quote_text"] = article.get("excerpt") or ""
         meta["quote_cite"] = f"{article.get('author')} — Executive Briefing"
         meta["tags"] = ["LogisticWavesToday", "Aviation", "Maritime", "SupplyChain", "Mobility2026"]
@@ -3213,55 +2950,24 @@ def article_detail_page(conn, user, article, related):
     raw_body = article.get("body") or ""
     clean_body = re.sub(r"<[^>]+>", "", raw_body)
     body_paras = [p.strip() for p in re.split(r"\n\s*\n", clean_body) if p.strip()]
-
-    lead_para = body_paras[0] if body_paras else excerpt
-    paras_1 = body_paras[1:3] if len(body_paras) > 2 else [
-        "Modern engineering organizations are aggressively auditing their infrastructure cost curves and compensation matrices as talent mobility reaches global scale.",
-        "With distributed compute pipelines becoming the standard operating model, technical differentiation is directly tied to specialized domain knowledge."
-    ]
-    paras_2 = body_paras[3:5] if len(body_paras) > 4 else [
-        "In interviews across leading tech organizations, engineering vice presidents noted that generalist full-stack roles are rapidly becoming commoditized by agentic toolchains.",
-        "Conversely, engineers who grasp memory layouts, zero-copy serialization, and kernel-level networking protocols continue to see unprecedented inbound recruiter interest."
-    ]
-    paras_3 = body_paras[5:7] if len(body_paras) > 6 else [
-        "Regulatory shifts and bilateral tax modernization have added another layer of complexity. Multinational enterprises are standardizing on Employer of Record hubs to mitigate compliance risks.",
-        "Compensation packages now routinely feature structured liquidity tender offers and performance-linked equity vesting schedules to protect candidate upside."
-    ]
-    paras_4 = body_paras[7:] if len(body_paras) > 7 else [
-        "As we look ahead, the gap between organizations that institutionalize modern developer ergonomics and those relying on legacy paradigms will only widen.",
-        "For engineers, specializing in high-concurrency systems, foundation model fine-tuning, and robust distributed state management remains the highest-leverage career investment."
-    ]
-
     custom_body_html = format_editorial_body(raw_body)
     if custom_body_html and (not is_preset or len(raw_body) > 350):
         story_inner_html = f'''
         <p class="editorial-lead-para" style="font-size:18px;font-weight:500;line-height:1.75;color:#1e293b;margin-bottom:26px;">{e(excerpt)}</p>
         {custom_body_html}
         '''
-    else:
+    elif is_preset and len(body_paras) >= 2:
+        lead_para = body_paras[0]
         story_inner_html = f'''
         <p class="editorial-lead-para">{e(lead_para)}</p>
-        <h2 class="editorial-subheading">{meta["sub_1"]}</h2>
-        {"".join(f'<p class="editorial-para">{e(p)}</p>' for p in paras_1)}
-        <h2 class="editorial-subheading">{meta["sub_2"]}</h2>
-        {"".join(f'<p class="editorial-para">{e(p)}</p>' for p in paras_2)}
-        <figure class="editorial-inline-figure">
-          <img src="{meta["inline_img1"]}" alt="Technology Infrastructure" class="editorial-inline-image">
-          <figcaption class="editorial-inline-caption">{meta["inline_cap1"]}</figcaption>
-        </figure>
-        <h2 class="editorial-subheading">{meta["sub_3"]}</h2>
-        {"".join(f'<p class="editorial-para">{e(p)}</p>' for p in paras_3)}
+        {"".join(f'<p class="editorial-para">{e(p)}</p>' for p in body_paras[1:])}
         <blockquote class="editorial-pull-quote">
-          <p class="editorial-quote-p">{meta["quote_text"]}</p>
-          <cite class="editorial-quote-cite">{meta["quote_cite"]}</cite>
+          <p class="editorial-quote-p">{e(meta["quote_text"])}</p>
+          <cite class="editorial-quote-cite">{e(meta["quote_cite"])}</cite>
         </blockquote>
-        <h2 class="editorial-subheading">{meta["sub_4"]}</h2>
-        {"".join(f'<p class="editorial-para">{e(p)}</p>' for p in paras_4)}
-        <figure class="editorial-inline-figure">
-          <img src="{meta["inline_img2"]}" alt="Enterprise Architecture" class="editorial-inline-image">
-          <figcaption class="editorial-inline-caption">{meta["inline_cap2"]}</figcaption>
-        </figure>
         '''
+    else:
+        story_inner_html = f'<p class="editorial-lead-para" style="font-size:18px;font-weight:500;line-height:1.75;color:#1e293b;margin-bottom:26px;">{e(excerpt)}</p>' 
 
     # 3. Stat Card HTML
     stat_cells_html = "".join(f'''
@@ -3272,40 +2978,29 @@ def article_detail_page(conn, user, article, related):
 
     # 4. Tags HTML
     tags_html = "".join(f'''
-      <a href="/article-blogs?q={t}" class="tag-pill-link">#{t}</a>''' for t in meta["tags"])
+      <a href="{url('/article-blogs', q=t)}" class="tag-pill-link">#{e(t)}</a>''' for t in meta["tags"])
 
     # 5. Right-Hand Popular / Recommended Articles Sidebar (Matching User Reference)
     sidebar_articles = [db.as_dict(r) for r in conn.execute(
         "SELECT * FROM articles WHERE id != ? ORDER BY id DESC LIMIT 8", (article["id"],)
     ).fetchall()]
 
-    sidebar_covers = [
-        "https://images.unsplash.com/photo-1578575437130-527eed3abbec?auto=format&fit=crop&w=800&q=80",
-        "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=400&q=80",
-        "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=400&q=80",
-        "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=400&q=80",
-        "https://images.unsplash.com/photo-1542296332-2e4473faf563?auto=format&fit=crop&w=400&q=80",
-        "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=400&q=80",
-        "https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=400&q=80",
-        "https://images.unsplash.com/photo-1497215728101-856f4ea42174?auto=format&fit=crop&w=400&q=80"
-    ]
-
     # Featured top popular card
     feat_card = sidebar_articles[0] if sidebar_articles else article
     feat_slug = feat_card.get("slug") or "article"
-    feat_title = feat_card.get("title") or "Global Supply Chain Modernization"
-    feat_pub = feat_card.get("published") or "November 7, 2026"
-    feat_time = feat_card.get("read_time") or "8 min read"
-    feat_img = feat_card.get("thumb") or sidebar_covers[0]
+    feat_title = feat_card.get("title") or "Industry Briefing"
+    feat_pub = feat_card.get("published") or ""
+    feat_time = feat_card.get("read_time") or ""
+    feat_img = e(_article_cover_url(feat_card, 0))
 
     # Popular list items (thumbs left, title right)
     sidebar_items_html = []
     for s_idx, s_art in enumerate(sidebar_articles[1:], start=1):
         s_slug = s_art.get("slug") or "article"
         s_title = s_art.get("title") or "Industry Report"
-        s_cat = s_art.get("category") or "Economics"
-        s_time = s_art.get("read_time") or "5 min read"
-        s_thumb = s_art.get("thumb") or sidebar_covers[s_idx % len(sidebar_covers)]
+        s_cat = s_art.get("category") or "Editorial"
+        s_time = s_art.get("read_time") or ""
+        s_thumb = e(_article_cover_url(s_art, s_idx))
 
         sidebar_items_html.append(f'''
         <a href="/articles/{e(s_slug)}" class="sidebar-popular-item">
@@ -3368,7 +3063,7 @@ def article_detail_page(conn, user, article, related):
               <div class="byline-right-meta">
                 <span class="byline-timestamp"><i class="fa-regular fa-calendar"></i> {e(published)}</span>
                 <span class="byline-read-time"><i class="fa-regular fa-clock"></i> {e(read_time)}</span>
-                <span class="byline-readers-count"><i class="fa-solid fa-eye"></i> {meta["readers"]}</span>
+                {f'<span class="byline-readers-count"><i class="fa-solid fa-eye"></i> {e(meta["readers"])}</span>' if meta.get("readers") else ''}
               </div>
             </div>
 
@@ -3397,7 +3092,7 @@ def article_detail_page(conn, user, article, related):
                 <a href="https://www.facebook.com/sharer/sharer.php" target="_blank" rel="noopener" class="share-btn">
                   <i class="fa-brands fa-facebook"></i> Facebook
                 </a>
-                <button type="button" class="share-btn" onclick="navigator.clipboard.writeText(window.location.href); alert('Article link copied to clipboard!');">
+                <button type="button" class="share-btn" onclick="navigator.clipboard.writeText(window.location.href); if(window.showToast) window.showToast('Article link copied to clipboard!');">
                   <i class="fa-regular fa-copy"></i> Copy Link
                 </button>
               </div>
@@ -3475,7 +3170,7 @@ def article_detail_page(conn, user, article, related):
         const timeLbl = document.getElementById('audioTimeLabel');
         
         if (!('speechSynthesis' in window)) {{
-          alert('Audio reader preview: playing editorial digest.');
+          if (window.showToast) window.showToast('Audio reader is unavailable in this browser.', true);
           return;
         }}
 
@@ -3523,7 +3218,7 @@ def tech_hubs_page(conn, user, hub=None):
         companies, _ = db.list_companies(conn, {"location": hub["name"].split(",")[0]}, limit=4)
         body = f'''
         <section class="page-hero"><div class="container">{breadcrumb([("Home", "/"), ("Tech Hubs", "/tech-hubs"), (hub["name"], "")])}
-          <h1>Tech Jobs in {e(hub["name"])}</h1><p class="hero-sub">{thousands(hub["jobs"])} jobs · {thousands(hub["companies"])} companies in the real platform</p></div></section>
+          <h1>Tech Jobs in {e(hub["name"])}</h1><p class="hero-sub">{thousands(hub["jobs"])} open roles across {thousands(hub["companies"])} employers</p></div></section>
         <section class="section"><div class="container"><div class="results-head"><h2>Recent roles</h2><a class="btn btn-outline" href="{url('/jobs', location=hub['name'].split(',')[0])}">Search jobs {icon("arrow", 15)}</a></div>
           <div class="job-list">{"".join(job_card(j) for j in jobs) or empty_state('No sample jobs in this hub', 'Try the full job search instead.')}</div>
           <h2 class="section-title">Companies to know</h2><div class="hub-company-grid">{"".join(f'<a class="hub-company" href="/company/{e(c["slug"])}">{company_logo(c, 84)}<span>{e(c["name"])}</span></a>' for c in companies)}</div>
@@ -3747,7 +3442,7 @@ COURSE_LINES = [
                 "thumb": "/static/images/topic_real_2.jpg",
                 "desc": "Deploy ultra-low latency vLLM and TensorRT-LLM inference engines on Kubernetes with speculative decoding, continuous batching, and KV-cache optimization.",
                 "link_text": "Read more...",
-                "channel": "Built In Tech Academy",
+                "channel": "Logistic Waves Academy",
                 "instructor": "Alex Mercer • Lead MLOps Engineer",
                 "avatar": "/static/images/expert_sarah.png",
                 "chapters": [
@@ -3821,7 +3516,7 @@ COURSE_LINES = [
                 "thumb": "/static/images/lead_story.jpg",
                 "desc": "Deep dive into production web architecture: React Server Components, server actions, streaming SSR, PostgreSQL database indexing, Redis session management, and edge deployment.",
                 "link_text": "Read more...",
-                "channel": "Built In Tech Academy",
+                "channel": "Logistic Waves Academy",
                 "instructor": "Dr. Sarah Jenkins • VP Engineering & Web Architect",
                 "avatar": "/static/images/expert_sarah.png",
                 "chapters": [
@@ -4244,7 +3939,7 @@ def awards_page(conn, user, city=None):
     <section class="section"><div class="container detail-grid"><div class="detail-main">
       <div class="content-card"><h2>2026 winners</h2><div class="winner-list">{winner_cards}</div></div>
       <div class="content-card"><h2>Explore awards by location</h2><div class="award-grid">{award_cards}</div></div>
-    </div><aside class="detail-side"><div class="side-card"><h3>How winners are chosen</h3><p>Sample ranking based on benefits, company size, hiring activity and employee signals in this demo dataset.</p><a class="btn btn-outline btn-block" href="/companies">Explore companies</a></div></aside></div></section>'''
+    </div><aside class="detail-side"><div class="side-card"><h3>How winners are chosen</h3><p>Rankings evaluate employer benefits, workplace policies, active hiring volume, and team signals.</p><a class="btn btn-outline btn-block" href="/companies">Explore companies</a></div></aside></div></section>'''
     return layout(title, body, user, description="Explore best places to work awards and top employers.")
 
 
@@ -4267,7 +3962,7 @@ def search_page(conn, user, q):
     jobs, total = db.list_jobs(conn, {"q": q}, limit=8)
     body = f'''
     <section class="page-hero"><div class="container">{breadcrumb([("Home", "/"), ("Search", "")])}
-      <h1>Search results for “{e(q)}”</h1><p class="hero-sub">Jobs, companies and articles from the demo database.</p>
+      <h1>Search results for “{e(q)}”</h1><p class="hero-sub">Matching jobs, companies, and articles across Logistic Waves.</p>
       <form method="get" action="/search" class="article-search">{icon("search", 18)}<input type="search" name="q" value="{e(q)}" placeholder="Search everything"><button class="btn btn-magenta btn-sm" type="submit">Search</button></form>
     </div></section>
     <section class="section"><div class="container">

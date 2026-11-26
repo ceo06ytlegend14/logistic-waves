@@ -343,7 +343,7 @@ JOBS = build_jobs()
 ARTICLES = [
     dict(slug="defense-companies-dallas", title="10 Defense Companies in Dallas to Know",
          excerpt="National security, aerospace engineering and high-tech defense innovation thrive in this North Texas hub.",
-         author="Built In Staff, With AI", date="November 03, 2026", category="Tech Hubs", tag="Editors' Picks", read_time="8 min read", accent="#4d1096"),
+         author="Logistic Waves Editorial", date="November 03, 2026", category="Tech Hubs", tag="Editors' Picks", read_time="8 min read", accent="#4d1096"),
     dict(slug="boston-aerospace-companies", title="8 Top Aerospace Companies in Boston",
          excerpt="These companies are working with a broad range of technologies, from AI and predictive analytics to innovative hardware manufacturing.",
          author="Alyssa Schroer", date="November 03, 2026", category="Tech Hubs", tag="Company Lists", read_time="6 min read", accent="#244fe7"),
@@ -361,7 +361,7 @@ ARTICLES = [
          author="Kriti Saxena", date="October 28, 2026", category="Data & Analytics", tag="Expert Contributor", read_time="10 min read", accent="#009036"),
     dict(slug="remote-first-companies-hiring", title="12 Remote-First Companies Hiring Right Now",
          excerpt="Distributed teams are building products across fintech, healthtech and developer tools. Here are the teams to watch.",
-         author="Built In Staff", date="October 24, 2026", category="Remote Work", tag="Company Lists", read_time="8 min read", accent="#4fe2c1"),
+         author="Logistic Waves Editorial", date="October 24, 2026", category="Remote Work", tag="Company Lists", read_time="8 min read", accent="#4fe2c1"),
     dict(slug="tech-salaries-2026", title="The Complete Guide to Tech Salaries in 2026",
          excerpt="What engineers, designers, product managers and data professionals are earning across the United States this year.",
          author="Ashley Brownridge", date="October 20, 2026", category="Careers", tag="Salaries", read_time="12 min read", accent="#cc1e8a"),

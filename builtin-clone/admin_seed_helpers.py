@@ -10,7 +10,7 @@ def seed_sample_today_videos(conn):
     episodes = [
         {
             "slug": "freightwaves-today-live-up-summit",
-            "title": "FreightWaves Today Live: Port Automation & Space Tech Logistics",
+            "title": "Logistic Waves Today Live: Port Automation & Space Tech Logistics",
             "excerpt": "Join Logistic Waves Today live with industry pioneers at the UP.Summit examining modern autonomous freight and maritime breakthroughs.",
             "category": "Maritime & Tech",
             "tag": "Logistic Waves Today",
@@ -279,6 +279,7 @@ def seed_sample_logistics_companies_and_jobs(conn):
                     )
                 )
                 job_count += 1
+    db.sync_company_open_jobs(conn)
     conn.commit()
     return comp_count, job_count
 

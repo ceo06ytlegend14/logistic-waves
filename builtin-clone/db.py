@@ -324,7 +324,7 @@ def _seed(conn):
                 i + 1, c["slug"], c["name"], c["initials"], c["color"], c["tagline"],
                 c["industries"], c["description"], c["location"], c["employees"], c["offices"],
                 c["founded"], c["benefits"], c["office_type"], c["remote_policy"], c["hiring_now"],
-                c["open_jobs"], "https://example.com",
+                c["open_jobs"], c.get("website") or "",
                 ",".join(seed.PERKS[: (8 + i % 8)]),
                 ",".join(seed.TECH_STACK[i % 5 : i % 5 + 10]),
                 ",".join(seed.CATEGORIES[i % 4 : i % 4 + 6]),
@@ -377,12 +377,32 @@ def _seed(conn):
             "INSERT INTO users (id,name,email,salt,password_hash,role,headline,location,created_at) VALUES (?,?,?,?,?,?,?,?,?)",
             (i + 1, name, email, salt, digest, role, headline, location, now),
         )
+    sync_company_open_jobs(conn)
     conn.commit()
+
+
+def _sanitize_legacy_placeholders(conn):
+    """Remove stale placeholder URLs and legacy editorial labels on existing databases."""
+    conn.execute("UPDATE companies SET website='' WHERE lower(website) LIKE ?", ("%example.com%",))
+    conn.execute(
+        "UPDATE articles SET author='Logistic Waves Editorial' WHERE author IN ('Built In Staff', 'Built In Staff, With AI')"
+    )
+    conn.execute(
+        "UPDATE articles SET title='Logistic Waves Today Live: Port Automation & Space Tech Logistics' WHERE slug='freightwaves-today-live-up-summit' AND title LIKE ?",
+        ("FreightWaves Today Live:%",),
+    )
 
 
 def init_db():
     conn = connect()
     if isinstance(conn, PgConn):
+        try:
+            _sanitize_legacy_placeholders(conn)
+            sync_company_open_jobs(conn)
+        except Exception:
+            pass
+        finally:
+            conn.close()
         return
     conn.executescript(SCHEMA)
     article_columns = {
@@ -440,6 +460,8 @@ def init_db():
         )
         conn.commit()
     seed_workspace_demo_data(conn)
+    _sanitize_legacy_placeholders(conn)
+    sync_company_open_jobs(conn)
     conn.close()
 
 
@@ -974,6 +996,26 @@ def subscribe(conn, email):
         if isinstance(ex, sqlite3.IntegrityError) or "unique" in msg or "duplicate" in msg:
             return False, "That email is already subscribed."
         raise
+
+
+def sync_company_open_jobs(conn, company_id=None):
+    """Synchronize companies.open_jobs and hiring_now with actual active job counts."""
+    if company_id:
+        cnt = conn.execute(
+            "SELECT COUNT(*) FROM jobs WHERE company_id=? AND status='active'",
+            (company_id,),
+        ).fetchone()[0]
+        conn.execute(
+            "UPDATE companies SET open_jobs=?, hiring_now=? WHERE id=?",
+            (cnt, 1 if cnt > 0 else 0, company_id),
+        )
+    else:
+        conn.execute(
+            """UPDATE companies SET
+               open_jobs = (SELECT COUNT(*) FROM jobs WHERE jobs.company_id = companies.id AND jobs.status = 'active'),
+               hiring_now = CASE WHEN (SELECT COUNT(*) FROM jobs WHERE jobs.company_id = companies.id AND jobs.status = 'active') > 0 THEN 1 ELSE 0 END"""
+        )
+    conn.commit()
 
 
 def create_job(conn, data, user_id):
