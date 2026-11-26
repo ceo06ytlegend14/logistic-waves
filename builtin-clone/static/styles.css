@@ -3855,7 +3855,7 @@ body {
 .smoke-white-hero .hero-shell {
   position: relative !important;
   width: 100% !important;
-  min-height: 520px !important;
+  min-height: 360px !important;
   background: #f8fafc !important;
   display: flex !important;
   flex-direction: column !important;
@@ -3867,13 +3867,16 @@ body {
   border-radius: 0 !important;
 }
 
-/* 1. Crystal-Clear Ultra-HD Logistics Photograph */
+/* 1. Crystal-Clear Ultra-HD Logistics Photograph (Flat Fit Right Frame) */
 .smoke-white-hero .hero-photo-hd {
   position: absolute !important;
-  inset: 0 !important;
+  top: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  left: 38% !important;
   z-index: 1 !important;
   background-image: url("/static/images/login_concept_hero_bg.jpg") !important;
-  background-position: center right !important;
+  background-position: center center !important;
   background-size: cover !important;
   background-repeat: no-repeat !important;
   opacity: 1 !important;
@@ -3887,11 +3890,11 @@ body {
   background: linear-gradient(
     90deg,
     #f8fafc 0%,
-    rgba(248, 250, 252, 0.98) 36%,
-    rgba(248, 250, 252, 0.84) 52%,
-    rgba(248, 250, 252, 0.45) 72%,
-    rgba(248, 250, 252, 0.10) 90%,
-    transparent 100%
+    #f8fafc 38%,
+    rgba(248, 250, 252, 0.90) 45%,
+    rgba(248, 250, 252, 0.45) 54%,
+    rgba(248, 250, 252, 0.08) 64%,
+    transparent 74%
   ) !important;
   pointer-events: none !important;
 }
@@ -3903,10 +3906,30 @@ body {
   width: min(1360px, 94%) !important;
   max-width: 1360px !important;
   margin: 0 auto !important;
-  padding: 76px 20px !important;
+  padding: 38px 20px !important;
   display: flex !important;
   flex-direction: column !important;
   justify-content: center !important;
+}
+
+@media (max-width: 860px) {
+  .smoke-white-hero .hero-shell {
+    min-height: 0 !important;
+  }
+  .smoke-white-hero .hero-photo-hd {
+    left: 0 !important;
+  }
+  .smoke-white-hero .hero-smoke-overlay {
+    background: linear-gradient(
+      180deg,
+      rgba(248, 250, 252, 0.94) 0%,
+      rgba(248, 250, 252, 0.90) 65%,
+      rgba(248, 250, 252, 0.78) 100%
+    ) !important;
+  }
+  .smoke-white-hero .hero-inner-wrap {
+    padding: 28px 16px !important;
+  }
 }
 
 /* 4. Left-Aligned Content */

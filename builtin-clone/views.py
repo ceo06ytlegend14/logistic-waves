@@ -501,7 +501,7 @@ def layout(title, body, user=None, active="", description="", page_class="", ext
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/styles.css?v=20261126_apple2">
+  <link rel="stylesheet" href="/static/styles.css?v=20261126_hero_flat">
   <link rel="stylesheet" href="/static/home-recreation.css?v=20261126_apple2">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   {extra_head}
@@ -1027,11 +1027,6 @@ def home_page(conn, user):
 
         <div class="hero-inner-wrap">
           <div class="hero-content">
-            <div class="hero-eyebrow-smoke">
-              <span class="eyebrow-dot-blue"></span>
-              GLOBAL LOGISTICS INTELLIGENCE
-            </div>
-            
             <h1 class="hero-headline-smoke">
               Insights for<br>
               <span class="hero-hl-blue">Smarter</span> Logistics
@@ -1876,7 +1871,7 @@ def job_detail_page(conn, user, job, similar):
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..800&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="/static/styles.css?v=20261126_apple2">
+  <link rel="stylesheet" href="/static/styles.css?v=20261126_hero_flat">
   <link rel="stylesheet" href="/static/home-recreation.css?v=20261126_apple2">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link rel="stylesheet" href="/static/thesandbox-css/builtin-theme.css">
