@@ -1325,6 +1325,7 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
         "<a href='/profile' style='display:flex;align-items:center;gap:8px;padding:8px 12px;font-size:13px;color:#1e293b;border-radius:8px;text-decoration:none;'><i class='fa-solid fa-user' style='color:#3874ff;width:16px;'></i> Member Profile</a>"
         "<a href='/' target='_blank' style='display:flex;align-items:center;gap:8px;padding:8px 12px;font-size:13px;color:#1e293b;border-radius:8px;text-decoration:none;'><i class='fa-solid fa-globe' style='color:#10b981;width:16px;'></i> Live Website</a>"
         "<form method='post' action='/logout' style='margin:4px 0 0;padding-top:4px;border-top:1px solid #f1f5f9;'>"
+        f"{_csrf_field()}"
         "<button type='submit' style='width:100%;display:flex;align-items:center;gap:8px;padding:8px 12px;font-size:13px;color:#ef4444;background:none;border:none;border-radius:8px;cursor:pointer;font-weight:600;text-align:left;'><i class='fa-solid fa-right-from-bracket' style='width:16px;'></i> Log Out</button>"
         "</form></div></div>"
         "<div id='adminNotifWrap' style='position:relative;'>"

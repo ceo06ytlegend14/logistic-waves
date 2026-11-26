@@ -154,6 +154,11 @@ CREATE TABLE IF NOT EXISTS demo_seed_state (
   key TEXT PRIMARY KEY,
   created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS rate_limits (
+  rl_key TEXT NOT NULL,
+  ts BIGINT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_rate_limits_key_ts ON rate_limits(rl_key, ts);
 CREATE INDEX IF NOT EXISTS idx_articles_slug ON articles(slug);
 CREATE INDEX IF NOT EXISTS idx_applications_user ON applications(user_id);
 CREATE INDEX IF NOT EXISTS idx_saved_jobs_user ON saved_jobs(user_id);
@@ -367,16 +372,18 @@ def _seed(conn):
             (i + 1, s["title"], s["category"], s["median"], s["low"], s["high"], s["samples"], s["trend"]),
         )
 
-    demo_users = [
-        ("Alex Candidate", "candidate@demo.com", "candidate", "Software Engineer", "Chicago, IL"),
-        ("Morgan Employer", "employer@demo.com", "employer", "Talent Leader", "New York, NY"),
-    ]
-    for i, (name, email, role, headline, location) in enumerate(demo_users):
-        salt, digest = hash_password("demo1234")
-        conn.execute(
-            "INSERT INTO users (id,name,email,salt,password_hash,role,headline,location,created_at) VALUES (?,?,?,?,?,?,?,?,?)",
-            (i + 1, name, email, salt, digest, role, headline, location, now),
-        )
+    if os.environ.get("ALLOW_DEMO_USERS") == "1":
+        demo_pw = os.environ.get("DEMO_USER_PASSWORD") or secrets.token_urlsafe(16)
+        demo_users = [
+            ("Alex Candidate", "candidate@demo.com", "candidate", "Software Engineer", "Chicago, IL"),
+            ("Morgan Employer", "employer@demo.com", "employer", "Talent Leader", "New York, NY"),
+        ]
+        for i, (name, email, role, headline, location) in enumerate(demo_users):
+            salt, digest = hash_password(demo_pw)
+            conn.execute(
+                "INSERT INTO users (id,name,email,salt,password_hash,role,headline,location,created_at) VALUES (?,?,?,?,?,?,?,?,?)",
+                (i + 1, name, email, salt, digest, role, headline, location, now),
+            )
     sync_company_open_jobs(conn)
     conn.commit()
 
@@ -397,10 +404,12 @@ def init_db():
     conn = connect()
     if isinstance(conn, PgConn):
         try:
+            conn.execute("CREATE TABLE IF NOT EXISTS rate_limits (rl_key TEXT NOT NULL, ts BIGINT NOT NULL)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_rate_limits_key_ts ON rate_limits(rl_key, ts)")
             _sanitize_legacy_placeholders(conn)
             sync_company_open_jobs(conn)
-        except Exception:
-            pass
+        except Exception as ex:
+            print(f"[db] Pg init warning: {ex}")
         finally:
             conn.close()
         return
@@ -420,6 +429,7 @@ def init_db():
                 "tag", "reading_time", "duration", "read_time",
                 "image_url", "subtitle", "summary", "category",
                 "featured", "views", "author_id", "series",
+                "thumb", "is_today", "guest",
             }
             if column not in _SAFE_ARTICLE_COLS:
                 raise ValueError(f"Disallowed column name: {column!r}")
@@ -427,38 +437,21 @@ def init_db():
     conn.commit()
     if conn.execute("SELECT COUNT(*) FROM companies").fetchone()[0] == 0:
         _seed(conn)
-    if conn.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0:
-        now = _now()
-        for i, (name, email, role, headline, location, pw) in enumerate([
-            ("Alex Candidate", "candidate@demo.com", "candidate", "Software Engineer", "Chicago, IL", "demo1234"),
-            ("Morgan Employer", "employer@demo.com", "employer", "Talent Leader", "New York, NY", "demo1234"),
-            ("System Administrator", "admin@logisticwaves.com", "admin", "Platform Admin", "San Francisco, CA", "Admin@Waves2026!"),
-        ]):
-            salt, digest = hash_password(pw)
-            conn.execute(
-                "INSERT OR IGNORE INTO users (id,name,email,salt,password_hash,role,headline,location,created_at) VALUES (?,?,?,?,?,?,?,?,?)",
-                (i + 1, name, email, salt, digest, role, headline, location, now),
-            )
+    admin_email = (os.environ.get("ADMIN_EMAIL") or "admin@logisticwaves.com").strip().lower()
+    admin_user = conn.execute("SELECT id FROM users WHERE lower(email)=?", (admin_email,)).fetchone()
+    if not admin_user:
+        bootstrap_pw = os.environ.get("ADMIN_PASSWORD") or secrets.token_urlsafe(18)
+        salt, digest = hash_password(bootstrap_pw)
+        conn.execute(
+            "INSERT INTO users (name,email,salt,password_hash,role,headline,location,created_at) VALUES (?,?,?,?,?,?,?,?)",
+            ("System Administrator", admin_email, salt, digest, "admin", "Platform Admin", "San Francisco, CA", _now()),
+        )
         conn.commit()
+        if not os.environ.get("ADMIN_PASSWORD"):
+            print(f"[db] Provisioned initial admin '{admin_email}' with generated one-time password.", flush=True)
     # Clean up any legacy accounts
     conn.execute("DELETE FROM users WHERE lower(email)='theancoc69@gmail.com'")
     conn.commit()
-    admin_user = conn.execute("SELECT id FROM users WHERE lower(email)='admin@logisticwaves.com'").fetchone()
-    if not admin_user:
-        salt, digest = hash_password("Admin@Waves2026!")
-        conn.execute(
-            "INSERT INTO users (name,email,salt,password_hash,role,headline,location,created_at) VALUES (?,?,?,?,?,?,?,?)",
-            ("System Administrator", "admin@logisticwaves.com", salt, digest, "admin", "Platform Admin", "San Francisco, CA", _now()),
-        )
-        conn.commit()
-    else:
-        # Ensure credentials and admin role are up to date
-        salt, digest = hash_password("Admin@Waves2026!")
-        conn.execute(
-            "UPDATE users SET name='System Administrator', role='admin', salt=?, password_hash=? WHERE id=?",
-            (salt, digest, admin_user["id"]),
-        )
-        conn.commit()
     seed_workspace_demo_data(conn)
     _sanitize_legacy_placeholders(conn)
     sync_company_open_jobs(conn)
@@ -610,15 +603,21 @@ def authenticate(conn, email, password):
 
 
 def create_user(conn, name, email, password, role="candidate", headline="", location=""):
-    email = email.strip().lower()
+    name = (name or "").strip()[:120]
+    email = (email or "").strip().lower()[:254]
+    password = password or ""
+    if not name:
+        return None, "Full name is required."
+    if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+        return None, "Enter a valid email address."
     if conn.execute("SELECT 1 FROM users WHERE lower(email)=?", (email,)).fetchone():
         return None, "An account with that email already exists."
-    if len(password) < 6:
-        return None, "Password must be at least 6 characters."
+    if len(password) < 6 or len(password) > 128:
+        return None, "Password must be between 6 and 128 characters."
     salt, digest = hash_password(password)
     cur = conn.execute(
         "INSERT INTO users (name,email,salt,password_hash,role,headline,location,created_at) VALUES (?,?,?,?,?,?,?,?)",
-        (name.strip(), email, salt, digest, role, headline.strip(), location.strip(), _now()),
+        (name, email, salt, digest, role, (headline or "").strip()[:160], (location or "").strip()[:120], _now()),
     )
     conn.commit()
     return cur.lastrowid, None
@@ -820,7 +819,7 @@ def list_popular_articles(conn, exclude_id=None, limit=8):
 def list_salaries(conn, q="", category=""):
     parts, args = ["1=1"], []
     if q:
-        parts.append("title LIKE ?"); args.append(f"%{q}%")
+        parts.append("title LIKE ? ESCAPE '\\'"); args.append(f"%{_escape_like(q)}%")
     if category:
         parts.append("category = ?"); args.append(category)
     where, args = _where(parts, args)
@@ -1163,21 +1162,92 @@ def archive_employer_job(conn, user_id, job_id):
     return True
 
 
+def check_rate_limit(conn, rl_key, max_attempts, window_seconds):
+    import time
+    cutoff = int(time.time()) - int(window_seconds)
+    conn.execute("DELETE FROM rate_limits WHERE rl_key=? AND ts < ?", (rl_key, cutoff))
+    conn.commit()
+    cnt = conn.execute(
+        "SELECT COUNT(*) FROM rate_limits WHERE rl_key=? AND ts >= ?",
+        (rl_key, cutoff),
+    ).fetchone()[0]
+    return cnt >= max_attempts
+
+
+def record_rate_limit(conn, rl_key, window_seconds=3600):
+    import time
+    now_ts = int(time.time())
+    conn.execute("INSERT INTO rate_limits (rl_key, ts) VALUES (?, ?)", (rl_key, now_ts))
+    if secrets.randbelow(50) == 0:
+        conn.execute("DELETE FROM rate_limits WHERE ts < ?", (now_ts - int(window_seconds),))
+    conn.commit()
+
+
+def consume_rate_limit(conn, rl_key, max_attempts, window_seconds):
+    """Return True if rate limit is exceeded; otherwise record attempt and return False."""
+    if check_rate_limit(conn, rl_key, max_attempts, window_seconds):
+        return True
+    record_rate_limit(conn, rl_key, window_seconds)
+    return False
+
+
+def clear_rate_limit(conn, rl_key):
+    conn.execute("DELETE FROM rate_limits WHERE rl_key=?", (rl_key,))
+    conn.commit()
+
+
+def delete_user_cascade(conn, uid):
+    is_pg = isinstance(conn, PgConn)
+    if is_pg:
+        conn.execute("BEGIN")
+    try:
+        conn.execute("DELETE FROM sessions WHERE user_id=?", (uid,))
+        conn.execute("DELETE FROM saved_jobs WHERE user_id=?", (uid,))
+        conn.execute("DELETE FROM follows WHERE user_id=?", (uid,))
+        conn.execute("DELETE FROM applications WHERE user_id=?", (uid,))
+        conn.execute("DELETE FROM alerts WHERE user_id=?", (uid,))
+        conn.execute("DELETE FROM users WHERE id=?", (uid,))
+        if is_pg:
+            conn.execute("COMMIT")
+        else:
+            conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
+
+def delete_company_cascade(conn, cid):
+    is_pg = isinstance(conn, PgConn)
+    if is_pg:
+        conn.execute("BEGIN")
+    try:
+        conn.execute("DELETE FROM follows WHERE company_id=?", (cid,))
+        conn.execute("DELETE FROM jobs WHERE company_id=?", (cid,))
+        conn.execute("DELETE FROM companies WHERE id=?", (cid,))
+        if is_pg:
+            conn.execute("COMMIT")
+        else:
+            conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
+
 def global_search(conn, q, limit=5):
     q = (q or "").strip()
     if not q:
         return {"jobs": [], "companies": [], "articles": []}
-    like = f"%{q}%"
+    like = f"%{_escape_like(q)}%"
     jobs = [dict(r) for r in conn.execute(
-        "SELECT id,slug,title,company_name FROM jobs WHERE status='active' AND (title LIKE ? OR company_name LIKE ?) ORDER BY posted_at DESC LIMIT ?",
+        "SELECT id,slug,title,company_name FROM jobs WHERE status='active' AND (title LIKE ? ESCAPE '\\' OR company_name LIKE ? ESCAPE '\\') ORDER BY posted_at DESC LIMIT ?",
         (like, like, limit),
     ).fetchall()]
     companies = [dict(r) for r in conn.execute(
-        "SELECT slug,name,location,color,initials FROM companies WHERE name LIKE ? OR industries LIKE ? LIMIT ?",
+        "SELECT slug,name,location,color,initials FROM companies WHERE name LIKE ? ESCAPE '\\' OR industries LIKE ? ESCAPE '\\' LIMIT ?",
         (like, like, limit),
     ).fetchall()]
     articles = [dict(r) for r in conn.execute(
-        "SELECT slug,title,category FROM articles WHERE title LIKE ? OR excerpt LIKE ? LIMIT ?",
+        "SELECT slug,title,category FROM articles WHERE title LIKE ? ESCAPE '\\' OR excerpt LIKE ? ESCAPE '\\' LIMIT ?",
         (like, like, limit),
     ).fetchall()]
     return {"jobs": jobs, "companies": companies, "articles": articles}

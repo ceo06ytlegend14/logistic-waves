@@ -37,8 +37,18 @@
   }
   window.showToast = showToast;
 
+  function getCsrfToken() {
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? (meta.getAttribute("content") || "") : "";
+  }
+
   async function api(url, options) {
     const opts = Object.assign({ credentials: "same-origin" }, options || {});
+    const method = (opts.method || "GET").toUpperCase();
+    if (method !== "GET" && method !== "HEAD") {
+      const csrf = getCsrfToken();
+      opts.headers = Object.assign({}, opts.headers || {}, csrf ? { "X-CSRF-Token": csrf } : {});
+    }
     const res = await fetch(url, opts);
     let data = {};
     try { data = await res.json(); } catch (e) { /* ignore */ }
@@ -215,7 +225,17 @@
       // Update page title
       if (doc.title) document.title = doc.title;
 
-      // Update body classes and dataset
+      // Sync CSRF meta token & body state across SPA swaps
+      const newCsrf = doc.querySelector('meta[name="csrf-token"]');
+      if (newCsrf) {
+        let curCsrf = document.querySelector('meta[name="csrf-token"]');
+        if (!curCsrf) {
+          curCsrf = document.createElement("meta");
+          curCsrf.setAttribute("name", "csrf-token");
+          document.head.appendChild(curCsrf);
+        }
+        curCsrf.setAttribute("content", newCsrf.getAttribute("content") || "");
+      }
       if (doc.body) {
         document.body.className = doc.body.className;
         document.body.dataset.loggedIn = doc.body.dataset.loggedIn;

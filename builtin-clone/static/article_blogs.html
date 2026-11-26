@@ -540,9 +540,13 @@
     if (elCaption) elCaption.textContent = caption;
 
     if (elBody) {
-      var html = '<p class="lead" style="font-size:17.5px; font-weight:600; line-height:1.75; color:#1E293B; margin-bottom:20px;">' + lead + '</p>';
+      var _escHtml = function(s) {
+        return String(s == null ? '' : s)
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      };
+      var html = '<p class="lead" style="font-size:17.5px; font-weight:600; line-height:1.75; color:#1E293B; margin-bottom:20px;">' + _escHtml(lead) + '</p>';
       for (var i = 0; i < paragraphs.length; i++) {
-        html += '<p style="margin-bottom:18px; line-height:1.8; font-size:15.5px; color:#334155;">' + paragraphs[i] + '</p>';
+        html += '<p style="margin-bottom:18px; line-height:1.8; font-size:15.5px; color:#334155;">' + _escHtml(paragraphs[i]) + '</p>';
         if (i === 0) {
           html += '<blockquote style="border-left:4px solid #034f9a; padding:14px 22px; margin:28px 0; background:#F8FAFC; font-style:italic; font-size:16px; color:#0F172A; border-radius:0 8px 8px 0; line-height:1.6;">' +
                   '"Real-time data transparency and automated operational agility are defining the competitive edge in modern logistics management."' +

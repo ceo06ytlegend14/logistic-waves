@@ -45,6 +45,34 @@ def slugify(text):
     return re.sub(r"[^a-z0-9]+", "-", str(text).lower()).strip("-")
 
 
+_DATA_IMG_RE = re.compile(
+    r"^data:image/(png|jpeg|jpg|webp|gif);base64,[A-Za-z0-9+/=\s]+$",
+    re.IGNORECASE,
+)
+
+
+def safe_http_url(url, max_len=500):
+    val = (url or "").strip()
+    if not val or len(val) > max_len or any(c in val for c in ("\r", "\n", "\x00")):
+        return ""
+    parsed = urllib.parse.urlparse(val)
+    if parsed.scheme.lower() in ("http", "https") and parsed.netloc:
+        return val
+    return ""
+
+
+def safe_media_url(url, default=""):
+    val = (url or "").strip()
+    if not val or any(c in val for c in ("\r", "\n", "\x00")):
+        return default
+    if val.startswith("/") and not val.startswith("//"):
+        return val if len(val) <= 500 else default
+    if _DATA_IMG_RE.match(val) and len(val) <= 3_000_000:
+        return val
+    http_val = safe_http_url(val, max_len=1000)
+    return http_val or default
+
+
 CATEGORY_BY_SLUG = {slugify(c): c for c in seed.CATEGORIES}
 SALARY_BY_SLUG = {slugify(s["title"]): s for s in seed.SALARIES}
 TAG_BY_SLUG = {slugify(t): t for t in sorted({a["tag"] for a in seed.ARTICLES})}
@@ -320,7 +348,7 @@ def header(user, active=""):
             <a href="/alerts">{icon("bell", 15)} Job Alerts</a>
             <a href="/employers">{icon("building", 15)} Employer Portal</a>
             {admin_link}
-            <form method="post" action="/logout"><button type="submit">{icon("external", 15)} Log Out</button></form>
+            <form method="post" action="/logout">{csrf_input()}<button type="submit">{icon("external", 15)} Log Out</button></form>
           </div>
         </div>'''
     else:
@@ -443,6 +471,7 @@ def layout(title, body, user=None, active="", description="", page_class="", ext
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="{e(desc)}">
+  <meta name="csrf-token" content="{e(_get_csrf())}">
   <title>{e(title)} | Logistic Waves</title>
   <link rel="icon" type="image/png" href="/static/favicon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -527,8 +556,9 @@ _ARTICLE_FALLBACK_COVERS = [
 
 def _article_cover_url(article, idx=0):
     thumb = (article.get("thumb") or "").strip() if article else ""
-    if thumb and not thumb.startswith("#"):
-        return thumb
+    safe_t = safe_media_url(thumb)
+    if safe_t:
+        return safe_t
     return _ARTICLE_FALLBACK_COVERS[idx % len(_ARTICLE_FALLBACK_COVERS)]
 
 
@@ -656,60 +686,7 @@ def signin_required(next_path, title="Sign in to continue"):
             </a>
           </div>
 
-          <div class="gate-demo-box">
-            <div class="gate-demo-head">
-              <span class="gate-demo-kicker">1-CLICK DEMO ACCESS</span>
-              <p>Test the platform instantly with pre-seeded demo accounts (no typing needed):</p>
-            </div>
 
-            <div class="gate-demo-buttons">
-              <form method="post" action="/auth/login" class="gate-demo-form">
-                <input type="hidden" name="email" value="candidate@demo.com">
-                <input type="hidden" name="password" value="demo1234">
-                <input type="hidden" name="next" value="{e(next_path)}">
-                <button type="submit" class="btn gate-demo-btn">
-                  <div class="demo-btn-content">
-                    <span class="demo-role-tag">Job Seeker</span>
-                    <span class="demo-btn-title">Continue as Candidate Demo</span>
-                  </div>
-                  <svg class="demo-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-                </button>
-              </form>
-
-              <form method="post" action="/auth/login" class="gate-demo-form">
-                <input type="hidden" name="email" value="employer@demo.com">
-                <input type="hidden" name="password" value="demo1234">
-                <input type="hidden" name="next" value="{e(next_path)}">
-                <button type="submit" class="btn gate-demo-btn">
-                  <div class="demo-btn-content">
-                    <span class="demo-role-tag">Employer Portal</span>
-                    <span class="demo-btn-title">Continue as Employer Demo</span>
-                  </div>
-                  <svg class="demo-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-                </button>
-              </form>
-
-              <form method="post" action="/auth/login" class="gate-demo-form">
-                <input type="hidden" name="email" value="admin@logisticwaves.com">
-                <input type="hidden" name="password" value="Admin@Waves2026!">
-                <input type="hidden" name="next" value="/admin">
-                <button type="submit" class="btn gate-demo-btn" style="border-color: #0284c7;">
-                  <div class="demo-btn-content">
-                    <span class="demo-role-tag" style="background: #0284c7; color: #ffffff;">Admin Console</span>
-                    <span class="demo-btn-title">Continue as Admin Demo</span>
-                  </div>
-                  <svg class="demo-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-                </button>
-              </form>
-            </div>
-
-            <div class="gate-demo-credentials">
-              <span class="creds-label">Manual login:</span>
-              <span class="creds-val">admin@logisticwaves.com (Admin@Waves2026!)</span>
-              <span class="creds-dot">•</span>
-              <span class="creds-val">employer@demo.com (demo1234)</span>
-            </div>
-          </div>
         </div>
       </div>
     </section>'''
@@ -1623,7 +1600,7 @@ def linkedin_company_detail_page(conn, user, company, tab, jobs=None, related=No
     recent_jobs = "".join(linkedin_job_card(j, compact=True) for j in jobs[:4]) or _no_jobs_msg
     all_jobs = "".join(linkedin_job_card(j) for j in jobs) or _no_jobs_msg
 
-    raw_website = (company.get("website") or "").strip()
+    raw_website = safe_http_url(company.get("website") or "")
     has_website = bool(raw_website and "example.com" not in raw_website.lower())
     website_label = re.sub(r"^https?://(www\.)?", "", raw_website).rstrip("/") if has_website else ""
     details = []
@@ -1871,7 +1848,7 @@ def job_detail_page(conn, user, job, similar):
             <a href="/tracker" style="display:block;padding:7px 14px;font-size:12.5px;color:#1e293b;text-decoration:none;">Applications</a>
             <a href="/saved" style="display:block;padding:7px 14px;font-size:12.5px;color:#1e293b;text-decoration:none;">Saved Jobs</a>
             <a href="/alerts" style="display:block;padding:7px 14px;font-size:12.5px;color:#1e293b;text-decoration:none;">Job Alerts</a>
-            <a href="/logout" style="display:block;padding:7px 14px;font-size:12.5px;color:#ef4444;text-decoration:none;border-top:1px solid #f1f5f9;">Log Out</a>
+            <form method="post" action="/logout" style="margin:0;">{csrf_input()}<button type="submit" style="display:block;width:100%;text-align:left;padding:7px 14px;font-size:12.5px;color:#ef4444;background:none;border:none;border-top:1px solid #f1f5f9;cursor:pointer;">Log Out</button></form>
           </div>
         </div>
         '''
@@ -1891,6 +1868,7 @@ def job_detail_page(conn, user, job, similar):
   <title>{e(company_name)} | {e(job_title)}</title>
   <meta name="description" content="Apply for {e(job_title)} at {e(company_name)}. {e(workplace)} role in {e(location)} with competitive compensation ({e(salary)}).">
   <meta name="author" content="Logistic Waves">
+  <meta name="csrf-token" content="{e(_get_csrf())}">
   <link rel="icon" type="image/png" href="/static/favicon.png">
 
   <!-- FontAwesome Icons -->
@@ -2389,7 +2367,15 @@ def job_detail_page(conn, user, job, similar):
         if (!t) return;
         const iconCls = isError ? 'fa-circle-exclamation' : 'fa-circle-check';
         const iconColor = isError ? '#ef4444' : '#10b981';
-        t.innerHTML = '<i class="fa-solid ' + iconCls + '" style="color:' + iconColor + ';"></i> <span>' + msg + '</span>';
+        t.innerHTML = '';
+        const iconEl = document.createElement('i');
+        iconEl.className = 'fa-solid ' + iconCls;
+        iconEl.style.color = iconColor;
+        const msgEl = document.createElement('span');
+        msgEl.textContent = msg;
+        t.appendChild(iconEl);
+        t.appendChild(document.createTextNode(' '));
+        t.appendChild(msgEl);
         t.style.display = 'flex';
         t.style.opacity = '1';
         clearTimeout(window.__toastTimer);
@@ -2422,7 +2408,8 @@ def job_detail_page(conn, user, job, similar):
           const skillNote = matched.length ? ('Matched keywords: ' + matched.join(', ')) : ('Target skills: ' + jobSkills.slice(0, 4).join(', '));
           if (fb) {{
             fb.style.display = 'block';
-            fb.innerHTML = '<div style="font-weight:800;display:flex;align-items:center;gap:6px;margin-bottom:4px;color:#1e3a8a;"><i class="fa-solid fa-circle-check" style="color:#2563eb;"></i><span>Estimated Fit Score: ' + score + '%</span></div><div>Analyzed <strong>' + file.name.replace(/</g, '&lt;') + '</strong> (' + (file.size/1024).toFixed(1) + ' KB) for ' + jobTitle + '. ' + skillNote + '.</div>';
+            const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            fb.innerHTML = '<div style="font-weight:800;display:flex;align-items:center;gap:6px;margin-bottom:4px;color:#1e3a8a;"><i class="fa-solid fa-circle-check" style="color:#2563eb;"></i><span>Estimated Fit Score: ' + score + '%</span></div><div>Analyzed <strong>' + esc(file.name) + '</strong> (' + (file.size/1024).toFixed(1) + ' KB) for ' + esc(jobTitle) + '. ' + esc(skillNote) + '.</div>';
           }}
           window.showToast('CV analysis complete (' + score + '% alignment).');
         }}
@@ -2445,10 +2432,11 @@ def job_detail_page(conn, user, job, similar):
         const label = document.getElementById('save-btn-label');
         const wasSaved = label && label.textContent === 'Saved';
         applySaveVisual(!wasSaved);
+        const csrfTok = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
         fetch('/api/saved/' + jobId + '/toggle', {{
           method: 'POST',
           credentials: 'same-origin',
-          headers: {{'Content-Type': 'application/json'}},
+          headers: Object.assign({{'Content-Type': 'application/json'}}, csrfTok ? {{'X-CSRF-Token': csrfTok}} : {{}}),
           body: '{{}}'
         }})
           .then(async r => {{
@@ -2492,10 +2480,11 @@ def job_detail_page(conn, user, job, similar):
             submitBtn.innerHTML = 'Submitting...';
           }}
           try {{
+            const csrfTok = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
             const res = await fetch('/api/apply/' + jobId, {{
               method: 'POST',
               credentials: 'same-origin',
-              headers: {{'Content-Type': 'application/json'}},
+              headers: Object.assign({{'Content-Type': 'application/json'}}, csrfTok ? {{'X-CSRF-Token': csrfTok}} : {{}}),
               body: JSON.stringify({{note: note || (name + ' <' + email + '>' + (phone ? ' · ' + phone : ''))}})
             }});
             if (res.status === 401) {{
@@ -2757,13 +2746,16 @@ def format_editorial_body(raw_body):
             grid_items = []
             for m in img_matches:
                 cap = m.group(1).strip()
-                src = m.group(2).strip()
+                src = safe_media_url(m.group(2).strip())
+                if not src:
+                    continue
                 grid_items.append(f'''
                 <figure style="margin:0;display:flex;flex-direction:column;">
                   <img src="{e(src)}" alt="{e(cap or 'Article Photo')}" style="width:100%;height:260px;object-fit:cover;border-radius:12px;box-shadow:0 4px 16px rgba(0,0,0,0.06);display:block;" loading="lazy">
                   {f'<figcaption style="font-size:12.5px;color:#64748b;margin-top:7px;font-style:italic;text-align:center;">{e(cap)}</figcaption>' if cap else ''}
                 </figure>''')
-            out.append(f'''
+            if grid_items:
+                out.append(f'''
             <div class="editorial-image-gallery" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(260px, 1fr));gap:16px;margin:32px 0;">
               {"".join(grid_items)}
             </div>''')
@@ -2772,15 +2764,13 @@ def format_editorial_body(raw_body):
         img_match = re.match(r"^!\[(.*?)\]\((.*?)\)$", block)
         if img_match:
             cap = img_match.group(1).strip()
-            src = img_match.group(2).strip()
-            out.append(f'''
+            src = safe_media_url(img_match.group(2).strip())
+            if src:
+                out.append(f'''
             <figure class="editorial-inline-figure" style="margin:28px 0;">
               <img src="{e(src)}" alt="{e(cap or 'Article Image')}" class="editorial-inline-image" style="width:100%;max-height:500px;object-fit:cover;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.08);display:block;" loading="lazy">
               {f'<figcaption class="editorial-inline-caption" style="font-size:13px;color:#64748b;margin-top:8px;font-style:italic;text-align:center;">{e(cap)}</figcaption>' if cap else ''}
             </figure>''')
-            continue
-        if block.startswith("<img") or "<img" in block:
-            out.append(f'<div class="editorial-inline-figure" style="margin:28px 0;">{block}</div>')
             continue
         if block.startswith("### "):
             out.append(f'<h3 class="editorial-subheading" style="font-size:19px;font-weight:700;color:#0f172a;margin:28px 0 12px;">{e(block[4:])}</h3>')
@@ -4484,7 +4474,7 @@ def auth_page(kind, next_path="", error="", message="", preset_role="candidate")
 
           <!-- SSO Buttons -->
           <div class="auth-sso-row">
-            <button type="button" class="sso-btn" onclick="window.showToast ? showToast('Google Workspace SSO is configured for verified enterprise domains. Use email & password or demo accounts below.') : null">
+            <button type="button" class="sso-btn" onclick="window.showToast ? showToast('Google Workspace SSO is not enabled. Sign in with email and password.') : null">
               <img src="/static/images/google_icon.png" alt="Google" class="sso-icon" width="20" height="20">
               <span>Google</span>
             </button>
@@ -4574,7 +4564,7 @@ def account_shell(user, active, title, subtitle, content):
           </div>
           <nav class="account-nav">{nav}</nav>
           <div class="account-sidebar-footer"><span>{e(user["email"])}</span>
-            <form method="post" action="/logout"><button type="submit">{icon("external", 15)} Sign out</button></form>
+            <form method="post" action="/logout">{csrf_input()}<button type="submit">{icon("external", 15)} Sign out</button></form>
           </div>
         </aside>
         <div class="account-content">{content}</div>
@@ -4712,7 +4702,7 @@ def employers_page(conn, user, employer_jobs=None, message="", error=""):
           <div class="info-card">{icon("building", 26)}<h3>Company profiles</h3><p>Showcase culture, benefits, teams and tech stack in one research-ready profile.</p></div>
           <div class="info-card">{icon("chart", 26)}<h3>Hiring insights</h3><p>See which roles attract attention and where your pipeline is strongest.</p></div>
           <div class="info-card">{icon("users", 26)}<h3>Candidate reach</h3><p>Post roles that appear instantly across job search, company pages and alerts.</p></div>
-        </div><div class="demo-credentials wide"><strong>Try the portal</strong><br>employer@demo.com / demo1234</div></div></section>'''
+        </div></div></section>'''
         return layout("For Employers", body, None, description="Employer branding, job posting and hiring insights.")
     companies = [dict(r) for r in conn.execute("SELECT slug,name FROM companies ORDER BY name").fetchall()]
     company_options = [("", "Select a company")] + [(c["slug"], c["name"]) for c in companies]
@@ -4759,7 +4749,7 @@ def employers_page(conn, user, employer_jobs=None, message="", error=""):
     content = f'''
       <div class="stat-grid"><div class="stat-card"><span>{icon("briefcase", 22)}</span><strong>{len(employer_jobs or [])}</strong><small>Jobs you manage</small></div>
         <div class="stat-card"><span>{icon("building", 22)}</span><strong>{len(companies)}</strong><small>Company profiles</small></div>
-        <div class="stat-card"><span>{icon("users", 22)}</span><strong>{_emp_counts['users']}</strong><small>Demo accounts</small></div>
+        <div class="stat-card"><span>{icon("users", 22)}</span><strong>{_emp_counts['users']}</strong><small>Registered members</small></div>
         <div class="stat-card"><span>{icon("chart", 22)}</span><strong>{_emp_counts['jobs']}</strong><small>Active jobs</small></div></div>
       <div class="content-card" id="post"><div class="card-head"><div><h2>Post a new job</h2><p>Reach candidates across search and company pages.</p></div><span class="job-posting-tag">Publishes instantly</span></div>{msg}{err}
         <form method="post" action="/employers/post-job" class="employer-form">
@@ -4781,7 +4771,7 @@ def employers_page(conn, user, employer_jobs=None, message="", error=""):
         <div class="employer-job-list">{rows}</div></div>'''
     body = account_shell(user, "employer", "Employer workspace",
                          "Manage your open roles and reach great candidates.", content)
-    return layout("Employer Portal", body, user, description="Post and manage jobs in the demo employer portal.")
+    return layout("Employer Portal", body, user, description="Post and manage jobs in the Logistic Waves employer portal.")
 
 
 # ---------- static / utility ----------

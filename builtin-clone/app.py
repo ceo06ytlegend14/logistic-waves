@@ -25,11 +25,26 @@ import seed
 import views
 
 # ---------- CSRF protection (stateless HMAC-SHA256 for serverless compatibility) ----------
-_CSRF_SECRET = (
-    os.environ.get("CSRF_SECRET")
-    or os.environ.get("DATABASE_URL")
-    or "lw-csrf-fallback-dev-key"
-).encode("utf-8")
+def _resolve_csrf_secret() -> bytes:
+    env_secret = os.environ.get("CSRF_SECRET")
+    if env_secret:
+        return env_secret.encode("utf-8")
+    db_url = os.environ.get("DATABASE_URL") or os.environ.get("POSTGRES_URL")
+    if db_url:
+        return hmac.new(db_url.encode("utf-8"), b"logistic-waves-csrf-v1", hashlib.sha256).digest()
+    secret_file = Path(__file__).resolve().parent / "data" / ".csrf_secret"
+    if secret_file.is_file():
+        return secret_file.read_bytes().strip()
+    raw = secrets.token_hex(32).encode("utf-8")
+    try:
+        secret_file.parent.mkdir(parents=True, exist_ok=True)
+        secret_file.write_bytes(raw)
+    except Exception:
+        pass
+    return raw
+
+
+_CSRF_SECRET = _resolve_csrf_secret()
 
 
 def get_csrf_token(session_token: str) -> str:
@@ -47,32 +62,63 @@ def verify_csrf(session_token: str, submitted: str) -> bool:
     return bool(expected) and hmac.compare_digest(expected, submitted)
 
 
-# ---------- Login rate limiting ----------
-_login_attempts: dict = {}   # ip -> [timestamp, ...]
-_login_lock = threading.Lock()
+# ---------- Rate limiting & Input validation constants ----------
 LOGIN_MAX_ATTEMPTS = 5
 LOGIN_WINDOW_SECONDS = 300   # 5 minutes
+SIGNUP_MAX_ATTEMPTS = 5
+SIGNUP_WINDOW_SECONDS = 600  # 10 minutes
+MAX_BODY_BYTES = 4 * 1024 * 1024
+ALLOWED_APP_STATUSES = {"Applied", "Reviewing", "Interview", "Offer", "Rejected"}
+_DATA_IMG_RE = re.compile(
+    r"^data:image/(png|jpeg|jpg|webp|gif);base64,[A-Za-z0-9+/=\s]+$",
+    re.IGNORECASE,
+)
 
 
-def _check_rate_limit(ip: str) -> bool:
-    now = datetime.utcnow().timestamp()
-    with _login_lock:
-        attempts = [t for t in _login_attempts.get(ip, []) if now - t < LOGIN_WINDOW_SECONDS]
-        _login_attempts[ip] = attempts
-        return len(attempts) >= LOGIN_MAX_ATTEMPTS
+class PayloadTooLargeError(ValueError):
+    pass
 
 
-def _record_failed_login(ip: str) -> None:
-    now = datetime.utcnow().timestamp()
-    with _login_lock:
-        lst = _login_attempts.get(ip, [])
-        lst.append(now)
-        _login_attempts[ip] = lst[-20:]
+class BadRequestError(ValueError):
+    pass
 
 
-def _clear_login_attempts(ip: str) -> None:
-    with _login_lock:
-        _login_attempts.pop(ip, None)
+def _clip(value, max_len: int) -> str:
+    return (value or "").strip()[:max_len]
+
+
+def _is_valid_email(email: str) -> bool:
+    return bool(email and len(email) <= 254 and re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email))
+
+
+def _safe_http_url(url: str, max_len: int = 500) -> str:
+    val = _clip(url, max_len)
+    if not val or any(c in val for c in ("\r", "\n", "\x00")):
+        return ""
+    parsed = urllib.parse.urlparse(val)
+    return val if parsed.scheme.lower() in ("http", "https") and parsed.netloc else ""
+
+
+def _safe_media_url(url: str, default: str = "") -> str:
+    val = (url or "").strip()
+    if not val or any(c in val for c in ("\r", "\n", "\x00")):
+        return default
+    if val.startswith("/") and not val.startswith("//"):
+        return val if len(val) <= 500 else default
+    if _DATA_IMG_RE.match(val) and len(val) <= 3_000_000:
+        return val
+    return _safe_http_url(val, max_len=1000) or default
+
+
+def _resolve_client_ip(headers, direct_ip: str) -> str:
+    if os.environ.get("VERCEL") or os.environ.get("TRUST_PROXY") == "1":
+        real_ip = (headers.get("X-Real-IP") or "").strip()
+        if real_ip:
+            return real_ip[:64]
+        xff = (headers.get("X-Forwarded-For") or "").split(",")[0].strip()
+        if xff:
+            return xff[:64]
+    return (direct_ip or "unknown")[:64]
 
 ROOT = Path(__file__).resolve().parent
 STATIC = ROOT / "static"
@@ -185,7 +231,7 @@ def sitemap_xml(conn, host):
 
 # ---------- routing ----------
 
-def route(conn, method, path, query, payload, user, token, host, client_ip=""):
+def route(conn, method, path, query, payload, user, token, host, client_ip="", csrf_header=""):
     # Static assets
     if path.startswith("/static/"):
         if method not in ("GET", "HEAD"):
@@ -252,6 +298,10 @@ def route(conn, method, path, query, payload, user, token, host, client_ip=""):
 
     # ---------- JSON API ----------
     if path.startswith("/api/"):
+        if method in ("POST", "PUT", "PATCH", "DELETE") and user:
+            submitted_csrf = csrf_header or (payload.get("_csrf", "") if isinstance(payload, dict) else "")
+            if not verify_csrf(token, submitted_csrf):
+                return json_response({"ok": False, "error": "Invalid or missing CSRF token."}, status=403)
         if path == "/api/me":
             if not user:
                 return json_response({"ok": True, "logged_in": False})
@@ -271,7 +321,7 @@ def route(conn, method, path, query, payload, user, token, host, client_ip=""):
             return json_response({"ok": True, "jobs": items, "total": total, "page": page, "limit": limit})
 
         m = re.match(r"^/api/saved/(\d+)/toggle$", path)
-        if m and method in ("POST", "GET"):
+        if m and method == "POST":
             guard = require_login_api(user)
             if guard:
                 return guard
@@ -282,7 +332,7 @@ def route(conn, method, path, query, payload, user, token, host, client_ip=""):
             return json_response({"ok": True, "saved": state, "job_id": job_id})
 
         m = re.match(r"^/api/follow/(\d+)/toggle$", path)
-        if m and method in ("POST", "GET"):
+        if m and method == "POST":
             guard = require_login_api(user)
             if guard:
                 return guard
@@ -297,10 +347,12 @@ def route(conn, method, path, query, payload, user, token, host, client_ip=""):
             guard = require_login_api(user)
             if guard:
                 return guard
+            if db.consume_rate_limit(conn, f"apply:{user['id']}", 20, 300):
+                return json_response({"ok": False, "error": "Too many applications submitted. Please wait a few minutes."}, status=429)
             job_id = int(m.group(1))
             if not db.get_job(conn, job_id):
                 return json_response({"ok": False, "error": "Job not found."}, status=404)
-            ok, message = db.apply_job(conn, user["id"], job_id, payload.get("note", ""))
+            ok, message = db.apply_job(conn, user["id"], job_id, _clip(payload.get("note", ""), 2000))
             return json_response({"ok": True, "already": not ok, "message": message})
 
         m = re.match(r"^/api/applications/(\d+)$", path)
@@ -319,13 +371,17 @@ def route(conn, method, path, query, payload, user, token, host, client_ip=""):
             if method == "GET":
                 return json_response({"ok": True, "alerts": db.list_alerts(conn, user["id"])})
             if method == "POST":
+                if db.consume_rate_limit(conn, f"alert:{user['id']}", 20, 300):
+                    return json_response({"ok": False, "error": "Too many requests. Please wait a few minutes."}, status=429)
                 filters = payload.get("filters") or {}
                 if isinstance(filters, str):
                     try:
                         filters = json.loads(filters)
                     except (ValueError, TypeError):
                         filters = {}
-                alert_id = db.create_alert(conn, user["id"], payload.get("query", ""),
+                if not isinstance(filters, dict):
+                    filters = {}
+                alert_id = db.create_alert(conn, user["id"], _clip(payload.get("query", ""), 200),
                                            filters, payload.get("frequency", "Daily"))
                 if not alert_id:
                     return json_response({"ok": False, "error": "Enter an alert name and valid frequency."}, status=400)
@@ -365,8 +421,10 @@ def route(conn, method, path, query, payload, user, token, host, client_ip=""):
             return json_response({"ok": True, "message": "Job archived."})
 
         if path == "/api/newsletter" and method == "POST":
-            email = (payload.get("email") or "").strip()
-            if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+            if db.consume_rate_limit(conn, f"news:{client_ip}", 10, 300):
+                return json_response({"ok": False, "error": "Too many requests. Please try again shortly."}, status=429)
+            email = _clip(payload.get("email", ""), 254).lower()
+            if not _is_valid_email(email):
                 return json_response({"ok": False, "error": "Enter a valid email address."}, status=400)
             _, message = db.subscribe(conn, email)
             return json_response({"ok": True, "message": message})
@@ -391,22 +449,25 @@ def route(conn, method, path, query, payload, user, token, host, client_ip=""):
         email = (payload.get("email") or "").strip()
         password = payload.get("password") or ""
         if kind == "login":
-            # Rate limit: block after 5 failed attempts within 5 minutes
-            if _check_rate_limit(client_ip):
+            rl_key = f"login:{client_ip}"
+            if db.check_rate_limit(conn, rl_key, LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_SECONDS):
                 return Response(views.auth_page(kind, next_path,
-                                                error="Too many failed login attempts. Please wait 5 minutes and try again."))
+                                                error="Too many failed login attempts. Please wait 5 minutes and try again."), status=429)
             account = db.authenticate(conn, email, password)
             if not account:
-                _record_failed_login(client_ip)
+                db.record_rate_limit(conn, rl_key, LOGIN_WINDOW_SECONDS)
                 return Response(views.auth_page(kind, next_path,
                                                 error="That email or password doesn't match an account."))
-            _clear_login_attempts(client_ip)
+            db.clear_rate_limit(conn, rl_key)
             new_token = db.create_session(conn, account["id"])
             destination = safe_next(next_path) if next_path else (
                 "/employers" if account.get("role") == "employer" else "/profile"
             )
             return redirect(destination,
                             set_cookies=[(SESSION_COOKIE, new_token, SESSION_MAX_AGE)])
+        if db.consume_rate_limit(conn, f"signup:{client_ip}", SIGNUP_MAX_ATTEMPTS, SIGNUP_WINDOW_SECONDS):
+            return Response(views.auth_page(kind, next_path,
+                                            error="Too many signup attempts. Please wait a few minutes and try again."), status=429)
         role = payload.get("role", "candidate")
         if role not in ("candidate", "employer"):
             role = "candidate"
@@ -420,14 +481,9 @@ def route(conn, method, path, query, payload, user, token, host, client_ip=""):
         return redirect(destination,
                         set_cookies=[(SESSION_COOKIE, new_token, SESSION_MAX_AGE)])
 
-    if path == "/logout":
-        if token:
-            db.delete_session(conn, token)
-        return redirect("/", clear_cookies=[SESSION_COOKIE])
-
-    # CSRF verification for all authenticated state-changing POST requests (skip API and login/signup/logout)
-    if method == "POST" and user and path not in ("/auth/login", "/auth/signup", "/logout") and not path.startswith("/api/"):
-        submitted_csrf = payload.get("_csrf", "")
+    # CSRF verification for all authenticated state-changing form requests (including /logout)
+    if method in ("POST", "PUT", "PATCH", "DELETE") and user and path not in ("/auth/login", "/auth/signup"):
+        submitted_csrf = csrf_header or payload.get("_csrf", "")
         if not verify_csrf(token, submitted_csrf):
             body = ("<div style='text-align:center;padding:60px 20px'>"
                     "<h2>Invalid Request</h2>"
@@ -435,6 +491,13 @@ def route(conn, method, path, query, payload, user, token, host, client_ip=""):
                     "Please go back and try again.</p>"
                     "<a href='/'>← Back to Home</a></div>")
             return Response(views.layout("Invalid Request", body, user), status=403)
+
+    if path == "/logout":
+        if method != "POST":
+            return Response("Method not allowed", status=405, content_type="text/plain; charset=utf-8")
+        if token:
+            db.delete_session(conn, token)
+        return redirect("/", clear_cookies=[SESSION_COOKIE])
 
     # ---------- account pages ----------
     if path in (
@@ -446,8 +509,8 @@ def route(conn, method, path, query, payload, user, token, host, client_ip=""):
 
     if path == "/profile":
         if method == "POST":
-            db.update_profile(conn, user["id"], payload.get("name", ""),
-                              payload.get("headline", ""), payload.get("location", ""))
+            db.update_profile(conn, user["id"], _clip(payload.get("name", ""), 120),
+                              _clip(payload.get("headline", ""), 160), _clip(payload.get("location", ""), 120))
             user = db.current_user(conn, token) or user
             return Response(views.profile_page(conn, user, db.user_stats(conn, user["id"]),
                                                message="Profile updated."))
@@ -581,14 +644,16 @@ def route(conn, method, path, query, payload, user, token, host, client_ip=""):
         return redirect(f"/admin?tab={tab}")
 
     if path == "/admin/videos/create" and method == "POST":
-        title = payload.get("title", "").strip()
-        guest = payload.get("guest", "").strip()
-        duration = payload.get("duration", "15:00 min").strip()
-        category = payload.get("category", "Maritime & Tech").strip()
-        thumb = payload.get("thumb", "").strip() or payload.get("thumb_preset", "/static/images/fw_today_1.jpg")
-        excerpt = payload.get("excerpt", "").strip() or f"Exclusive Logistic Waves Today broadcast examining {title}."
-        body = payload.get("body", "").strip() or f"Full broadcast editorial analysis for {title} with featured guest {guest}."
-        slug = views.slugify(title)
+        title = _clip(payload.get("title", ""), 300)
+        if not title:
+            return redirect("/admin?tab=videos&err=" + urllib.parse.quote("Episode title is required (max 300 characters)."))
+        guest = _clip(payload.get("guest", ""), 120)
+        duration = _clip(payload.get("duration", "15:00 min"), 40) or "15:00 min"
+        category = _clip(payload.get("category", "Maritime & Tech"), 120) or "Maritime & Tech"
+        thumb = _safe_media_url(payload.get("thumb", "") or payload.get("thumb_preset", ""), "/static/images/fw_today_1.jpg")
+        excerpt = _clip(payload.get("excerpt", ""), 1000) or f"Exclusive Logistic Waves Today broadcast examining {title}."
+        body = _clip(payload.get("body", ""), 200000) or f"Full broadcast editorial analysis for {title} with featured guest {guest}."
+        slug = views.slugify(title) or "episode"
         
         ex = conn.execute("SELECT id FROM articles WHERE slug=?", (slug,)).fetchone()
         now_str = datetime.utcnow().strftime("%b %d, %Y")
@@ -607,17 +672,17 @@ def route(conn, method, path, query, payload, user, token, host, client_ip=""):
         return redirect("/admin?tab=videos&msg=" + urllib.parse.quote(f"Video episode '{title}' published successfully!"))
 
     if path == "/admin/articles/create" and method == "POST":
-        title = payload.get("title", "").strip()
+        title = (payload.get("title") or "").strip()
         if not title or len(title) > 300:
             return redirect("/admin?tab=articles&err=" + urllib.parse.quote("Article title is required (max 300 characters)."))
-        category = payload.get("category", "Maritime & Supply Chain").strip()
-        author = payload.get("author", "Editorial Staff").strip()
-        tag = payload.get("tag", "Maritime Insights").strip()
-        read_time = payload.get("read_time", "6 min read").strip()
-        thumb = payload.get("thumb", "").strip() or "/static/images/fw_today_1.jpg"
-        excerpt = payload.get("excerpt", "").strip()
-        body = payload.get("body", "").strip()
-        slug = views.slugify(title)
+        category = _clip(payload.get("category", "Maritime & Supply Chain"), 120) or "Maritime & Supply Chain"
+        author = _clip(payload.get("author", "Editorial Staff"), 120) or "Editorial Staff"
+        tag = _clip(payload.get("tag", "Maritime Insights"), 120) or "Maritime Insights"
+        read_time = _clip(payload.get("read_time", "6 min read"), 40) or "6 min read"
+        thumb = _safe_media_url(payload.get("thumb", ""), "/static/images/fw_today_1.jpg")
+        excerpt = _clip(payload.get("excerpt", ""), 1000)
+        body = _clip(payload.get("body", ""), 200000)
+        slug = views.slugify(title) or "article"
         now_str = datetime.utcnow().strftime("%b %d, %Y")
         ex = conn.execute("SELECT id FROM articles WHERE slug=?", (slug,)).fetchone()
         if ex:
@@ -644,16 +709,18 @@ def route(conn, method, path, query, payload, user, token, host, client_ip=""):
     if path == "/admin/articles/update" and method == "POST":
         art_id = get_int(payload.get("id", "0"), 0, low=0)
         tab = payload.get("tab", "articles")
-        title = payload.get("title", "").strip()
-        category = payload.get("category", "Maritime & Supply Chain").strip()
-        author = payload.get("author", "Editorial Staff").strip()
-        tag = payload.get("tag", "Maritime Insights").strip()
-        read_time = payload.get("read_time", "6 min read").strip()
-        guest = payload.get("guest", "").strip()
-        duration = payload.get("duration", "15:00 min").strip()
-        thumb = payload.get("thumb", "").strip()
-        excerpt = payload.get("excerpt", "").strip()
-        body = payload.get("body", "").strip()
+        title = (payload.get("title") or "").strip()
+        if not title or len(title) > 300:
+            return redirect(f"/admin?tab={tab}&err=" + urllib.parse.quote("Article title is required (max 300 characters)."))
+        category = _clip(payload.get("category", "Maritime & Supply Chain"), 120) or "Maritime & Supply Chain"
+        author = _clip(payload.get("author", "Editorial Staff"), 120) or "Editorial Staff"
+        tag = _clip(payload.get("tag", "Maritime Insights"), 120) or "Maritime Insights"
+        read_time = _clip(payload.get("read_time", "6 min read"), 40) or "6 min read"
+        guest = _clip(payload.get("guest", ""), 120)
+        duration = _clip(payload.get("duration", "15:00 min"), 40)
+        thumb = _safe_media_url(payload.get("thumb", ""), "")
+        excerpt = _clip(payload.get("excerpt", ""), 1000)
+        body = _clip(payload.get("body", ""), 200000)
         if art_id:
             conn.execute(
                 """UPDATE articles SET title=?, category=?, author=?, tag=?, read_time=?, guest=?, duration=?, thumb=?, excerpt=?, body=? WHERE id=?""",
@@ -664,18 +731,20 @@ def route(conn, method, path, query, payload, user, token, host, client_ip=""):
         return redirect(f"/admin?tab={tab}&err=" + urllib.parse.quote("Article ID not found."))
 
     if path == "/admin/jobs/create" and method == "POST":
-        title = payload.get("title", "").strip()
+        title = (payload.get("title") or "").strip()
         if not title or len(title) > 300:
             return redirect("/admin?tab=jobs&err=" + urllib.parse.quote("Job title is required (max 300 characters)."))
-        comp_slug = payload.get("company_slug", "").strip()
-        category = payload.get("category", "Engineering & Architecture").strip()
-        workplace = payload.get("workplace", "Hybrid").strip()
-        location = payload.get("location", "Vietnam").strip()
-        salary_min = get_int(payload.get("salary_min", "50000"), 50000)
-        salary_max = get_int(payload.get("salary_max", "85000"), 85000)
-        skills = payload.get("skills", "").strip()
-        description = payload.get("description", "").strip()
-        slug = views.slugify(title)
+        comp_slug = _clip(payload.get("company_slug", ""), 120)
+        category = _clip(payload.get("category", "Engineering & Architecture"), 120) or "Engineering & Architecture"
+        workplace = _clip(payload.get("workplace", "Hybrid"), 60) or "Hybrid"
+        location = _clip(payload.get("location", "Vietnam"), 160) or "Vietnam"
+        salary_min = get_int(payload.get("salary_min", "50000"), 50000, low=0, high=10000000)
+        salary_max = get_int(payload.get("salary_max", "85000"), 85000, low=0, high=10000000)
+        if salary_min > salary_max:
+            salary_min, salary_max = salary_max, salary_min
+        skills = _clip(payload.get("skills", ""), 500)
+        description = _clip(payload.get("description", ""), 20000)
+        slug = views.slugify(title) or "job"
         
         comp = conn.execute("SELECT id, name, initials, color FROM companies WHERE slug=?", (comp_slug,)).fetchone()
         if comp:
@@ -708,19 +777,23 @@ def route(conn, method, path, query, payload, user, token, host, client_ip=""):
     if path == "/admin/jobs/update" and method == "POST":
         job_id = get_int(payload.get("id", "0"), 0, low=0)
         tab = payload.get("tab", "jobs")
-        title = payload.get("title", "").strip()
-        comp_slug = payload.get("company_slug", "").strip()
-        category = payload.get("category", "Engineering & Architecture").strip()
-        workplace = payload.get("workplace", "Hybrid").strip()
-        location = payload.get("location", "Vietnam").strip()
-        salary_min = get_int(payload.get("salary_min", "50000"), 50000)
-        salary_max = get_int(payload.get("salary_max", "85000"), 85000)
-        salary_display = payload.get("salary_display", "").strip()
+        title = (payload.get("title") or "").strip()
+        if not title or len(title) > 300:
+            return redirect(f"/admin?tab={tab}&err=" + urllib.parse.quote("Job title is required (max 300 characters)."))
+        comp_slug = _clip(payload.get("company_slug", ""), 120)
+        category = _clip(payload.get("category", "Engineering & Architecture"), 120) or "Engineering & Architecture"
+        workplace = _clip(payload.get("workplace", "Hybrid"), 60) or "Hybrid"
+        location = _clip(payload.get("location", "Vietnam"), 160) or "Vietnam"
+        salary_min = get_int(payload.get("salary_min", "50000"), 50000, low=0, high=10000000)
+        salary_max = get_int(payload.get("salary_max", "85000"), 85000, low=0, high=10000000)
+        if salary_min > salary_max:
+            salary_min, salary_max = salary_max, salary_min
+        salary_display = _clip(payload.get("salary_display", ""), 80)
         if not salary_display:
             salary_display = f"${salary_min:,} - ${salary_max:,}"
-        skills = payload.get("skills", "").strip()
-        description = payload.get("description", "").strip()
-        level = payload.get("level", "Mid-Senior").strip()
+        skills = _clip(payload.get("skills", ""), 500)
+        description = _clip(payload.get("description", ""), 20000)
+        level = _clip(payload.get("level", "Mid-Senior"), 60) or "Mid-Senior"
         
         old_row = conn.execute("SELECT company_id FROM jobs WHERE id=?", (job_id,)).fetchone()
         comp = conn.execute("SELECT id, name, initials, color FROM companies WHERE slug=?", (comp_slug,)).fetchone()
@@ -752,16 +825,19 @@ def route(conn, method, path, query, payload, user, token, host, client_ip=""):
         return redirect(f"/admin?tab={tab}&err=" + urllib.parse.quote("Job ID not found."))
 
     if path == "/admin/companies/create" and method == "POST":
-        name = payload.get("name", "").strip()
-        tagline = payload.get("tagline", "").strip()
-        industries = payload.get("industries", "Logistics & Maritime").strip()
-        location = payload.get("location", "Vietnam").strip()
-        employees = get_int(payload.get("employees", "1000"), 1000)
-        color = payload.get("color", "#034f9a").strip() or "#034f9a"
-        website = payload.get("website", "").strip()
-        description = payload.get("description", "").strip()
+        name = _clip(payload.get("name", ""), 160)
+        if not name:
+            return redirect("/admin?tab=companies&err=" + urllib.parse.quote("Company name is required."))
+        tagline = _clip(payload.get("tagline", ""), 240)
+        industries = _clip(payload.get("industries", "Logistics & Maritime"), 200) or "Logistics & Maritime"
+        location = _clip(payload.get("location", "Vietnam"), 160) or "Vietnam"
+        employees = get_int(payload.get("employees", "1000"), 1000, low=1, high=5000000)
+        raw_color = _clip(payload.get("color", "#034f9a"), 20)
+        color = raw_color if re.match(r"^#[0-9A-Fa-f]{3,8}$", raw_color) else "#034f9a"
+        website = _safe_http_url(payload.get("website", ""))
+        description = _clip(payload.get("description", ""), 10000)
         initials = "".join(w[0] for w in name.split()[:2]).upper() or "CO"
-        slug = views.slugify(name)
+        slug = views.slugify(name) or "company"
         
         ex = conn.execute("SELECT id FROM companies WHERE slug=?", (slug,)).fetchone()
         if ex:
@@ -781,22 +857,21 @@ def route(conn, method, path, query, payload, user, token, host, client_ip=""):
     if path == "/admin/companies/delete" and method == "POST":
         comp_id = get_int(payload.get("id", "0"), 0, low=0)
         tab = payload.get("tab", "companies")
-        conn.execute("DELETE FROM jobs WHERE company_id=?", (comp_id,))
-        conn.execute("DELETE FROM companies WHERE id=?", (comp_id,))
-        conn.commit()
+        db.delete_company_cascade(conn, comp_id)
         return redirect(f"/admin?tab={tab}&msg=" + urllib.parse.quote("Company and its listings deleted."))
 
     if path == "/admin/companies/update" and method == "POST":
         comp_id = get_int(payload.get("id", "0"), 0, low=0)
         tab = payload.get("tab", "companies")
-        name = payload.get("name", "").strip()
-        tagline = payload.get("tagline", "").strip()
-        industries = payload.get("industries", "Logistics & Maritime").strip()
-        location = payload.get("location", "Vietnam").strip()
-        employees = get_int(payload.get("employees", "1000"), 1000)
-        color = payload.get("color", "#034f9a").strip() or "#034f9a"
-        website = payload.get("website", "").strip()
-        description = payload.get("description", "").strip()
+        name = _clip(payload.get("name", ""), 160)
+        tagline = _clip(payload.get("tagline", ""), 240)
+        industries = _clip(payload.get("industries", "Logistics & Maritime"), 200) or "Logistics & Maritime"
+        location = _clip(payload.get("location", "Vietnam"), 160) or "Vietnam"
+        employees = get_int(payload.get("employees", "1000"), 1000, low=1, high=5000000)
+        raw_color = _clip(payload.get("color", "#034f9a"), 20)
+        color = raw_color if re.match(r"^#[0-9A-Fa-f]{3,8}$", raw_color) else "#034f9a"
+        website = _safe_http_url(payload.get("website", ""))
+        description = _clip(payload.get("description", ""), 10000)
         initials = "".join(w[0] for w in name.split()[:2]).upper() or "CO"
         
         if comp_id and name:
@@ -831,13 +906,7 @@ def route(conn, method, path, query, payload, user, token, host, client_ip=""):
         uid = get_int(payload.get("id", "0"), 0, low=0)
         if uid == user["id"]:
             return redirect("/admin?tab=users&err=" + urllib.parse.quote("You cannot delete your own currently signed-in admin account."))
-        conn.execute("DELETE FROM sessions WHERE user_id=?", (uid,))
-        conn.execute("DELETE FROM saved_jobs WHERE user_id=?", (uid,))
-        conn.execute("DELETE FROM follows WHERE user_id=?", (uid,))
-        conn.execute("DELETE FROM applications WHERE user_id=?", (uid,))
-        conn.execute("DELETE FROM alerts WHERE user_id=?", (uid,))
-        conn.execute("DELETE FROM users WHERE id=?", (uid,))
-        conn.commit()
+        db.delete_user_cascade(conn, uid)
         return redirect("/admin?tab=users&msg=" + urllib.parse.quote("User account deleted."))
 
     if path == "/admin/users/role" and method == "POST":
@@ -859,8 +928,10 @@ def route(conn, method, path, query, payload, user, token, host, client_ip=""):
 
     if path == "/admin/applications/status" and method == "POST":
         aid = get_int(payload.get("id", "0"), 0, low=0)
-        status = payload.get("status", "Reviewing").strip()
-        note = payload.get("note", "").strip()
+        status = _clip(payload.get("status", "Reviewing"), 40)
+        if status not in ALLOWED_APP_STATUSES:
+            return redirect("/admin?tab=applications&err=" + urllib.parse.quote("Invalid application status."))
+        note = _clip(payload.get("note", ""), 2000)
         conn.execute("UPDATE applications SET status=?, note=? WHERE id=?", (status, note, aid))
         conn.commit()
         return redirect("/admin?tab=applications&msg=" + urllib.parse.quote(f"Status updated to {status}."))
@@ -874,13 +945,15 @@ def route(conn, method, path, query, payload, user, token, host, client_ip=""):
 
     # ---------- admin: salaries ----------
     if path == "/admin/salaries/create" and method == "POST":
-        title    = payload.get("title", "").strip()
-        category = payload.get("category", "Logistics").strip()
-        median   = get_int(payload.get("median", "80000"), 80000)
-        low      = get_int(payload.get("low", "60000"), 60000)
-        high     = get_int(payload.get("high", "110000"), 110000)
-        samples  = get_int(payload.get("samples", "500"), 500)
-        trend    = payload.get("trend", "+2.0%").strip() or "+2.0%"
+        title    = _clip(payload.get("title", ""), 200)
+        category = _clip(payload.get("category", "Logistics"), 120) or "Logistics"
+        median   = get_int(payload.get("median", "80000"), 80000, low=0, high=10000000)
+        low      = get_int(payload.get("low", "60000"), 60000, low=0, high=10000000)
+        high     = get_int(payload.get("high", "110000"), 110000, low=0, high=10000000)
+        if low > high:
+            low, high = high, low
+        samples  = get_int(payload.get("samples", "500"), 500, low=0, high=10000000)
+        trend    = _clip(payload.get("trend", "+2.0%"), 20) or "+2.0%"
         if title:
             conn.execute(
                 "INSERT INTO salaries (title, category, median, low, high, samples, trend) VALUES (?,?,?,?,?,?,?)",
@@ -899,13 +972,15 @@ def route(conn, method, path, query, payload, user, token, host, client_ip=""):
     if path == "/admin/salaries/update" and method == "POST":
         sid = get_int(payload.get("id", "0"), 0, low=0)
         tab = payload.get("tab", "salaries")
-        title = payload.get("title", "").strip()
-        category = payload.get("category", "Logistics").strip()
-        median = get_int(payload.get("median", "80000"), 80000)
-        low = get_int(payload.get("low", "60000"), 60000)
-        high = get_int(payload.get("high", "110000"), 110000)
-        samples = get_int(payload.get("samples", "500"), 500)
-        trend = payload.get("trend", "+2.0%").strip() or "+2.0%"
+        title = _clip(payload.get("title", ""), 200)
+        category = _clip(payload.get("category", "Logistics"), 120) or "Logistics"
+        median = get_int(payload.get("median", "80000"), 80000, low=0, high=10000000)
+        low = get_int(payload.get("low", "60000"), 60000, low=0, high=10000000)
+        high = get_int(payload.get("high", "110000"), 110000, low=0, high=10000000)
+        if low > high:
+            low, high = high, low
+        samples = get_int(payload.get("samples", "500"), 500, low=0, high=10000000)
+        trend = _clip(payload.get("trend", "+2.0%"), 20) or "+2.0%"
         
         if sid and title:
             conn.execute(
@@ -1156,7 +1231,14 @@ class Handler(BaseHTTPRequestHandler):
         return item.value if item else None
 
     def _payload(self):
-        length = int(self.headers.get("Content-Length", "0") or 0)
+        try:
+            length = int(self.headers.get("Content-Length", "0") or 0)
+        except (TypeError, ValueError):
+            raise BadRequestError("Invalid Content-Length header")
+        if length < 0:
+            raise BadRequestError("Negative Content-Length header")
+        if length > MAX_BODY_BYTES:
+            raise PayloadTooLargeError("Request payload too large")
         raw = self.rfile.read(length) if length > 0 else b""
         ctype = (self.headers.get("Content-Type") or "").lower()
         if "application/json" in ctype:
@@ -1197,10 +1279,12 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header("Cache-Control", "no-store")
             for key, value in resp.headers.items():
                 self.send_header(key, value)
+            is_https = bool(os.environ.get("VERCEL")) or (self.headers.get("X-Forwarded-Proto", "").lower() == "https")
+            sec_flag = "; Secure" if is_https else ""
             for name, value, max_age in resp.set_cookies:
-                self.send_header("Set-Cookie", f"{name}={value}; Path=/; HttpOnly; SameSite=Lax; Max-Age={max_age}")
+                self.send_header("Set-Cookie", f"{name}={value}; Path=/; HttpOnly; SameSite=Lax{sec_flag}; Max-Age={max_age}")
             for name in resp.clear_cookies:
-                self.send_header("Set-Cookie", f"{name}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT")
+                self.send_header("Set-Cookie", f"{name}=; Path=/; HttpOnly; SameSite=Lax{sec_flag}; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT")
             # Security headers
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("X-Frame-Options", "SAMEORIGIN")
@@ -1219,16 +1303,25 @@ class Handler(BaseHTTPRequestHandler):
         path = parsed.path.rstrip("/") or "/"
         query_pairs = urllib.parse.parse_qs(parsed.query, keep_blank_values=True)
         query = {k: (v[-1] if v else "") for k, v in query_pairs.items()}
-        payload = self._payload() if self.command in ("POST", "PUT", "PATCH", "DELETE") else {}
+        try:
+            payload = self._payload() if self.command in ("POST", "PUT", "PATCH", "DELETE") else {}
+        except PayloadTooLargeError:
+            self._send(Response("Payload Too Large", status=413, content_type="text/plain; charset=utf-8"))
+            return
+        except BadRequestError:
+            self._send(Response("Bad Request", status=400, content_type="text/plain; charset=utf-8"))
+            return
         token = self._cookie_token()
         conn = db.connect()
         try:
             user = db.current_user(conn, token)
             host = self.headers.get("Host", "localhost")
-            client_ip = (self.client_address[0] if self.client_address else "") or ""
+            direct_ip = (self.client_address[0] if self.client_address else "") or ""
+            client_ip = _resolve_client_ip(self.headers, direct_ip)
+            csrf_header = (self.headers.get("X-CSRF-Token") or "").strip()
             # Set the per-request CSRF token so views can embed it in forms
             views._set_csrf(get_csrf_token(token))
-            resp = route(conn, self.command, path, query, payload, user, token, host, client_ip)
+            resp = route(conn, self.command, path, query, payload, user, token, host, client_ip, csrf_header)
             self._send(resp)
         except (ConnectionResetError, BrokenPipeError, ConnectionAbortedError):
             pass
@@ -1275,7 +1368,6 @@ def main():
     db.init_db()
     server = Server(("0.0.0.0", PORT), Handler)
     print(f"Logistic Waves running at http://0.0.0.0:{PORT}", flush=True)
-    print("Demo accounts: candidate@demo.com / demo1234  |  employer@demo.com / demo1234", flush=True)
     while True:
         try:
             server.serve_forever()

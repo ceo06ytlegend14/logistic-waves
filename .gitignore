@@ -3,6 +3,8 @@ __pycache__/
 *$py.class
 .vercel/
 .env*
+.csrf_secret
+*.csrf_secret
 .DS_Store
 Thumbs.db
 
