@@ -934,3 +934,17 @@ button:focus, button:focus-visible, a:focus, a:focus-visible,
   box-shadow: none !important;
   border: none !important;
 }
+
+/* Prevent legacy builtin-theme.css from laying out footer-brand horizontally */
+.site-footer .footer-brand {
+  display: block !important;
+  max-width: 100%;
+  min-width: 0;
+}
+.site-footer .footer-col {
+  min-width: 0;
+}
+.site-footer .footer-col a {
+  display: inline-block;
+  margin-bottom: 0;
+}

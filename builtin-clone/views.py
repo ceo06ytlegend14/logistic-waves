@@ -1884,7 +1884,7 @@ def job_detail_page(conn, user, job, similar):
   <link rel="stylesheet" href="/static/home-recreation.css?v=20261126_perf">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link rel="stylesheet" href="/static/thesandbox-css/builtin-theme.css">
-  <link rel="stylesheet" href="/static/job-detail-sandbox.css?v=20261126_perf2">
+  <link rel="stylesheet" href="/static/job-detail-sandbox.css?v=20261126_perf3">
 </head>
 <body data-logged-in="{'true' if user else 'false'}">
 
