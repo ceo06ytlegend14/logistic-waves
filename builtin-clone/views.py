@@ -500,9 +500,9 @@ def layout(title, body, user=None, active="", description="", page_class="", ext
   <link rel="icon" type="image/png" href="/static/favicon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@700;800&family=Montserrat:wght@700;800;900&family=Syncopate:wght@700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/styles.css?v=20261126_perf2">
-  <link rel="stylesheet" href="/static/home-recreation.css?v=20261126_perf">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css?v=20261126_apple2">
+  <link rel="stylesheet" href="/static/home-recreation.css?v=20261126_apple2">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   {extra_head}
 </head>
@@ -1322,11 +1322,7 @@ def home_page(conn, user):
     </script>
     """
 
-    extra_head = """
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;0,900;1,700;1,800&family=Inter:wght@400;500;600;700;800;900&family=Montserrat:wght@600;700;800;900&display=swap" rel="stylesheet">
-"""
+    extra_head = ""
     return layout("Logistic Waves | Logistics, Supply Chain & Tech Jobs Hub", body, user, active="home",
                   page_class="page-home",
                   description="Everything for your next move in tech: high-concurrency engineering roles, company insights, and editorial intelligence.",
@@ -1592,7 +1588,7 @@ def linkedin_company_detail_page(conn, user, company, tab, jobs=None, related=No
         for c in similar
     )
     post_cards = "".join(
-        f'''<article class="li-post">{f'<img src="{e(a["thumb"])}" alt="{e(a["title"])}" width="480" height="150" decoding="async" style="width:100%;height:150px;object-fit:cover;border-radius:8px;display:block;" loading="lazy">' if a.get('thumb') else photo_placeholder(a['accent'], "Add post image", a['slug'], i, 150)}
+        f'''<article class="li-post">{f'<img src="{e(a["thumb"])}" alt="{e(a["title"])}" width="480" height="270" decoding="async" style="width:100%;aspect-ratio:16/9;height:auto;object-fit:cover;border-radius:14px;display:block;" loading="lazy">' if a.get('thumb') else photo_placeholder(a['accent'], "Add post image", a['slug'], i, 150)}
           <div class="li-post-body"><a class="li-post-title" href="/articles/{e(a['slug'])}">{e(a['title'])}</a>
           <p>{e(a['excerpt'])}</p><div class="li-meta">{e(a['author'])} · {e(a['published'])} · {e(a['read_time'])}</div></div></article>'''
         for i, a in enumerate(related)
@@ -1875,16 +1871,16 @@ def job_detail_page(conn, user, job, similar):
   <!-- FontAwesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
-  <!-- Google Fonts: Montserrat + Barlow Condensed + Inter -->
+  <!-- Apple SF Pro Display / Text + Inter optical fallback -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;500;600;700;800&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="/static/styles.css?v=20261126_perf2">
-  <link rel="stylesheet" href="/static/home-recreation.css?v=20261126_perf">
+  <link rel="stylesheet" href="/static/styles.css?v=20261126_apple2">
+  <link rel="stylesheet" href="/static/home-recreation.css?v=20261126_apple2">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link rel="stylesheet" href="/static/thesandbox-css/builtin-theme.css">
-  <link rel="stylesheet" href="/static/job-detail-sandbox.css?v=20261126_perf3">
+  <link rel="stylesheet" href="/static/job-detail-sandbox.css?v=20261126_apple2">
 </head>
 <body data-logged-in="{'true' if user else 'false'}">
 
@@ -2588,7 +2584,7 @@ def salary_detail_page(conn, user, salary, related_jobs):
 # ---------- articles ----------
 
 def articles_page(conn, user, q="", category="", tag="", featured=None):
-    extra_head = '''<link rel="stylesheet" href="/static/article.css?v=20261126_perf2">
+    extra_head = '''<link rel="stylesheet" href="/static/article.css?v=20261126_apple2">
     <style>
       #view-article {
         display: block !important;
@@ -2612,8 +2608,8 @@ def articles_page(conn, user, q="", category="", tag="", featured=None):
     if has_filter:
         matched = db.list_articles(conn, q=q, category=category, tag=tag, limit=60)
         cards = "".join(
-            f'''<article class="lw-db-card" style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;display:flex;flex-direction:column;transition:all 0.2s;">
-              <a href="/articles/{e(a['slug'])}" style="display:block;height:175px;overflow:hidden;background:#f1f5f9;">
+            f'''<article class="lw-db-card" style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;display:flex;flex-direction:column;transition:all 0.2s;">
+              <a href="/articles/{e(a['slug'])}" style="display:block;aspect-ratio:16/9;overflow:hidden;background:#f1f5f9;">
                 <img src="{e(_article_cover_url(a, i))}" alt="{e(a['title'])}" width="400" height="175" decoding="async" style="width:100%;height:100%;object-fit:cover;display:block;" loading="lazy">
               </a>
               <div style="padding:16px;display:flex;flex-direction:column;gap:8px;flex:1;">
@@ -2695,8 +2691,8 @@ def articles_page(conn, user, q="", category="", tag="", featured=None):
     ).fetchall()]
     if latest_editorial and '<div id="lw-hub-overview">' in hub_content:
         latest_cards = "".join(
-            f'''<article class="lw-db-card" style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;display:flex;flex-direction:column;transition:all 0.2s;">
-              <a href="/articles/{e(a['slug'])}" style="display:block;height:165px;overflow:hidden;background:#f1f5f9;">
+            f'''<article class="lw-db-card" style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;display:flex;flex-direction:column;transition:all 0.2s;">
+              <a href="/articles/{e(a['slug'])}" style="display:block;aspect-ratio:16/9;overflow:hidden;background:#f1f5f9;">
                 <img src="{e(_article_cover_url(a, i))}" alt="{e(a['title'])}" width="400" height="175" decoding="async" style="width:100%;height:100%;object-fit:cover;display:block;" loading="lazy">
               </a>
               <div style="padding:14px 16px;display:flex;flex-direction:column;gap:6px;flex:1;">
@@ -2752,7 +2748,7 @@ def format_editorial_body(raw_body):
                     continue
                 grid_items.append(f'''
                 <figure style="margin:0;display:flex;flex-direction:column;">
-                  <img src="{e(src)}" alt="{e(cap or 'Article Photo')}" width="400" height="260" decoding="async" style="width:100%;height:260px;object-fit:cover;border-radius:12px;box-shadow:0 4px 16px rgba(0,0,0,0.06);display:block;" loading="lazy">
+                  <img src="{e(src)}" alt="{e(cap or 'Article Photo')}" width="400" height="260" decoding="async" style="width:100%;aspect-ratio:16/9;height:auto;object-fit:cover;border-radius:14px;box-shadow:0 4px 16px rgba(0,0,0,0.06);display:block;" loading="lazy">
                   {f'<figcaption style="font-size:12.5px;color:#64748b;margin-top:7px;font-style:italic;text-align:center;">{e(cap)}</figcaption>' if cap else ''}
                 </figure>''')
             if grid_items:
@@ -2769,7 +2765,7 @@ def format_editorial_body(raw_body):
             if src:
                 out.append(f'''
             <figure class="editorial-inline-figure" style="margin:28px 0;">
-              <img src="{e(src)}" alt="{e(cap or 'Article Image')}" class="editorial-inline-image" width="800" height="450" decoding="async" style="width:100%;max-height:500px;object-fit:cover;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.08);display:block;" loading="lazy">
+              <img src="{e(src)}" alt="{e(cap or 'Article Image')}" class="editorial-inline-image" width="800" height="450" decoding="async" style="width:100%;aspect-ratio:16/9;max-height:460px;object-fit:cover;border-radius:14px;box-shadow:0 4px 20px rgba(0,0,0,0.08);display:block;" loading="lazy">
               {f'<figcaption class="editorial-inline-caption" style="font-size:13px;color:#64748b;margin-top:8px;font-style:italic;text-align:center;">{e(cap)}</figcaption>' if cap else ''}
             </figure>''')
             continue
@@ -3908,7 +3904,7 @@ def courses_page(conn, user, f=None):
     </script>
     '''
 
-    extra_css = '<link rel="stylesheet" href="/static/courses.css?v=20261126_perf">';
+    extra_css = '<link rel="stylesheet" href="/static/courses.css?v=20261126_apple2">';
     return layout("Engineering Courses & Masterclasses", body, user, active="courses", page_class="course-simple-page", description="Browse video courses and engineering lessons.", extra_head=extra_css)
 
 
@@ -4093,14 +4089,14 @@ def auth_page(kind, next_path="", error="", message="", preset_role="candidate")
         object-fit: contain !important;
       }}
       .auth-brand-title {{
-        font-family: "Plus Jakarta Sans", -apple-system, sans-serif !important;
+        font-family: "SF Pro Display", -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, sans-serif !important;
         font-size: 16px !important;
         font-weight: 800 !important;
         letter-spacing: 0.04em !important;
         color: #003875 !important;
       }}
       .auth-form-title {{
-        font-family: "Plus Jakarta Sans", -apple-system, sans-serif !important;
+        font-family: "SF Pro Display", -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, sans-serif !important;
         font-size: 28px !important;
         font-weight: 800 !important;
         color: #0f172a !important;
@@ -4109,7 +4105,7 @@ def auth_page(kind, next_path="", error="", message="", preset_role="candidate")
         line-height: 1.15 !important;
       }}
       .auth-form-subtitle {{
-        font-family: "Plus Jakarta Sans", sans-serif !important;
+        font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, sans-serif !important;
         font-size: 14px !important;
         color: #64748b !important;
         margin: 0 0 16px !important;
@@ -4130,7 +4126,7 @@ def auth_page(kind, next_path="", error="", message="", preset_role="candidate")
         background: transparent !important;
         padding: 9px 16px !important;
         border-radius: 9999px !important;
-        font-family: "Plus Jakarta Sans", sans-serif !important;
+        font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, sans-serif !important;
         font-size: 13.5px !important;
         font-weight: 600 !important;
         color: #475569 !important;
@@ -4247,7 +4243,7 @@ def auth_page(kind, next_path="", error="", message="", preset_role="candidate")
         color: #ffffff !important;
         border: none !important;
         border-radius: 12px !important;
-        font-family: "Plus Jakarta Sans", sans-serif !important;
+        font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, sans-serif !important;
         font-size: 15px !important;
         font-weight: 700 !important;
         display: flex !important;
@@ -4304,7 +4300,7 @@ def auth_page(kind, next_path="", error="", message="", preset_role="candidate")
         border: 1.5px solid #d0dce8 !important;
         border-radius: 24px !important;
         padding: 0 16px !important;
-        font-family: "Plus Jakarta Sans", sans-serif !important;
+        font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, sans-serif !important;
         font-size: 14px !important;
         font-weight: 600 !important;
         color: #0f2c4d !important;

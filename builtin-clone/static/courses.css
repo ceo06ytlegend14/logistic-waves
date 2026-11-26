@@ -166,7 +166,7 @@
 .course-simple-thumb {
   position: relative;
   aspect-ratio: 16 / 9;
-  border-radius: 8px;
+  border-radius: 14px;
   overflow: hidden;
   background: #0f172a;
   margin-bottom: 10px;

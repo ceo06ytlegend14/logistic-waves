@@ -19,8 +19,10 @@
   --container:1426px;
   --main-col:975px;
   --aside-col:342px;
-  --font-head:'Poppins','Segoe UI',system-ui,sans-serif;
-  --font-body:'Lato','Helvetica Neue',Arial,sans-serif;
+  --font-display:"SF Pro Display",-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",system-ui,sans-serif;
+  --font-text:"SF Pro Text",-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",system-ui,sans-serif;
+  --font-head:var(--font-display);
+  --font-body:var(--font-text);
 }
 
 #view-article, #view-article * {
@@ -239,7 +241,7 @@
 }
 
 #view-article .feature-card .feature-media {
-  position:relative;display:block;aspect-ratio:1.67;overflow:hidden;background:#ddd
+  position:relative;display:block;aspect-ratio:16 / 10;border-radius:16px;overflow:hidden;background:#e2e8f0
 }
 
 #view-article .feature-card .feature-media img {
@@ -267,7 +269,7 @@
 }
 
 #view-article .mini .thumb {
-  flex:0 0 111px;width:111px;aspect-ratio:1.48;overflow:hidden;background:#e8e8e8
+  flex:0 0 112px;width:112px;aspect-ratio:16 / 10;border-radius:10px;overflow:hidden;background:#e8e8e8
 }
 
 #view-article .mini .thumb img {
@@ -348,7 +350,7 @@
 }
 
 #view-article .card .card-media {
-  display:block;aspect-ratio:1.82;overflow:hidden;background:#e8e8e8
+  display:block;aspect-ratio:16 / 9;border-radius:14px;overflow:hidden;background:#e8e8e8
 }
 
 #view-article .card .card-media img {
@@ -372,7 +374,7 @@
 }
 
 #view-article .nav-cards .card .card-media {
-  aspect-ratio:1.91
+  aspect-ratio:16 / 9;border-radius:14px;
 }
 
 #view-article .nav-cards .card h3 {
@@ -413,7 +415,7 @@
 }
 
 #view-article .video-card .video-media {
-  position:relative;display:block;aspect-ratio:1.77;overflow:hidden;border-radius:6px;background:#0a0e14
+  position:relative;display:block;aspect-ratio:16 / 9;overflow:hidden;border-radius:14px;background:#0a0e14
 }
 
 #view-article .video-card .video-media img {
@@ -504,7 +506,7 @@
 }
 
 #view-article .sonar-article .sci-media {
-  display:block;aspect-ratio:1.875;overflow:hidden;background:#0d141c;margin-bottom:16px
+  display:block;aspect-ratio:16 / 10;border-radius:16px;overflow:hidden;background:#0d141c;margin-bottom:16px
 }
 
 #view-article .sonar-article .sci-media img {
@@ -584,7 +586,7 @@
 }
 
 #view-article .chart-feature .feature-media {
-  aspect-ratio:1.775
+  aspect-ratio:16 / 10;border-radius:16px;
 }
 
 #view-article .chart-feature h3 {
@@ -600,7 +602,7 @@
 }
 
 #view-article .chart-minis .mini .thumb {
-  flex-basis:110px;width:110px;aspect-ratio:1.55
+  flex-basis:112px;width:112px;aspect-ratio:16 / 10;border-radius:10px;
 }
 
 #view-article .chart-minis .mini h4 {
@@ -616,7 +618,7 @@
 }
 
 #view-article .three-grid .card .card-media {
-  aspect-ratio:1.8
+  aspect-ratio:16 / 9;border-radius:14px;
 }
 
 #view-article .shipper-cols {
@@ -624,7 +626,7 @@
 }
 
 #view-article .shipper-feature .feature-media {
-  aspect-ratio:1.775
+  aspect-ratio:16 / 10;border-radius:16px;
 }
 
 #view-article .shipper-feature h3 {
@@ -938,10 +940,10 @@
   position: relative !important;
   display: block !important;
   width: 100% !important;
-  aspect-ratio: 1.67 !important;
+  aspect-ratio: 16 / 10 !important;
   overflow: hidden !important;
   background: #0f172a !important;
-  border-radius: 6px !important;
+  border-radius: 16px !important;
   margin-bottom: 12px !important;
 }
 
@@ -1159,9 +1161,9 @@
 #view-article .carousel-track .card .card-media {
   position: relative !important;
   width: 100% !important;
-  aspect-ratio: 1.68 !important;
+  aspect-ratio: 16 / 9 !important;
   overflow: hidden !important;
-  border-radius: 6px !important;
+  border-radius: 14px !important;
   background: #e2e8f0 !important;
 }
 
