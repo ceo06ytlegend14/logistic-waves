@@ -395,11 +395,40 @@ def render_edit_modals(all_companies):
         "</script>\n"
     )
 
-def render_admin_dashboard(conn, user, message="", error="", tab="overview"):
+def _render_pagination(tab: str, page: int, total: int, per_page: int = 20) -> str:
+    """Render server-side pagination controls for admin tables."""
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    if total_pages <= 1:
+        return ""
+    page = max(1, min(page, total_pages))
+    prev_btn = (
+        f"<a href='/admin?tab={e(tab)}&amp;page={page - 1}' class='btn-ctrl btn-ctrl-light' style='padding:5px 12px;font-size:12px;'>&laquo; Prev</a>"
+        if page > 1 else
+        "<span class='btn-ctrl btn-ctrl-light' style='padding:5px 12px;font-size:12px;opacity:.45;cursor:not-allowed;'>&laquo; Prev</span>"
+    )
+    next_btn = (
+        f"<a href='/admin?tab={e(tab)}&amp;page={page + 1}' class='btn-ctrl btn-ctrl-light' style='padding:5px 12px;font-size:12px;'>Next &raquo;</a>"
+        if page < total_pages else
+        "<span class='btn-ctrl btn-ctrl-light' style='padding:5px 12px;font-size:12px;opacity:.45;cursor:not-allowed;'>Next &raquo;</span>"
+    )
+    return (
+        "<div style='display:flex;align-items:center;justify-content:space-between;padding:14px 24px;border-top:1px solid #e2e8f0;'>"
+        f"<span style='font-size:12.5px;color:#64748b;'>Page <strong>{page}</strong> of <strong>{total_pages}</strong> ({total} total)</span>"
+        f"<div style='display:flex;gap:8px;'>{prev_btn}{next_btn}</div>"
+        "</div>"
+    )
+
+
+def render_admin_dashboard(conn, user, message="", error="", tab="overview", page=1):
+    page = max(1, int(page or 1))
+    per_page = 20
+    offset = (page - 1) * per_page
+
     # Batched counts — single round-trip instead of 5+ separate queries
     _c = conn.execute("""
         SELECT
             (SELECT COUNT(*) FROM jobs WHERE status='active') as jobs,
+            (SELECT COUNT(*) FROM jobs) as total_jobs,
             (SELECT COUNT(*) FROM companies) as companies,
             (SELECT COUNT(*) FROM articles) as articles,
             (SELECT COUNT(*) FROM jobs WHERE is_remote=1 AND status='active') as remote,
@@ -412,54 +441,84 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview"):
     today_videos_count = counts.pop("today_videos", 0)
     applications_count = counts.pop("applications", 0)
     subscribers_count  = counts.pop("subscribers", 0)
+    total_jobs_count   = counts.pop("total_jobs", 0)
     users_count        = counts.get("users", 0)
 
-    today_videos = [dict(r) for r in conn.execute(
-        "SELECT id, slug, title, author, guest, duration, thumb, published, category, excerpt, body, tag, is_today, read_time "
-        "FROM articles WHERE tag='Logistic Waves Today' OR is_today=1 ORDER BY id DESC"
-    ).fetchall()]
-
-    all_articles = [dict(r) for r in conn.execute(
-        "SELECT id, slug, title, category, tag, author, published, is_today, read_time, duration, guest, thumb, excerpt, body "
-        "FROM articles ORDER BY id DESC LIMIT 200"
-    ).fetchall()]
-
-    all_jobs = [dict(r) for r in conn.execute(
-        "SELECT id, slug, title, company_id, company_slug, company_name, category, level, workplace, location, salary_min, salary_max, salary_display, skills, description, posted_at "
-        "FROM jobs ORDER BY id DESC LIMIT 200"
-    ).fetchall()]
-
-    all_companies = [dict(r) for r in conn.execute(
-        "SELECT id, slug, name, initials, color, tagline, industries, location, employees, website, description, open_jobs "
-        "FROM companies ORDER BY name ASC"
-    ).fetchall()]
-
-    all_users = [dict(r) for r in conn.execute(
-        "SELECT id, name, email, role, created_at FROM users ORDER BY id DESC"
-    ).fetchall()]
-
+    # Lazy-tab querying: only fetch rows needed for the active tab
+    today_videos = []
+    all_articles = []
+    all_jobs = []
+    all_companies = []
+    all_users = []
     all_applications = []
-    try:
-        all_applications = [dict(r) for r in conn.execute(
-            "SELECT a.id, a.status, a.note, a.created_at,"
-            " j.title as job_title, j.id as job_id, j.slug as job_slug,"
-            " u.name as user_name, u.email as user_email"
-            " FROM applications a"
-            " JOIN jobs j ON a.job_id=j.id"
-            " JOIN users u ON a.user_id=u.id"
-            " ORDER BY a.id DESC LIMIT 200"
+    all_subscribers = []
+    all_salaries = []
+
+    if tab in ("overview", "videos"):
+        v_limit = 5 if tab == "overview" else 100
+        today_videos = [dict(r) for r in conn.execute(
+            "SELECT id, slug, title, author, guest, duration, thumb, published, category, excerpt, body, tag, is_today, read_time "
+            "FROM articles WHERE tag='Logistic Waves Today' OR is_today=1 ORDER BY id DESC LIMIT ?",
+            (v_limit,)
         ).fetchall()]
-    except Exception:
-        pass
 
-    all_subscribers = [dict(r) for r in conn.execute(
-        "SELECT id, email, created_at FROM subscribers ORDER BY id DESC"
-    ).fetchall()]
+    if tab == "articles":
+        all_articles = [dict(r) for r in conn.execute(
+            "SELECT id, slug, title, category, tag, author, published, is_today, read_time, duration, guest, thumb, excerpt, body "
+            "FROM articles ORDER BY id DESC LIMIT ? OFFSET ?",
+            (per_page, offset)
+        ).fetchall()]
 
-    all_salaries = [dict(r) for r in conn.execute(
-        "SELECT id, title, category, median, low, high, samples, trend "
-        "FROM salaries ORDER BY id DESC"
-    ).fetchall()]
+    if tab in ("overview", "jobs"):
+        j_limit = 5 if tab == "overview" else per_page
+        j_offset = 0 if tab == "overview" else offset
+        all_jobs = [dict(r) for r in conn.execute(
+            "SELECT id, slug, title, company_id, company_slug, company_name, category, level, workplace, location, salary_min, salary_max, salary_display, skills, description, posted_at "
+            "FROM jobs ORDER BY id DESC LIMIT ? OFFSET ?",
+            (j_limit, j_offset)
+        ).fetchall()]
+
+    if tab == "companies":
+        all_companies = [dict(r) for r in conn.execute(
+            "SELECT id, slug, name, initials, color, tagline, industries, location, employees, website, description, open_jobs "
+            "FROM companies ORDER BY name ASC LIMIT ? OFFSET ?",
+            (per_page, offset)
+        ).fetchall()]
+    elif tab in ("overview", "jobs"):
+        all_companies = [dict(r) for r in conn.execute(
+            "SELECT slug, name FROM companies ORDER BY name ASC"
+        ).fetchall()]
+
+    if tab == "users":
+        all_users = [dict(r) for r in conn.execute(
+            "SELECT id, name, email, role, created_at FROM users ORDER BY id DESC LIMIT 100"
+        ).fetchall()]
+
+    if tab == "applications":
+        try:
+            all_applications = [dict(r) for r in conn.execute(
+                "SELECT a.id, a.status, a.note, a.created_at,"
+                " j.title as job_title, j.id as job_id, j.slug as job_slug,"
+                " u.name as user_name, u.email as user_email"
+                " FROM applications a"
+                " JOIN jobs j ON a.job_id=j.id"
+                " JOIN users u ON a.user_id=u.id"
+                " ORDER BY a.id DESC LIMIT ? OFFSET ?",
+                (per_page, offset)
+            ).fetchall()]
+        except Exception:
+            pass
+
+    if tab == "subscribers":
+        all_subscribers = [dict(r) for r in conn.execute(
+            "SELECT id, email, created_at FROM subscribers ORDER BY id DESC LIMIT 100"
+        ).fetchall()]
+
+    if tab == "salaries":
+        all_salaries = [dict(r) for r in conn.execute(
+            "SELECT id, title, category, median, low, high, samples, trend "
+            "FROM salaries ORDER BY id DESC LIMIT 100"
+        ).fetchall()]
 
     # Alert banner
     alert_html = ""
@@ -740,11 +799,11 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview"):
         "<button type='submit' class='btn-submit-clean'><i class='fa-solid fa-upload'></i> Publish Article</button>"
         "</form></div>"
         "<div class='table-card'>"
-        "<div class='table-header-bar'><h3 class='table-title'>All Articles &amp; Reports (" + str(len(all_articles)) + ")</h3></div>"
+        "<div class='table-header-bar'><h3 class='table-title'>All Articles &amp; Reports (" + str(counts['articles']) + ")</h3></div>"
         "<table class='clean-table'>"
         "<thead><tr><th>Title &amp; Slug</th><th>Category</th><th>Tag</th><th>Author</th><th>Date</th><th>Action</th></tr></thead>"
         "<tbody>" + articles_rows + "</tbody>"
-        "</table></div></div>"
+        "</table>" + _render_pagination("articles", page, counts["articles"], per_page) + "</div></div>"
     )
 
     # ======================= JOBS TAB =======================
@@ -818,44 +877,44 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview"):
         "<button type='submit' class='btn-submit-clean' style='background:#10b981;'><i class='fa-solid fa-plus'></i> Publish Job Listing</button>"
         "</form></div>"
         "<div class='table-card'>"
-        "<div class='table-header-bar'><h3 class='table-title'>Active Job Listings (" + str(len(all_jobs)) + ")</h3></div>"
+        "<div class='table-header-bar'><h3 class='table-title'>Active Job Listings (" + str(total_jobs_count) + ")</h3></div>"
         "<table class='clean-table'>"
         "<thead><tr><th>Title &amp; Company</th><th>Category</th><th>Workplace</th><th>Location</th><th>Salary</th><th>Posted</th><th>Action</th></tr></thead>"
         "<tbody>" + jobs_rows + "</tbody>"
-        "</table></div></div>"
+        "</table>" + _render_pagination("jobs", page, total_jobs_count, per_page) + "</div></div>"
     )
 
     # ======================= COMPANIES TAB =======================
     def company_row(c):
-        clr = e(c['color'] or '#3874ff')
+        clr = e(c.get('color') or '#3874ff')
         return (
             "<tr>"
             "<td><div style='display:flex;align-items:center;gap:12px;'>"
-            "<span style='display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:10px;background:" + clr + ";color:#fff;font-weight:800;font-size:13px;'>" + e(c['initials']) + "</span>"
-            "<div><strong>" + e(c['name']) + "</strong><br><small style='color:#64748b;'>" + e(c['slug']) + "</small></div>"
+            "<span style='display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:10px;background:" + clr + ";color:#fff;font-weight:800;font-size:13px;'>" + e(c.get('initials') or 'CO') + "</span>"
+            "<div><strong>" + e(c.get('name') or '') + "</strong><br><small style='color:#64748b;'>" + e(c.get('slug') or '') + "</small></div>"
             "</div></td>"
-            "<td><span class='pill-badge pill-blue'>" + e(c['industries'] or 'Logistics') + "</span></td>"
-            "<td>" + e(c['location']) + "</td>"
-            "<td>" + format(c['employees'], ',') + " employees</td>"
-            "<td><span class='pill-badge pill-green'>" + str(c['open_jobs']) + " Openings</span></td>"
+            "<td><span class='pill-badge pill-blue'>" + e(c.get('industries') or 'Logistics') + "</span></td>"
+            "<td>" + e(c.get('location') or '') + "</td>"
+            "<td>" + format(c.get('employees') or 0, ',') + " employees</td>"
+            "<td><span class='pill-badge pill-green'>" + str(c.get('open_jobs') or 0) + " Openings</span></td>"
             "<td><div class='action-btns'>"
             "<button type='button' class='btn-action-round btn-action-edit' title='Edit Company' "
-            "data-id='" + str(c['id']) + "' data-tab='companies' "
-            "data-name='" + e(c['name']) + "' data-tagline='" + e(c.get('tagline') or '') + "' "
+            "data-id='" + str(c.get('id') or '') + "' data-tab='companies' "
+            "data-name='" + e(c.get('name') or '') + "' data-tagline='" + e(c.get('tagline') or '') + "' "
             "data-industries='" + e(c.get('industries') or '') + "' data-location='" + e(c.get('location') or '') + "' "
             "data-employees='" + str(c.get('employees') or 1000) + "' data-color='" + e(c.get('color') or '#3874ff') + "' "
             "data-website='" + e(c.get('website') or '') + "' data-description='" + e(c.get('description') or '') + "' "
             "onclick='openCompanyEditModal(this)'><i class='fa-solid fa-pen-to-square'></i></button>"
-            "<a href='/company/" + e(c['slug']) + "' target='_blank' class='btn-action-round'><i class='fa-solid fa-arrow-up-right-from-square'></i></a>"
+            "<a href='/company/" + e(c.get('slug') or '') + "' target='_blank' class='btn-action-round'><i class='fa-solid fa-arrow-up-right-from-square'></i></a>"
             "<form method='post' action='/admin/companies/delete' onsubmit=\"return confirm('Delete company and all jobs?');\" style='display:inline;'>"
             f"{_csrf_field()}"
-            "<input type='hidden' name='id' value='" + str(c['id']) + "'>"
+            "<input type='hidden' name='id' value='" + str(c.get('id') or '') + "'>"
             "<input type='hidden' name='tab' value='companies'>"
             "<button type='submit' class='btn-action-delete'><i class='fa-solid fa-trash-can'></i></button>"
             "</form></div></td></tr>"
         )
 
-    companies_rows = "".join([company_row(c) for c in all_companies]) or \
+    companies_rows = ("".join([company_row(c) for c in all_companies]) if tab == "companies" else "") or \
         "<tr><td colspan='6' style='text-align:center;padding:32px;color:#94a3b8;'>No companies found.</td></tr>"
 
     companies_content = (
@@ -878,11 +937,11 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview"):
         "<button type='submit' class='btn-submit-clean' style='background:#8b5cf6;'><i class='fa-solid fa-plus'></i> Register Company</button>"
         "</form></div>"
         "<div class='table-card'>"
-        "<div class='table-header-bar'><h3 class='table-title'>Registered Companies (" + str(len(all_companies)) + ")</h3></div>"
+        "<div class='table-header-bar'><h3 class='table-title'>Registered Companies (" + str(counts['companies']) + ")</h3></div>"
         "<table class='clean-table'>"
         "<thead><tr><th>Company</th><th>Industry</th><th>Headquarters</th><th>Team Size</th><th>Jobs</th><th>Action</th></tr></thead>"
         "<tbody>" + companies_rows + "</tbody>"
-        "</table></div></div>"
+        "</table>" + _render_pagination("companies", page, counts["companies"], per_page) + "</div></div>"
     )
 
     # ======================= USERS TAB =======================
@@ -1000,7 +1059,7 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview"):
     applications_content = (
         "<div class='table-card'>"
         "<div class='table-header-bar'>"
-        "<h3 class='table-title'><i class='fa-solid fa-file-signature' style='color:#8b5cf6;margin-right:8px;'></i> Job Applications (" + str(len(all_applications)) + ")</h3>"
+        "<h3 class='table-title'><i class='fa-solid fa-file-signature' style='color:#8b5cf6;margin-right:8px;'></i> Job Applications (" + str(applications_count) + ")</h3>"
         "<div>" + status_summary + "</div>"
         "</div>"
         "<div style='padding:0 24px 12px;'><p style='font-size:13px;color:#64748b;margin:0;'>"
@@ -1009,7 +1068,7 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview"):
         "<table class='clean-table'>"
         "<thead><tr><th>Applicant</th><th>Job Position</th><th>Status</th><th>Notes</th><th>Applied</th><th>Action</th></tr></thead>"
         "<tbody>" + applications_rows + "</tbody>"
-        "</table></div>"
+        "</table>" + _render_pagination("applications", page, applications_count, per_page) + "</div>"
     )
 
     # ======================= SUBSCRIBERS TAB =======================

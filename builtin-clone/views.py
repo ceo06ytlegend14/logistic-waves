@@ -4993,6 +4993,7 @@ def employers_page(conn, user, employer_jobs=None, message="", error=""):
             </div>
             <div class="employer-job-actions"><details class="employer-job-edit"><summary class="btn btn-outline">{icon("edit", 15)} Edit role</summary>
               <form method="post" action="/employers/jobs/update" class="employer-job-edit-form" data-job-id="{job['id']}">
+                {csrf_input()}
                 <input type="hidden" name="id" value="{job['id']}">
                 <label>Job title<input name="title" value="{e(job['title'])}" required></label>
                 <label>Company{company_field}</label><label>Category{category_field}</label><label>Experience{level_field}</label>
@@ -5005,6 +5006,7 @@ def employers_page(conn, user, employer_jobs=None, message="", error=""):
               </form>
             </details>
             <form method="post" action="/employers/jobs/archive" class="employer-job-archive-form" data-job-id="{job['id']}">
+              {csrf_input()}
               <input type="hidden" name="id" value="{job['id']}">
               <button class="btn btn-quiet-danger" type="submit" {'disabled' if job['status'] != 'active' else ''}>{'Archived' if job['status'] != 'active' else 'Archive'}</button>
             </form></div>
@@ -5013,13 +5015,15 @@ def employers_page(conn, user, employer_jobs=None, message="", error=""):
         "No roles posted yet", "Create your first listing to meet your next great hire.",
         "/employers#post", "Post a job",
     )
+    _emp_counts = db.counts(conn)
     content = f'''
       <div class="stat-grid"><div class="stat-card"><span>{icon("briefcase", 22)}</span><strong>{len(employer_jobs or [])}</strong><small>Jobs you manage</small></div>
         <div class="stat-card"><span>{icon("building", 22)}</span><strong>{len(companies)}</strong><small>Company profiles</small></div>
-        <div class="stat-card"><span>{icon("users", 22)}</span><strong>{db.counts(conn)['users']}</strong><small>Demo accounts</small></div>
-        <div class="stat-card"><span>{icon("chart", 22)}</span><strong>{db.counts(conn)['jobs']}</strong><small>Active jobs</small></div></div>
+        <div class="stat-card"><span>{icon("users", 22)}</span><strong>{_emp_counts['users']}</strong><small>Demo accounts</small></div>
+        <div class="stat-card"><span>{icon("chart", 22)}</span><strong>{_emp_counts['jobs']}</strong><small>Active jobs</small></div></div>
       <div class="content-card" id="post"><div class="card-head"><div><h2>Post a new job</h2><p>Reach candidates across search and company pages.</p></div><span class="job-posting-tag">Publishes instantly</span></div>{msg}{err}
         <form method="post" action="/employers/post-job" class="employer-form">
+          {csrf_input()}
           <label>Job title<input name="title" placeholder="e.g. Senior Frontend Engineer" required></label>
           <label>Company {select("company_slug", company_options, "", "", "")}</label>
           <label>Category {select("category", seed.CATEGORIES, "Engineering", "", "")}</label>
@@ -5061,5 +5065,5 @@ def not_found_page(user, path):
     return layout("Page not found", body, user, description="The requested page was not found.")
 
 
-def admin_dashboard_page(conn, user, message="", error="", tab="overview"):
-    return admin_views.render_admin_dashboard(conn, user, message=message, error=error, tab=tab)
+def admin_dashboard_page(conn, user, message="", error="", tab="overview", page=1):
+    return admin_views.render_admin_dashboard(conn, user, message=message, error=error, tab=tab, page=page)

@@ -3,6 +3,7 @@
 Run:  python3 app.py
 Then open the preview URL (port 8000 by default).
 """
+import hashlib
 import html
 import gzip
 import hmac
@@ -23,32 +24,26 @@ import db
 import seed
 import views
 
-# ---------- CSRF protection ----------
-_csrf_lock = threading.Lock()
-_csrf_tokens: dict = {}   # session_token -> csrf_token
-
-
-def _generate_csrf(session_token: str) -> str:
-    csrf = secrets.token_hex(24)
-    with _csrf_lock:
-        _csrf_tokens[session_token] = csrf
-    return csrf
+# ---------- CSRF protection (stateless HMAC-SHA256 for serverless compatibility) ----------
+_CSRF_SECRET = (
+    os.environ.get("CSRF_SECRET")
+    or os.environ.get("DATABASE_URL")
+    or "lw-csrf-fallback-dev-key"
+).encode("utf-8")
 
 
 def get_csrf_token(session_token: str) -> str:
+    """Derive a deterministic, unforgeable CSRF token bound to the HttpOnly session token."""
     if not session_token:
         return ""
-    with _csrf_lock:
-        if session_token not in _csrf_tokens:
-            _csrf_tokens[session_token] = secrets.token_hex(24)
-        return _csrf_tokens[session_token]
+    return hmac.new(_CSRF_SECRET, session_token.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
 def verify_csrf(session_token: str, submitted: str) -> bool:
+    """Verify the submitted CSRF token matches the session-bound HMAC."""
     if not session_token or not submitted:
         return False
-    with _csrf_lock:
-        expected = _csrf_tokens.get(session_token, "")
+    expected = get_csrf_token(session_token)
     return bool(expected) and hmac.compare_digest(expected, submitted)
 
 
@@ -430,6 +425,17 @@ def route(conn, method, path, query, payload, user, token, host, client_ip=""):
             db.delete_session(conn, token)
         return redirect("/", clear_cookies=[SESSION_COOKIE])
 
+    # CSRF verification for all authenticated state-changing POST requests (skip API and login/signup/logout)
+    if method == "POST" and user and path not in ("/auth/login", "/auth/signup", "/logout") and not path.startswith("/api/"):
+        submitted_csrf = payload.get("_csrf", "")
+        if not verify_csrf(token, submitted_csrf):
+            body = ("<div style='text-align:center;padding:60px 20px'>"
+                    "<h2>Invalid Request</h2>"
+                    "<p>Your form submission could not be verified (CSRF token mismatch). "
+                    "Please go back and try again.</p>"
+                    "<a href='/'>← Back to Home</a></div>")
+            return Response(views.layout("Invalid Request", body, user), status=403)
+
     # ---------- account pages ----------
     if path in (
         "/tracker", "/saved", "/alerts", "/profile", "/employers/post-job",
@@ -533,17 +539,6 @@ def route(conn, method, path, query, payload, user, token, host, client_ip=""):
             return redirect("/employers?" + urllib.parse.urlencode({"error": "Job not found."}))
         return redirect("/employers?" + urllib.parse.urlencode({"message": "Job archived."}))
 
-    # CSRF verification for all state-changing POST requests (skip API and login/signup/logout)
-    if method == "POST" and path not in ("/auth/login", "/auth/signup", "/logout") and not path.startswith("/api/"):
-        submitted_csrf = payload.get("_csrf", "")
-        if not verify_csrf(token, submitted_csrf):
-            body = ("<div style='text-align:center;padding:60px 20px'>"
-                    "<h2>Invalid Request</h2>"
-                    "<p>Your form submission could not be verified (CSRF token mismatch). "
-                    "Please go back and try again.</p>"
-                    "<a href='/'>← Back to Home</a></div>")
-            return Response(views.layout("Invalid Request", body, user), status=403)
-
     # ---------- admin dashboard & data seeder ----------
     # SECURITY: All /admin routes require a logged-in admin user (admin role only)
     if path.startswith("/admin"):
@@ -560,7 +555,8 @@ def route(conn, method, path, query, payload, user, token, host, client_ip=""):
         msg = query.get("msg") or query.get("message", "")
         err = query.get("err") or query.get("error", "")
         tab = query.get("tab", "overview")
-        return Response(views.admin_dashboard_page(conn, user, message=msg, error=err, tab=tab))
+        page = get_int(query.get("page", "1"), 1, 1, 10000)
+        return Response(views.admin_dashboard_page(conn, user, message=msg, error=err, tab=tab, page=page))
 
     if path == "/admin/seed" and method == "POST":
         action = payload.get("action", "")
