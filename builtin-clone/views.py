@@ -501,7 +501,7 @@ def layout(title, body, user=None, active="", description="", page_class="", ext
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/styles.css?v=20261126_hero_flat">
+  <link rel="stylesheet" href="/static/styles.css?v=20261126_blue_smoke">
   <link rel="stylesheet" href="/static/home-recreation.css?v=20261126_apple2">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   {extra_head}
@@ -1044,13 +1044,6 @@ def home_page(conn, user):
                 Watch Overview
               </a>
             </div>
-
-            <div class="hero-features-smoke">
-              <div class="feat-item-smoke"><i class="fa-solid fa-earth-americas"></i> Worldwide Coverage</div>
-              <div class="feat-item-smoke"><i class="fa-solid fa-bolt"></i> Real-Time Tracking</div>
-              <div class="feat-item-smoke"><i class="fa-solid fa-shield-halved"></i> Trusted &amp; Secure</div>
-              <div class="feat-item-smoke"><i class="fa-solid fa-headset"></i> 24/7 Support</div>
-            </div>
           </div>
         </div>
       </div>
@@ -1107,7 +1100,7 @@ def home_page(conn, user):
               {lead_html}
             </div>'''
     else:
-        picks_inner_html = empty_state("No editorial articles published yet", "Publish an article from the admin dashboard to feature it here.", '<a class="btn btn-primary" href="/article-blogs">Explore Intelligence Hub</a>')
+        picks_inner_html = empty_state("No editorial articles published yet", "Publish an article from the admin dashboard to feature it here.", "/article-blogs", "Explore Intelligence Hub")
         recent_html = '<p style="color:#64748b;font-size:13px;">No recent articles yet.</p>'
 
     body += f"""
@@ -1591,7 +1584,8 @@ def linkedin_company_detail_page(conn, user, company, tab, jobs=None, related=No
     _no_jobs_msg = empty_state(
         f"No active openings at {company['name']}",
         "Create a job alert to get notified when new roles are published.",
-        f'<a class="li-btn li-btn-outline" href="{url("/alerts", company=company["slug"])}">Create job alert</a>',
+        url("/alerts", company=company["slug"]),
+        "Create job alert",
     )
     recent_jobs = "".join(linkedin_job_card(j, compact=True) for j in jobs[:4]) or _no_jobs_msg
     all_jobs = "".join(linkedin_job_card(j) for j in jobs) or _no_jobs_msg
@@ -1871,7 +1865,7 @@ def job_detail_page(conn, user, job, similar):
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..800&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="/static/styles.css?v=20261126_hero_flat">
+  <link rel="stylesheet" href="/static/styles.css?v=20261126_blue_smoke">
   <link rel="stylesheet" href="/static/home-recreation.css?v=20261126_apple2">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link rel="stylesheet" href="/static/thesandbox-css/builtin-theme.css">
@@ -2620,7 +2614,8 @@ def articles_page(conn, user, q="", category="", tag="", featured=None):
         results_html = f'<div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(290px, 1fr));gap:20px;">{cards}</div>' if cards else empty_state(
             "No articles match your filter",
             "Try a different search term or reset filters to browse all briefings.",
-            '<a class="btn btn-primary" href="/article-blogs">Browse All Articles</a>',
+            "/article-blogs",
+            "Browse All Articles",
         )
         body = f'''
         <div id="view-article">

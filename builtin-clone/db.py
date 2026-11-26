@@ -784,12 +784,12 @@ def list_articles(conn, q="", category="", tag="", limit=20):
     parts, args = ["1=1"], []
     if q:
         like = f"%{_escape_like(q)}%"
-        parts.append("(title LIKE ? ESCAPE '\\' OR excerpt LIKE ? ESCAPE '\\')")
+        parts.append("(LOWER(title) LIKE LOWER(?) ESCAPE '\\' OR LOWER(excerpt) LIKE LOWER(?) ESCAPE '\\')")
         args += [like, like]
     if category:
-        parts.append("category = ?"); args.append(category)
+        parts.append("LOWER(category) = LOWER(?)"); args.append(category)
     if tag:
-        parts.append("tag = ?"); args.append(tag)
+        parts.append("LOWER(tag) = LOWER(?)"); args.append(tag)
     where, args = _where(parts, args)
     rows = conn.execute(
         "SELECT id, slug, title, excerpt, author, published, category, tag, read_time, accent, thumb, is_today, duration, guest"
