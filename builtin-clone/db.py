@@ -303,7 +303,7 @@ class PgCursor:
                     has_returning = True
                     break
 
-        if params is not None:
+        if params:
             if isinstance(params, list):
                 params = tuple(params)
             self._cur.execute(pg_sql, params)
