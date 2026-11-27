@@ -527,6 +527,130 @@ def _sanitize_legacy_placeholders(conn):
     )
 
 
+_TODAY_EPISODE_SEEDS = [
+    (
+        "freightwaves-today-live-up-summit",
+        "Logistic Waves Today Live: Port Automation & Space Tech Logistics",
+        "Join Logistic Waves Today live with industry pioneers at the UP.Summit examining modern autonomous freight and maritime breakthroughs.",
+        "Full editorial broadcast analysis for Logistic Waves Today Live: Port Automation & Space Tech Logistics.\n\nFeatured guest Chip Palombini discusses autonomous port cranes, orbital launch supply chains, and next-generation maritime visibility platforms.",
+        "Rachel Premack",
+        "Nov 5, 2026",
+        "Maritime & Tech",
+        "Logistic Waves Today",
+        "14 min watch",
+        "#0084ff",
+        "/static/images/fw_today_1.jpg",
+        1,
+        "14:20 min",
+        "Chip Palombini",
+    ),
+    (
+        "flying-taxis-cargo-electric-aviation",
+        "Flying Taxis & Cargo: Electric Aviation's Future Takes Off",
+        "Electric aviation pioneers showcase eVTOL cargo prototypes and regional delivery aircraft designed to bypass highway freight congestion.",
+        "Electric Vertical Takeoff and Landing (eVTOL) aircraft are moving from conceptual test flights to certified commercial freight corridors.\n\nBETA Technologies and regional logistics partners outline battery density gains, FAA certification milestones, and middle-mile cargo economics.",
+        "Chip Palombini",
+        "Nov 6, 2026",
+        "Logistic Waves Today",
+        "Logistic Waves Today",
+        "18 min watch",
+        "#0084ff",
+        "/static/images/fw_today_2.jpg",
+        1,
+        "18:45 min",
+        "Chip Palombini",
+    ),
+    (
+        "floridas-space-race-private-sector-boom",
+        "Florida's Space Race: 95% Cost Drop Fuels Private Sector Boom",
+        "Florida is rapidly becoming the epicenter of the new space race, with groundbreaking public-private partnerships driving down costs and transforming Cape Canaveral freight.",
+        "Titusville & Cape Canaveral, Florida — Launch costs to low Earth orbit have dropped by more than 95% over the past decade.\n\nHeavy rocket recovery, maritime barge logistics, and specialized clean-room freight are reshaping port infrastructure across the Space Coast.",
+        "Rep. Mike Haridopolos · Space Commerce",
+        "Nov 6, 2026",
+        "Logistic Waves Today",
+        "Logistic Waves Today",
+        "19 min watch",
+        "#0084ff",
+        "/static/images/fw_today_3.jpg",
+        1,
+        "19:00 min",
+        "Rep. Mike Haridopolos",
+    ),
+    (
+        "electric-flying-boat-lands-5-billion",
+        "Electric 'Flying Boat' Lands $5 Billion in Orders",
+        "REGENT is building electric seagliders that merge the best of boats and planes, flying on a cushion of air over the water to connect coastal ports without runway infrastructure.",
+        "North Kingstown, Rhode Island — Maritime mobility startup REGENT has surpassed $5 billion in commercial backorders for its wing-in-ground-effect electric seagliders.\n\nDesigned to serve coastal freight and passenger routes at 180 mph, seagliders dock directly at existing port terminals.",
+        "Billy Thalheimer · Maritime Mobility",
+        "Nov 6, 2026",
+        "Logistic Waves Today",
+        "Logistic Waves Today",
+        "22 min watch",
+        "#0084ff",
+        "/static/images/fw_today_4.jpg",
+        1,
+        "22:00 min",
+        "Billy Thalheimer",
+    ),
+    (
+        "autonomous-freight-corridors-commercial-launch",
+        "Autonomous Freight Corridors: Texas Triangle Commercial Launch",
+        "Driverless Class 8 trucks begin commercial driver-out hauls across I-45 and I-10, demonstrating 99.8% on-time terminal-to-terminal arrival rates.",
+        "Dallas & Houston, Texas — Commercial freight transport entered a transformative chapter this week as autonomous Class 8 fleets expanded driverless hub-to-hub operations across the Texas Triangle.\n\nTelematics, radar-lidar fusion, and automated yard handoffs cut dwell time by over 35%.",
+        "Marcus Vance · Autonomous Freight",
+        "Nov 5, 2026",
+        "Logistic Waves Today",
+        "Logistic Waves Today",
+        "26 min watch",
+        "#0084ff",
+        "/static/images/fw_today_5.jpg",
+        1,
+        "26:00 min",
+        "Marcus Vance",
+    ),
+    (
+        "decarbonizing-ocean-cargo-methanol-ships",
+        "Decarbonizing Ocean Cargo: Dual-Fuel Methanol Containerships",
+        "Global shipping alliances accelerate net-zero marine corridors with 12 new green methanol container vessels entering trans-Pacific and Asia-Europe trade lanes.",
+        "Singapore & Rotterdam — The decarbonization of global maritime trade reached a critical milestone this month as twelve new dual-fuel green methanol containerships entered scheduled service.\n\nPort bunkering partnerships and digital voyage optimization reduce lifecycle emissions by up to 65%.",
+        "Elina Voss · Maritime Supply Chain",
+        "Nov 4, 2026",
+        "Logistic Waves Today",
+        "Logistic Waves Today",
+        "21 min watch",
+        "#0084ff",
+        "/static/images/fw_today_6.jpg",
+        1,
+        "21:00 min",
+        "Elina Voss",
+    ),
+]
+
+
+def _ensure_today_episodes(conn):
+    """Ensure Logistic Waves Today video episodes exist in articles table."""
+    has_today = conn.execute("SELECT 1 FROM articles WHERE is_today = 1 LIMIT 1").fetchone()
+    if has_today:
+        return
+    inserted = False
+    for ep in _TODAY_EPISODE_SEEDS:
+        if conn.execute("SELECT 1 FROM articles WHERE slug = ?", (ep[0],)).fetchone():
+            conn.execute("UPDATE articles SET is_today = 1 WHERE slug = ?", (ep[0],))
+            inserted = True
+            continue
+        conn.execute(
+            """INSERT INTO articles
+               (slug, title, excerpt, body, author, published, category, tag, read_time, accent, thumb, is_today, duration, guest)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            ep,
+        )
+        inserted = True
+    if inserted:
+        conn.commit()
+        if isinstance(conn, PgConn):
+            _sync_pg_sequences(conn)
+
+
 def _ensure_ops_schema_pg(conn):
     """Ensure Logistics Operations tables exist in PostgreSQL."""
     stmts = [
@@ -687,6 +811,7 @@ def init_db():
                 conn.commit()
             seed_workspace_demo_data(conn)
             _sanitize_legacy_placeholders(conn)
+            _ensure_today_episodes(conn)
             sync_company_open_jobs(conn)
         except Exception as ex:
             print(f"[db] Pg init warning: {ex}")
@@ -734,6 +859,7 @@ def init_db():
     conn.commit()
     seed_workspace_demo_data(conn)
     _sanitize_legacy_placeholders(conn)
+    _ensure_today_episodes(conn)
     sync_company_open_jobs(conn)
     conn.close()
 

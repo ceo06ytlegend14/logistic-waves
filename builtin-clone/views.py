@@ -723,7 +723,9 @@ def logistic_waves_today_section(conn):
     # Dynamically fetch from the backend database (articles with feature 'Logistic Waves Today' or is_today=1)
     db_episodes = conn.execute(
         """SELECT * FROM articles 
-           WHERE is_today = 1 OR tag = 'Logistic Waves Today' OR category = 'Logistic Waves Today'
+           WHERE is_today = 1
+              OR tag IN ('Logistic Waves Today', 'Logistic Wave Today')
+              OR category IN ('Logistic Waves Today', 'Logistic Wave Today')
            ORDER BY id DESC LIMIT 12"""
     ).fetchall()
 
@@ -2719,7 +2721,9 @@ def articles_page(conn, user, q="", category="", tag="", featured=None):
 
     today_articles = conn.execute(
         """SELECT id, slug, title, excerpt, author, published, category, tag, read_time, accent, thumb, is_today, duration, guest FROM articles 
-           WHERE is_today = 1 OR tag = 'Logistic Waves Today' OR category = 'Logistic Waves Today'
+           WHERE is_today = 1
+              OR tag IN ('Logistic Waves Today', 'Logistic Wave Today')
+              OR category IN ('Logistic Waves Today', 'Logistic Wave Today')
            ORDER BY id DESC LIMIT 12"""
     ).fetchall()
 
