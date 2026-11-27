@@ -284,7 +284,10 @@ class PgCursor:
         self.lastrowid = None
 
     def execute(self, sql, params=None):
-        pg_sql = sql.replace("?", "%s")
+        if params:
+            pg_sql = sql.replace("%", "%%").replace("?", "%s")
+        else:
+            pg_sql = sql
         # PostgreSQL LIKE is case-sensitive whereas SQLite LIKE is case-insensitive
         pg_sql = re.sub(r"\bLIKE\b", "ILIKE", pg_sql, flags=re.I)
         if "INSERT OR IGNORE INTO" in pg_sql.upper():
