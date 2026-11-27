@@ -501,7 +501,7 @@ def layout(title, body, user=None, active="", description="", page_class="", ext
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/styles.css?v=20261126_blue_smoke">
+  <link rel="stylesheet" href="/static/styles.css?v=20261127_wttj_companies">
   <link rel="stylesheet" href="/static/home-recreation.css?v=20261126_apple2">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   {extra_head}
@@ -947,34 +947,118 @@ def home_page(conn, user):
           </div>
         </a>''')
 
-    # Company Directory Rows
+    # Welcome-to-the-Jungle Style Company Showcase Cards
+    followed_ids = db.followed_company_ids(conn, user["id"]) if user else set()
+    tech_covers = [
+        "/static/images/arch_office_team.jpg",
+        "/static/images/arch_glass_office.jpg",
+        "/static/images/arch_modern_2.jpg",
+        "/static/images/glass_arch_2.jpg",
+        "/static/images/glass_tower_1.jpg",
+        "/static/images/arch_glass_tower.jpg",
+    ]
+    maritime_covers = [
+        "/static/images/port_logistics_1.jpg",
+        "/static/images/port_logistics_2.jpg",
+        "/static/images/port_logistics_3.jpg",
+        "/static/images/arch_glass_tower.jpg",
+    ]
+    cat_rules = [
+        ("maritime", ("logistics", "maritime", "port", "freight", "supply chain", "ocean")),
+        ("ai", ("artificial intelligence", "machine learning")),
+        ("cloud", ("cloud",)),
+        ("fintech", ("fintech", "financial", "payments")),
+        ("security", ("security", "cybersecurity")),
+        ("media", ("design", "media", "music", "gaming")),
+    ]
+
+    def _emp_range_label(emp):
+        if not emp:
+            return "250 to 2,000 employees"
+        if emp > 2000:
+            return "> 2,000 employees"
+        if emp >= 250:
+            return "250 to 2,000 employees"
+        if emp >= 50:
+            return "50 to 250 employees"
+        if emp >= 15:
+            return "15 to 50 employees"
+        return "< 15 employees"
+
     dir_rows_html = []
-    for comp in dir_companies:
+    for idx, comp in enumerate(dir_companies):
         c_slug = comp["slug"]
         c_name = comp["name"]
-        logo_markup = _brand_logo_markup(c_slug, c_name, initials=comp.get("initials") or "CO", color=comp.get("color") or "#003366")
-
-        tags = [x.strip() for x in (comp.get("industries") or "Technology,Cloud,Enterprise").split(",") if x.strip()]
-        tags_markup = "".join(f'<span class="dir-tag-pill">{e(t)}</span>' for t in tags[:3])
+        cid = comp["id"]
+        logo_markup = _brand_logo_markup(
+            c_slug, c_name,
+            initials=comp.get("initials") or "CO",
+            color=comp.get("color") or "#003366",
+            size=72,
+        )
+        badge_cls = "wttj-logo-badge has-svg" if "<img " in logo_markup else "wttj-logo-badge"
+        raw_ind = (comp.get("industries") or "").strip()
+        ind_text = ", ".join(x.strip() for x in raw_ind.split(",") if x.strip()) or "Logistics & Technology"
+        ind_lower = raw_ind.lower()
+        cat_tokens = ["all"] + [k for k, words in cat_rules if any(w in ind_lower for w in words)]
+        is_maritime = "maritime" in cat_tokens
+        cover_url = maritime_covers[idx % len(maritime_covers)] if is_maritime else tech_covers[idx % len(tech_covers)]
+        loc_text = (comp.get("location") or "Global / Remote").strip()
+        emp_text = _emp_range_label(comp.get("employees"))
+        open_n = comp.get("open_jobs") or 0
+        jobs_text = f"{open_n} open role{'s' if open_n != 1 else ''}" if open_n > 0 else "Open applications"
+        is_fol = cid in followed_ids
 
         dir_rows_html.append(f'''
-        <a href="/company/{e(c_slug)}" class="dir-company-row" data-name="{e(c_name.lower())}" data-loc="{e((comp.get('location') or '').lower())}" data-tags="{e((comp.get('industries') or '').lower())}">
-          <div class="dir-company-left">
-            <div class="dir-logo-box">{logo_markup}</div>
-            <div>
-              <div class="dir-comp-name">
-                <span>{e(c_name)}</span>
-                <i class="fa-solid fa-circle-check" style="font-size: 12px; color: var(--blue);"></i>
+        <article class="wttj-card" data-cats="{e(' '.join(cat_tokens))}">
+          <a href="/company/{e(c_slug)}" class="wttj-cover-link">
+            <img src="{cover_url}" alt="{e(c_name)} workplace" class="wttj-cover-img" width="900" height="600" loading="lazy" decoding="async">
+          </a>
+          <a href="/company/{e(c_slug)}" class="{badge_cls}" aria-label="{e(c_name)}">
+            {logo_markup}
+          </a>
+          <div class="wttj-card-body">
+            <h3 class="wttj-name">
+              <a href="/company/{e(c_slug)}">{e(c_name)}</a>
+            </h3>
+            <div class="wttj-meta-list">
+              <div class="wttj-meta-row" title="{e(ind_text)}">
+                <i class="fa-solid fa-tag" aria-hidden="true"></i>
+                <span>{e(ind_text)}</span>
               </div>
-              <div class="dir-comp-tagline">{e(comp.get('tagline') or f'{c_name} — High Growth Innovation')}</div>
-              <div class="dir-comp-tags">{tags_markup}</div>
+              <div class="wttj-meta-row" title="{e(loc_text)}">
+                <i class="fa-solid fa-location-dot" aria-hidden="true"></i>
+                <span>{e(loc_text)}</span>
+              </div>
+              <div class="wttj-meta-row">
+                <i class="fa-solid fa-user-group" aria-hidden="true"></i>
+                <span>{e(emp_text)}</span>
+              </div>
+            </div>
+            <div class="wttj-footer">
+              <a href="/company/{e(c_slug)}/jobs" class="wttj-jobs-link">{e(jobs_text)}</a>
+              <button type="button" class="wttj-follow-btn li-btn follow-btn{' followed' if is_fol else ''}" data-company-id="{cid}" aria-pressed="{'true' if is_fol else 'false'}">
+                <span>{'Following' if is_fol else 'Follow'}</span>
+              </button>
             </div>
           </div>
-          <div class="dir-company-right">
-            <span class="dir-jobs-badge">{comp.get('open_jobs') or 12} open roles</span>
-            <span class="dir-view-btn">View Company &rarr;</span>
-          </div>
-        </a>''')
+        </article>''')
+
+    wttj_tabs = [
+        ("all", "Discover"),
+        ("maritime", "Logistics & Maritime"),
+        ("ai", "Artificial Intelligence"),
+        ("cloud", "Cloud"),
+        ("fintech", "Fintech"),
+        ("security", "Cybersecurity"),
+        ("media", "Design & Media"),
+    ]
+    wttj_tabs_html = "".join(
+        f'<button type="button" class="wttj-tab{" active" if i == 0 else ""}" role="tab" '
+        f'aria-selected="{"true" if i == 0 else "false"}" '
+        f'onclick="filterWttjCompanies(\'{k}\', this)">{e(label)}</button>'
+        for i, (k, label) in enumerate(wttj_tabs)
+    )
 
     # Latest Opportunities Cards
     opp_cards_html = []
@@ -1157,102 +1241,27 @@ def home_page(conn, user):
       </div>
     </section>
 
-    <!-- 4. Split Company Directory & Featured Poster -->
-    <section class="home-split-directory-section" id="companies-directory">
+    <!-- 4. Company Showcase Carousel (Category Tabs + Cover Cards) -->
+    <section class="home-companies-wttj" id="companies-directory">
       <div class="container">
-        <div class="split-dir-grid">
-          
-          <!-- Left: Featured Logistics Employer Showcase Card -->
-          <div class="poster-card-wrap lw-poster-showcase">
-            <div class="lw-poster-bg-wrap">
-              <img src="/static/images/poster_glass_hq.jpg" alt="Top Logistics Companies" class="lw-poster-bg-img" width="640" height="960" loading="lazy" decoding="async">
-              <div class="lw-poster-gradient-overlay"></div>
-            </div>
-            <div class="lw-poster-content">
-              <div class="lw-poster-top">
-                <div class="lw-poster-top-badge">
-                  <i class="fa-solid fa-briefcase"></i>
-                  <span>Grow Your Career</span>
-                </div>
-                <div class="lw-poster-brand-logo">
-                  <span class="lw-poster-emblem-wrap">
-                    <img src="/static/images/logo_emblem.png" alt="Logistics Waves" width="28" height="30" loading="lazy" decoding="async">
-                  </span>
-                  <span class="lw-poster-brand-text">LOGISTICS WAVES</span>
-                </div>
-              </div>
-
-              <div class="lw-poster-middle">
-                <h3 class="lw-poster-title">
-                  Top Companies<br>Are Hiring
-                </h3>
-                <p class="lw-poster-subtitle">
-                  Join leading maritime, supply chain &amp; global forwarding organizations across Vietnam &amp; Asia.
-                </p>
-                <a href="/companies" class="lw-poster-cta-btn">
-                  <span>Explore Opportunities</span>
-                  <i class="fa-solid fa-arrow-right"></i>
-                </a>
-              </div>
-
-              <div class="lw-poster-social-proof">
-                <div class="lw-poster-avatars">
-                  <img src="/static/images/avatars/user1.jpg" alt="Professional" class="lw-poster-avatar" width="32" height="32" loading="lazy" decoding="async" data-fallback-kind="avatar">
-                  <img src="/static/images/avatars/user2.jpg" alt="Professional" class="lw-poster-avatar" width="32" height="32" loading="lazy" decoding="async" data-fallback-kind="avatar">
-                  <img src="/static/images/avatars/user3.jpg" alt="Professional" class="lw-poster-avatar" width="32" height="32" loading="lazy" decoding="async" data-fallback-kind="avatar">
-                  <img src="/static/images/avatars/user4.jpg" alt="Professional" class="lw-poster-avatar" width="32" height="32" loading="lazy" decoding="async" data-fallback-kind="avatar">
-                  <span class="lw-poster-count-pill">+{c['jobs']}</span>
-                </div>
-                <div class="lw-poster-proof-text">Open roles across {c['companies']} active employers</div>
-              </div>
-            </div>
+        <div class="wttj-tabs-wrap">
+          <div class="wttj-tabs" role="tablist" aria-label="Filter companies by sector">
+            {wttj_tabs_html}
           </div>
-
-          <!-- Right: Directory List with Filter -->
-          <div class="dir-content-wrap">
-            <div class="dir-header-row">
-              <div class="dir-header-title-box">
-                <div class="dir-header-icon"><i class="fa-solid fa-landmark"></i></div>
-                <div>
-                  <div style="display:flex; align-items:center; gap:8px;">
-                    <h3 class="dir-title">Company Directory</h3>
-                    <span class="dir-count-pill">{len(dir_companies)} companies</span>
-                  </div>
-                  <p class="dir-subtitle">Discover top companies and explore career opportunities worldwide.</p>
-                </div>
-              </div>
-              <a href="/alerts" class="subnav-explore-btn">
-                <i class="fa-solid fa-bell"></i> Get Job Alerts &rarr;
-              </a>
-            </div>
-
-            <!-- Instant Search Bar -->
-            <div class="dir-search-bar">
-              <div class="dir-input-wrap">
-                <i class="fa-solid fa-magnifying-glass dir-search-icon"></i>
-                <input type="text" id="dir-company-filter" placeholder="Search companies by name, tag, or location..." oninput="filterHomeCompanies(this.value);" aria-label="Search companies">
-              </div>
-              <a href="/companies" class="subnav-explore-btn">Browse All {c['companies']} Companies &rarr;</a>
-            </div>
-
-            <!-- Companies List (Scrollable) -->
-            <div class="dir-companies-list" id="home-dir-list">
-              {"".join(dir_rows_html)}
-            </div>
-
-            <div id="dir-empty-state" style="display:none; padding:32px 16px; text-align:center; color:#64748b; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:8px; margin-top:8px;">
-              <i class="fa-solid fa-building" style="font-size:24px; margin-bottom:8px; opacity:0.5; display:block;"></i>
-              <p style="margin:0; font-size:13px; font-weight:600;">No companies match your search</p>
-              <p style="margin:4px 0 0; font-size:12px;">Try searching for another keyword, industry, or location.</p>
-            </div>
-
-            <!-- Scroll Indicator Footer -->
-            <div class="dir-scroll-hint">
-              <span><i class="fa-solid fa-arrows-up-down" style="margin-right:5px; color:var(--blue, #244fe7);"></i> Scroll to explore all companies</span>
-              <span id="dir-visible-count">Showing {len(dir_companies)} companies</span>
-            </div>
+        </div>
+        <div class="wttj-carousel-shell">
+          <button type="button" class="wttj-nav-btn wttj-nav-prev is-hidden" id="wttjPrevBtn" onclick="scrollWttjCarousel(-1);" aria-label="Previous companies">
+            <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
+          </button>
+          <div class="wttj-carousel-track" id="wttj-track" onscroll="updateWttjNav();">
+            {"".join(dir_rows_html)}
           </div>
-
+          <button type="button" class="wttj-nav-btn wttj-nav-next" id="wttjNextBtn" onclick="scrollWttjCarousel(1);" aria-label="Next companies">
+            <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+          </button>
+        </div>
+        <div class="wttj-section-foot">
+          <a href="/companies" class="wttj-all-link">Explore all {c['companies']} companies &rarr;</a>
         </div>
       </div>
     </section>
@@ -1278,33 +1287,47 @@ def home_page(conn, user):
     </section>
 
     <script>
-      function filterHomeCompanies(val) {{
-        val = val.trim().toLowerCase();
-        const list = document.getElementById('home-dir-list');
-        const rows = list ? list.querySelectorAll('.dir-company-row') : [];
-        let matched = 0;
-        rows.forEach(r => {{
-          const name = r.getAttribute('data-name') || '';
-          const loc = r.getAttribute('data-loc') || '';
-          const tags = r.getAttribute('data-tags') || '';
-          if (!val || name.includes(val) || loc.includes(val) || tags.includes(val)) {{
-            r.style.display = 'flex';
-            matched++;
-          }} else {{
-            r.style.display = 'none';
-          }}
+      function filterWttjCompanies(cat, btn) {{
+        document.querySelectorAll('.wttj-tab').forEach(t => {{
+          t.classList.remove('active');
+          t.setAttribute('aria-selected', 'false');
         }});
-        if (list) {{
-          list.scrollTop = 0;
+        if (btn) {{
+          btn.classList.add('active');
+          btn.setAttribute('aria-selected', 'true');
         }}
-        const countEl = document.getElementById('dir-visible-count');
-        if (countEl) {{
-          countEl.textContent = val ? `Showing ${{matched}} matching companies` : `Showing ${{rows.length}} companies`;
+        const track = document.getElementById('wttj-track');
+        if (!track) return;
+        track.querySelectorAll('.wttj-card').forEach(card => {{
+          const cats = (card.getAttribute('data-cats') || '').split(/\\s+/);
+          card.style.display = (cat === 'all' || cats.includes(cat)) ? 'flex' : 'none';
+        }});
+        track.scrollTo({{ left: 0, behavior: 'auto' }});
+        updateWttjNav();
+      }}
+
+      function updateWttjNav() {{
+        const track = document.getElementById('wttj-track');
+        const prev = document.getElementById('wttjPrevBtn');
+        const next = document.getElementById('wttjNextBtn');
+        if (!track) return;
+        const maxScroll = track.scrollWidth - track.clientWidth;
+        if (prev) prev.classList.toggle('is-hidden', track.scrollLeft <= 8);
+        if (next) next.classList.toggle('is-hidden', maxScroll <= 8 || track.scrollLeft >= maxScroll - 8);
+      }}
+
+      function scrollWttjCarousel(dir) {{
+        const track = document.getElementById('wttj-track');
+        if (track) {{
+          track.scrollBy({{ left: dir * 350, behavior: 'smooth' }});
+          setTimeout(updateWttjNav, 320);
         }}
-        const emptyState = document.getElementById('dir-empty-state');
-        if (emptyState) {{
-          emptyState.style.display = (matched === 0) ? 'block' : 'none';
-        }}
+      }}
+      window.addEventListener('resize', updateWttjNav);
+      if (document.readyState === 'loading') {{
+        document.addEventListener('DOMContentLoaded', updateWttjNav);
+      }} else {{
+        updateWttjNav();
       }}
 
       function scrollOppTrack(dir) {{
@@ -1871,7 +1894,7 @@ def job_detail_page(conn, user, job, similar):
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..800&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="/static/styles.css?v=20261126_blue_smoke">
+  <link rel="stylesheet" href="/static/styles.css?v=20261127_wttj_companies">
   <link rel="stylesheet" href="/static/home-recreation.css?v=20261126_apple2">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link rel="stylesheet" href="/static/thesandbox-css/builtin-theme.css">
@@ -2654,6 +2677,32 @@ def articles_page(conn, user, q="", category="", tag="", featured=None):
                 hub_content = f.read()
         except Exception as ex:
             hub_content = f"<!-- Error loading editorial hub: {ex} -->"
+
+    latest_editorial = conn.execute(
+        """SELECT id, slug, title, category, tag, thumb, accent FROM articles
+           WHERE COALESCE(is_today, 0) = 0
+           ORDER BY id DESC LIMIT 4"""
+    ).fetchall()
+    if latest_editorial and '<div class="nav-cards">' in hub_content:
+        nav_cards_html = []
+        for idx, r in enumerate(latest_editorial):
+            a = dict(r)
+            slug = a.get("slug") or f"article-{a['id']}"
+            title = a.get("title") or "Editorial Briefing"
+            cat = a.get("category") or a.get("tag") or "Logistics"
+            thumb = _article_cover_url(a, idx)
+            nav_cards_html.append(f'''<article class="card">
+<a class="card-media" href="/articles/{e(slug)}"><img alt="{e(title)}" src="{e(thumb)}" decoding="async" width="674" height="368" loading="lazy"/></a>
+<span class="cat">{e(cat)}</span>
+<h3><a href="/articles/{e(slug)}">{e(title)}</a></h3>
+</article>''')
+        hub_content = re.sub(
+            r'<div class="nav-cards">.*?</div>',
+            '<div class="nav-cards">\n' + "\n".join(nav_cards_html) + '\n</div>',
+            hub_content,
+            count=1,
+            flags=re.DOTALL,
+        )
 
     today_articles = conn.execute(
         """SELECT id, slug, title, excerpt, author, published, category, tag, read_time, accent, thumb, is_today, duration, guest FROM articles 
@@ -4651,7 +4700,7 @@ def profile_page(conn, user, stats, message=""):
     return layout("Your Profile", body, user, description="Manage your account profile.")
 
 
-def employers_page(conn, user, employer_jobs=None, message="", error=""):
+def employers_page(conn, user, employer_jobs=None, message="", error="", applicants=None):
     if not user:
         body = f'''
         <section class="page-hero employers-hero"><div class="container">{breadcrumb([("Home", "/"), ("For Employers", "")])}
@@ -4730,6 +4779,27 @@ def employers_page(conn, user, employer_jobs=None, message="", error=""):
       </div>
       <div class="content-card"><div class="card-head"><div><h2>Your job listings</h2><p>Edit details or archive a listing when hiring is complete.</p></div></div>
         <div class="employer-job-list">{rows}</div></div>'''
+    app_list = applicants or []
+    app_rows = "".join(
+        f'''<tr>
+          <td><strong>{e(a["candidate_name"])}</strong><div style="font-size:12px;color:#64748b;">{e(a["candidate_email"])}</div><div style="font-size:12px;color:#475569;">{e(a.get("candidate_headline") or "")}{" · " + e(a["candidate_location"]) if a.get("candidate_location") else ""}</div></td>
+          <td><a href="/job/{e(a["job_slug"])}/{a["job_id"]}" style="font-weight:600;color:#0071e3;text-decoration:none;">{e(a["job_title"])}</a><div style="font-size:12px;color:#64748b;">{e(a["company_name"])}</div></td>
+          <td style="font-size:12.5px;color:#334155;max-width:260px;">{e(a.get("note") or "No cover note attached.")}</td>
+          <td style="font-size:12px;color:#64748b;white-space:nowrap;">{e((a.get("created_at") or "")[:10])}</td>
+          <td>
+            <form method="post" action="/employers/applications/status" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+              {csrf_input()}
+              <input type="hidden" name="id" value="{a["id"]}">
+              {select("status", ["Applied", "Reviewing", "Interview", "Offer", "Rejected"], a["status"], "", "")}
+              <button class="btn btn-outline btn-sm" type="submit">Update</button>
+            </form>
+          </td>
+        </tr>'''
+        for a in app_list
+    ) or '<tr><td colspan="5" style="text-align:center;color:#64748b;padding:20px;">No student applications yet. Once candidates apply to your posted jobs, they will appear here.</td></tr>'
+    content += f'''
+      <div class="content-card" id="applicants"><div class="card-head"><div><h2>Candidate Applicants &amp; CVs</h2><p>{len(app_list)} application{"s" if len(app_list) != 1 else ""} across your posted roles</p></div></div>
+        <div class="table-card"><table class="tracker-table"><thead><tr><th>Candidate</th><th>Role</th><th>Cover Note / CV</th><th>Applied</th><th>Status</th></tr></thead><tbody>{app_rows}</tbody></table></div></div>'''
     body = account_shell(user, "employer", "Employer workspace",
                          "Manage your open roles and reach great candidates.", content)
     return layout("Employer Portal", body, user, description="Post and manage jobs in the Logistic Waves employer portal.")
