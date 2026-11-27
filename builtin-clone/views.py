@@ -383,10 +383,10 @@ def header(user, active=""):
         )
 
     mobile_links = "".join([
-        nav_link("Companies", "/companies", "companies"),
+        nav_link("News", "/article-blogs", "articles"),
         nav_link("Jobs", "/jobs", "jobs"),
-        nav_link("Articles", "/article-blogs", "articles"),
-        nav_link("Courses", "/courses", "courses"),
+        nav_link("Companies", "/companies", "companies"),
+        nav_link("Learning", "/courses", "courses"),
         '<a class="nav-link" href="/salaries">Salaries</a>',
         '<a class="nav-link" href="/remote">Remote</a>',
         '<a class="nav-link" href="/awards">Best Places To Work</a>',
@@ -398,10 +398,10 @@ def header(user, active=""):
       <div class="container header-inner">
         {brand_logo()}
         <nav class="main-nav" aria-label="Primary">
-          {nav_link("Companies", "/companies", "companies")}
+          {nav_link("News", "/article-blogs", "articles")}
           {nav_link("Jobs", "/jobs", "jobs")}
-          {nav_link("Articles", "/article-blogs", "articles")}
-          {nav_link("Courses", "/courses", "courses")}
+          {nav_link("Companies", "/companies", "companies")}
+          {nav_link("Learning", "/courses", "courses")}
         </nav>
         <div class="header-actions">
           <button class="icon-btn search-trigger" type="button" aria-label="Open search">{icon("search", 22)}</button>
@@ -506,7 +506,7 @@ def layout(title, body, user=None, active="", description="", page_class="", ext
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/styles.css?v=20261127_thumb_lg">
+  <link rel="stylesheet" href="/static/styles.css?v=20261127_nav_learn">
   <link rel="stylesheet" href="/static/home-recreation.css?v=20261126_apple2">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   {extra_head}
@@ -1282,6 +1282,37 @@ def home_page(conn, user):
       </div>
     </section>
 
+    <!-- 6. Learning & Courses Section -->
+    <section class="home-learning-section">
+      <div class="container">
+        <div class="opp-header-row">
+          <div class="opp-header-left">
+            <span class="editorial-sec-title">LEARNING &amp; COURSES</span>
+            <span class="editorial-dot"></span>
+          </div>
+          <div class="opp-controls">
+            <a href="/courses" class="subnav-explore-btn">Explore All Courses &rarr;</a>
+          </div>
+        </div>
+        <div class="home-learning-grid">
+          {"".join(
+              f'''<a href="/courses?course={e(c['id'])}" class="home-learning-card">
+                <div class="home-learning-thumb-wrap">
+                  <img src="{e(c['thumb'])}" alt="{e(c['title'])}" width="320" height="180" loading="lazy" decoding="async">
+                  <span class="home-learning-duration">{e(c.get('duration') or '15m')}</span>
+                </div>
+                <div class="home-learning-body">
+                  <span class="article-kicker" style="font-size:10px;">{e((c.get('channel') or 'Academy').upper())}</span>
+                  <h3 class="home-learning-title">{e(c['title'])}</h3>
+                  <p class="home-learning-meta">{e(c.get('instructor') or 'Logistics Waves Academy')}</p>
+                </div>
+              </a>'''
+              for c in [item for grp in COURSE_LINES for item in grp["courses"]][:4]
+          )}
+        </div>
+      </div>
+    </section>
+
     <script>
       function filterHomeCompanies(val) {{
         val = val.trim().toLowerCase();
@@ -1876,7 +1907,7 @@ def job_detail_page(conn, user, job, similar):
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..800&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="/static/styles.css?v=20261127_thumb_lg">
+  <link rel="stylesheet" href="/static/styles.css?v=20261127_nav_learn">
   <link rel="stylesheet" href="/static/home-recreation.css?v=20261126_apple2">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link rel="stylesheet" href="/static/thesandbox-css/builtin-theme.css">
@@ -4656,7 +4687,7 @@ def profile_page(conn, user, stats, message=""):
     return layout("Your Profile", body, user, description="Manage your account profile.")
 
 
-def employers_page(conn, user, employer_jobs=None, message="", error=""):
+def employers_page(conn, user, employer_jobs=None, message="", error="", applicants=None):
     if not user:
         body = f'''
         <section class="page-hero employers-hero"><div class="container">{breadcrumb([("Home", "/"), ("For Employers", "")])}
@@ -4735,6 +4766,27 @@ def employers_page(conn, user, employer_jobs=None, message="", error=""):
       </div>
       <div class="content-card"><div class="card-head"><div><h2>Your job listings</h2><p>Edit details or archive a listing when hiring is complete.</p></div></div>
         <div class="employer-job-list">{rows}</div></div>'''
+    app_list = applicants or []
+    app_rows = "".join(
+        f'''<tr>
+          <td><strong>{e(a["candidate_name"])}</strong><div style="font-size:12px;color:#64748b;">{e(a["candidate_email"])}</div><div style="font-size:12px;color:#475569;">{e(a.get("candidate_headline") or "")}{" · " + e(a["candidate_location"]) if a.get("candidate_location") else ""}</div></td>
+          <td><a href="/job/{e(a["job_slug"])}/{a["job_id"]}" style="font-weight:600;color:#0071e3;text-decoration:none;">{e(a["job_title"])}</a><div style="font-size:12px;color:#64748b;">{e(a["company_name"])}</div></td>
+          <td style="font-size:12.5px;color:#334155;max-width:260px;">{e(a.get("note") or "No cover note attached.")}</td>
+          <td style="font-size:12px;color:#64748b;white-space:nowrap;">{e((a.get("created_at") or "")[:10])}</td>
+          <td>
+            <form method="post" action="/employers/applications/status" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+              {csrf_input()}
+              <input type="hidden" name="id" value="{a["id"]}">
+              {select("status", ["Applied", "Reviewing", "Interview", "Offer", "Rejected"], a["status"], "", "")}
+              <button class="btn btn-outline btn-sm" type="submit">Update</button>
+            </form>
+          </td>
+        </tr>'''
+        for a in app_list
+    ) or '<tr><td colspan="5" style="text-align:center;color:#64748b;padding:20px;">No student applications yet. Once candidates apply to your posted jobs, they will appear here.</td></tr>'
+    content += f'''
+      <div class="content-card" id="applicants"><div class="card-head"><div><h2>Candidate Applicants &amp; CVs</h2><p>{len(app_list)} application{"s" if len(app_list) != 1 else ""} across your posted roles</p></div></div>
+        <div class="table-card"><table class="tracker-table"><thead><tr><th>Candidate</th><th>Role</th><th>Cover Note / CV</th><th>Applied</th><th>Status</th></tr></thead><tbody>{app_rows}</tbody></table></div></div>'''
     body = account_shell(user, "employer", "Employer workspace",
                          "Manage your open roles and reach great candidates.", content)
     return layout("Employer Portal", body, user, description="Post and manage jobs in the Logistic Waves employer portal.")
