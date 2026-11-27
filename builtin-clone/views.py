@@ -2593,7 +2593,7 @@ def salary_detail_page(conn, user, salary, related_jobs):
 # ---------- articles ----------
 
 def articles_page(conn, user, q="", category="", tag="", featured=None):
-    extra_head = '''<link rel="stylesheet" href="/static/article.css?v=20261126_apple2">
+    extra_head = '''<link rel="stylesheet" href="/static/article.css?v=20261127_uniform">
     <style>
       #view-article {
         display: block !important;
@@ -2602,10 +2602,30 @@ def articles_page(conn, user, q="", category="", tag="", featured=None):
         min-height: 100vh !important;
         padding: 0 0 60px 0 !important;
       }
-      #view-article .container {
-        width: min(1426px, 96%) !important;
-        max-width: 1426px !important;
+      #view-article .container,
+      #view-article .editorial-carousels-container {
+        width: 100% !important;
+        max-width: 1200px !important;
+        padding-left: 20px !important;
+        padding-right: 20px !important;
         margin: 0 auto !important;
+        box-sizing: border-box !important;
+      }
+      #view-article .video-card {
+        flex: 0 0 calc((100% - 66px) / 4) !important;
+        width: calc((100% - 66px) / 4) !important;
+      }
+      @media (max-width: 900px) {
+        #view-article .video-card {
+          flex: 0 0 calc((100% - 22px) / 2) !important;
+          width: calc((100% - 22px) / 2) !important;
+        }
+      }
+      @media (max-width: 560px) {
+        #view-article .video-card {
+          flex: 0 0 82vw !important;
+          width: 82vw !important;
+        }
       }
       .lw-db-card:hover {
         transform: translateY(-2px);
