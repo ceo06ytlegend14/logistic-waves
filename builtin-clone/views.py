@@ -1108,45 +1108,56 @@ def home_page(conn, user):
           </div>
         </article>''')
 
+    site = db.get_site_settings(conn)
+    hero_imgs = site.get("hero_images_list") or [
+        "/static/images/login_concept_hero_bg.jpg",
+        "/static/images/cargo_ship_hero.jpg",
+        "/static/images/editorial/hub_02.jpg",
+        "/static/images/editorial/hub_03.jpg",
+    ]
+    hero_slides_html = "".join(
+        f'<div class="hero-bg-slide{" active" if i == 0 else ""}" style="background-image: url(\'{e(img_url)}\');"></div>'
+        for i, img_url in enumerate(hero_imgs)
+    )
+    hero_dots_html = "".join(
+        f'<button type="button" class="hero-slide-dot{" active" if i == 0 else ""}" data-slide="{i}" aria-label="Slide {i + 1}"></button>'
+        for i in range(len(hero_imgs))
+    )
+    hero_interval_ms = site.get("hero_interval_ms", 10000)
+
     body = f"""
     <!-- 1. Enterprise Hero: Insights for Smarter Logistics (HD Photographic Smoke-White Master Composition) -->
     <section class="lw-hero-banner-section smoke-white-hero">
       <div class="hero-shell">
         <div class="hero-photo-hd" id="heroSlideContainer" aria-hidden="true">
-          <div class="hero-bg-slide active" style="background-image: url('/static/images/login_concept_hero_bg.jpg');"></div>
-          <div class="hero-bg-slide" style="background-image: url('/static/images/cargo_ship_hero.jpg');"></div>
-          <div class="hero-bg-slide" style="background-image: url('/static/images/editorial/hub_02.jpg');"></div>
-          <div class="hero-bg-slide" style="background-image: url('/static/images/editorial/hub_03.jpg');"></div>
+          {hero_slides_html}
         </div>
         <div class="hero-smoke-overlay" aria-hidden="true"></div>
 
         <div class="hero-inner-wrap">
           <div class="hero-content">
             <h1 class="hero-headline-smoke">
-              Insights for<br>
-              <span class="hero-hl-blue">Smarter</span> Logistics
+              {e(site.get("hero_title_prefix") or "Insights for")}<br>
+              <span class="hero-hl-blue">{e(site.get("hero_title_highlight") or "Smarter")}</span> {e(site.get("hero_title_suffix") or "Logistics")}
             </h1>
             
             <p class="hero-subtitle-smoke">
-              Industry briefings, supply chain intelligence, and active career opportunities across logistics and technology.
+              {e(site.get("hero_subtitle") or "Industry briefings, supply chain intelligence, and active career opportunities across logistics and technology.")}
             </p>
             
             <div class="hero-actions">
-              <a class="hero-btn-primary" href="/article-blogs">
-                Explore Insights
+              <a class="hero-btn-primary" href="{e(site.get("hero_primary_href") or "/article-blogs")}">
+                {e(site.get("hero_primary_label") or "Explore Insights")}
               </a>
               <a class="hero-btn-secondary" href="#overview" onclick="openFwtModal(0); return false;" aria-label="Watch Overview Video">
-                Watch Overview
+                {e(site.get("hero_secondary_label") or "Watch Overview")}
               </a>
             </div>
           </div>
         </div>
 
         <div class="hero-slide-dots" aria-label="Hero banner slides">
-          <button type="button" class="hero-slide-dot active" data-slide="0" aria-label="Slide 1"></button>
-          <button type="button" class="hero-slide-dot" data-slide="1" aria-label="Slide 2"></button>
-          <button type="button" class="hero-slide-dot" data-slide="2" aria-label="Slide 3"></button>
-          <button type="button" class="hero-slide-dot" data-slide="3" aria-label="Slide 4"></button>
+          {hero_dots_html}
         </div>
       </div>
     </section>
@@ -1164,7 +1175,7 @@ def home_page(conn, user):
         }}
         function resetTimer() {{
           if (timer) clearInterval(timer);
-          timer = setInterval(() => showSlide(idx + 1), 10000);
+          timer = setInterval(() => showSlide(idx + 1), {hero_interval_ms});
         }}
         dots.forEach((d, i) => d.addEventListener('click', () => {{ showSlide(i); resetTimer(); }}));
         resetTimer();
@@ -1172,7 +1183,7 @@ def home_page(conn, user):
     </script>"""
 
     editorial_articles = db.cached_query(
-        "home_editorial_v2",
+        "home_editorial_v3",
         60,
         lambda: [db.as_dict(r) for r in conn.execute(
             """SELECT * FROM articles
@@ -1184,7 +1195,17 @@ def home_page(conn, user):
 
     if editorial_articles:
         lead_art = editorial_articles[0]
-        stacked_arts = editorial_articles[1:3]
+        _feat_rows = [
+            db.as_dict(r) for r in conn.execute(
+                "SELECT * FROM articles WHERE slug IN ('federal-guidance-carrier-selection-tia', '230-immigrants-cdl-crackdown')"
+            ).fetchall()
+        ]
+        _feat_map = {r["slug"]: r for r in _feat_rows}
+        stacked_arts = [
+            _feat_map[s] for s in ("federal-guidance-carrier-selection-tia", "230-immigrants-cdl-crackdown") if s in _feat_map
+        ]
+        if len(stacked_arts) < 2:
+            stacked_arts = editorial_articles[1:3]
         recent_arts = editorial_articles[:5]
         stacked_html = "".join(f'''
                 <article class="stacked-story">
@@ -3696,9 +3717,39 @@ for line in COURSE_LINES:
 
 
 def courses_page(conn, user, f=None):
+    db_courses = db.list_courses(conn)
+    if db_courses:
+        grouped = {}
+        lookup = {}
+        for row in db_courses:
+            cid = row.get("slug") or f"course-{row['id']}"
+            ch = row.get("channel") or "Logistics Waves Academy"
+            item = {
+                "id": cid,
+                "title": row["title"],
+                "date": row.get("published_date") or "Nov 2026",
+                "duration": row.get("duration") or "25m",
+                "thumb": row.get("thumb") or "/static/images/fw_today_1.svg",
+                "desc": row.get("description") or "",
+                "link_text": "Read more...",
+                "channel": ch,
+                "instructor": row.get("instructor") or "Logistics Waves Faculty",
+                "avatar": "/static/images/expert_david.png",
+                "chapters": row.get("chapters") or [],
+            }
+            lookup[cid] = item
+            grouped.setdefault(ch, []).append(item)
+        active_lines = [
+            {"id": f"line-{i+1}", "title": ch, "courses": items}
+            for i, (ch, items) in enumerate(grouped.items())
+        ]
+    else:
+        active_lines = COURSE_LINES
+        lookup = ALL_COURSES
+
     # Render lines of course lessons matching the Logistic Wave / simple carousel look
     lines_html = []
-    for line in COURSE_LINES:
+    for line in active_lines:
         line_id = line["id"]
         cards_html = []
         for c in line["courses"]:
@@ -3749,7 +3800,7 @@ def courses_page(conn, user, f=None):
         ''')
 
     all_lines_html = "".join(lines_html)
-    courses_lookup_json = json.dumps(ALL_COURSES)
+    courses_lookup_json = json.dumps(lookup)
 
     body = f'''
     <div class="course-simple-page">

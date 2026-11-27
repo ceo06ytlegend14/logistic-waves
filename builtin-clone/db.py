@@ -154,6 +154,25 @@ CREATE TABLE IF NOT EXISTS demo_seed_state (
   key TEXT PRIMARY KEY,
   created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS site_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at TEXT
+);
+CREATE TABLE IF NOT EXISTS courses (
+  id INTEGER PRIMARY KEY,
+  slug TEXT UNIQUE NOT NULL,
+  title TEXT NOT NULL,
+  channel TEXT,
+  instructor TEXT,
+  duration TEXT,
+  published_date TEXT,
+  thumb TEXT,
+  description TEXT,
+  chapters_json TEXT,
+  status TEXT DEFAULT 'active',
+  created_at TEXT
+);
 CREATE TABLE IF NOT EXISTS rate_limits (
   rl_key TEXT NOT NULL,
   ts BIGINT NOT NULL
@@ -277,7 +296,7 @@ class PgCursor:
         has_returning = "RETURNING" in pg_sql.upper()
 
         if is_insert and not has_returning:
-            target_tables = ("users", "alerts", "applications", "subscribers", "jobs", "companies", "articles", "salaries", "branches", "drivers", "orders", "parcels", "parcel_events", "transactions")
+            target_tables = ("users", "alerts", "applications", "subscribers", "jobs", "companies", "articles", "salaries", "branches", "drivers", "orders", "parcels", "parcel_events", "transactions", "courses")
             for tbl in target_tables:
                 if f"into {tbl}" in pg_sql.lower() or f"into \"{tbl}\"" in pg_sql.lower():
                     pg_sql = pg_sql.rstrip().rstrip(";") + " RETURNING id"
@@ -1959,3 +1978,142 @@ def ops_stats(conn):
         "revenue_vnd": conn.execute("SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE type='Shipping Fee'").fetchone()[0],
         "cod_vnd": conn.execute("SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE type='COD Collection'").fetchone()[0],
     }
+
+
+# ---------- Site Settings & Courses CMS ----------
+
+DEFAULT_SITE_SETTINGS = {
+    "hero_title_prefix": "Insights for",
+    "hero_title_highlight": "Smarter",
+    "hero_title_suffix": "Logistics",
+    "hero_subtitle": "Industry briefings, supply chain intelligence, and active career opportunities across logistics and technology.",
+    "hero_primary_label": "Explore Insights",
+    "hero_primary_href": "/article-blogs",
+    "hero_secondary_label": "Watch Overview",
+    "hero_images": json.dumps([
+        "/static/images/login_concept_hero_bg.jpg",
+        "/static/images/cargo_ship_hero.jpg",
+        "/static/images/editorial/hub_02.jpg",
+        "/static/images/editorial/hub_03.jpg",
+    ]),
+    "hero_interval_sec": "10",
+    "promo_ticker_text": "",
+    "promo_ticker_href": "/jobs",
+    "footer_tagline": "Connecting top talent with leaders in shipping, multimodal logistics, supply chain tech, and global commerce.",
+}
+
+
+def get_site_settings(conn):
+    def _load():
+        merged = dict(DEFAULT_SITE_SETTINGS)
+        try:
+            rows = conn.execute("SELECT key, value FROM site_settings").fetchall()
+            for r in rows:
+                merged[r["key"]] = r["value"]
+        except Exception:
+            pass
+        try:
+            imgs = json.loads(merged.get("hero_images") or "[]")
+            if not isinstance(imgs, list) or not imgs:
+                imgs = json.loads(DEFAULT_SITE_SETTINGS["hero_images"])
+        except Exception:
+            imgs = json.loads(DEFAULT_SITE_SETTINGS["hero_images"])
+        merged["hero_images_list"] = [str(u).strip() for u in imgs if str(u).strip()]
+        try:
+            sec = int(merged.get("hero_interval_sec") or 10)
+            merged["hero_interval_ms"] = max(3, min(60, sec)) * 1000
+        except Exception:
+            merged["hero_interval_ms"] = 10000
+        return merged
+
+    return cached_query("site_settings", 60, _load)
+
+
+def save_site_settings(conn, updates):
+    now = _now()
+    for key, val in updates.items():
+        if key not in DEFAULT_SITE_SETTINGS:
+            continue
+        conn.execute(
+            "INSERT INTO site_settings (key, value, updated_at) VALUES (?, ?, ?) "
+            "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at",
+            (key, str(val), now),
+        )
+    conn.commit()
+    invalidate_cache()
+
+
+def list_courses(conn, include_inactive=False):
+    def _load():
+        try:
+            sql = "SELECT * FROM courses" if include_inactive else "SELECT * FROM courses WHERE status='active'"
+            rows = conn.execute(sql + " ORDER BY id ASC").fetchall()
+            out = []
+            for r in rows:
+                d = dict(r)
+                try:
+                    d["chapters"] = json.loads(d.get("chapters_json") or "[]")
+                except Exception:
+                    d["chapters"] = []
+                out.append(d)
+            return out
+        except Exception:
+            return []
+
+    return cached_query(f"courses_{'all' if include_inactive else 'active'}", 60, _load)
+
+
+def create_course(conn, payload):
+    title = (payload.get("title") or "").strip()
+    if not title:
+        return None
+    slug_base = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:60] or "course"
+    slug = f"{slug_base}-{secrets.token_hex(2)}"
+    channel = (payload.get("channel") or "Logistics Waves Academy").strip()
+    instructor = (payload.get("instructor") or "Logistics Waves Faculty").strip()
+    duration = (payload.get("duration") or "25m").strip()
+    published_date = (payload.get("published_date") or "Nov 2026").strip()
+    thumb = (payload.get("thumb") or "/static/images/fw_today_1.svg").strip()
+    description = (payload.get("description") or "").strip()
+    chapters = payload.get("chapters_json") or json.dumps([
+        {"title": "1. Core Concepts & Operational Overview", "duration": "08:00"},
+        {"title": "2. Industry Case Study & Execution", "duration": "12:00"},
+    ])
+    cur = conn.execute(
+        """INSERT INTO courses (slug, title, channel, instructor, duration, published_date, thumb, description, chapters_json, status, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?)""",
+        (slug, title, channel, instructor, duration, published_date, thumb, description, chapters, _now()),
+    )
+    conn.commit()
+    invalidate_cache()
+    return cur.lastrowid
+
+
+def update_course(conn, course_id, payload):
+    title = (payload.get("title") or "").strip()
+    if not course_id or not title:
+        return False
+    conn.execute(
+        """UPDATE courses SET title=?, channel=?, instructor=?, duration=?, published_date=?, thumb=?, description=?, status=?
+           WHERE id=?""",
+        (
+            title,
+            (payload.get("channel") or "Logistics Waves Academy").strip(),
+            (payload.get("instructor") or "Logistics Waves Faculty").strip(),
+            (payload.get("duration") or "25m").strip(),
+            (payload.get("published_date") or "Nov 2026").strip(),
+            (payload.get("thumb") or "/static/images/fw_today_1.svg").strip(),
+            (payload.get("description") or "").strip(),
+            (payload.get("status") or "active").strip(),
+            course_id,
+        ),
+    )
+    conn.commit()
+    invalidate_cache()
+    return True
+
+
+def delete_course(conn, course_id):
+    conn.execute("DELETE FROM courses WHERE id=?", (course_id,))
+    conn.commit()
+    invalidate_cache()

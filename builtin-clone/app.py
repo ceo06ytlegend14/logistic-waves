@@ -143,6 +143,7 @@ POST_PAGE_PATHS = {
     "/admin/applications/delete", "/admin/applications/status",
     "/admin/subscribers/delete",
     "/admin/salaries/create", "/admin/salaries/update", "/admin/salaries/delete",
+    "/admin/settings/save", "/admin/courses/create", "/admin/courses/update", "/admin/courses/delete",
     "/api/newsletter", "/apply", "/saved/toggle", "/follow/toggle",
 }
 
@@ -955,6 +956,54 @@ def route(conn, method, path, query, payload, user, token, host, client_ip="", c
         conn.execute("DELETE FROM subscribers WHERE id=?", (sid,))
         conn.commit()
         return redirect("/admin?tab=subscribers&msg=" + urllib.parse.quote("Subscriber removed."))
+
+    # ---------- admin: site settings & hero CMS ----------
+    if path == "/admin/settings/save" and method == "POST":
+        raw_imgs = payload.get("hero_images_text", "")
+        img_list = [ln.strip() for ln in raw_imgs.splitlines() if ln.strip()]
+        # Also pick up individual hero_img_1..4 inputs if provided
+        slot_imgs = [
+            (payload.get(f"hero_img_{i}") or "").strip()
+            for i in range(1, 7)
+        ]
+        slot_imgs = [u for u in slot_imgs if u]
+        final_imgs = slot_imgs if slot_imgs else img_list
+        if not final_imgs:
+            final_imgs = json.loads(db.DEFAULT_SITE_SETTINGS["hero_images"])
+        updates = {
+            "hero_title_prefix": _clip(payload.get("hero_title_prefix", "Insights for"), 120),
+            "hero_title_highlight": _clip(payload.get("hero_title_highlight", "Smarter"), 120),
+            "hero_title_suffix": _clip(payload.get("hero_title_suffix", "Logistics"), 120),
+            "hero_subtitle": _clip(payload.get("hero_subtitle", ""), 600),
+            "hero_primary_label": _clip(payload.get("hero_primary_label", "Explore Insights"), 80),
+            "hero_primary_href": _clip(payload.get("hero_primary_href", "/article-blogs"), 200),
+            "hero_secondary_label": _clip(payload.get("hero_secondary_label", "Watch Overview"), 80),
+            "hero_images": json.dumps(final_imgs),
+            "hero_interval_sec": str(get_int(payload.get("hero_interval_sec", "10"), 10, low=3, high=60)),
+            "promo_ticker_text": _clip(payload.get("promo_ticker_text", ""), 300),
+            "promo_ticker_href": _clip(payload.get("promo_ticker_href", "/jobs"), 200),
+            "footer_tagline": _clip(payload.get("footer_tagline", ""), 400),
+        }
+        db.save_site_settings(conn, updates)
+        return redirect("/admin?tab=settings&msg=" + urllib.parse.quote("Live site settings & hero banner saved to database!"))
+
+    # ---------- admin: courses ----------
+    if path == "/admin/courses/create" and method == "POST":
+        cid = db.create_course(conn, payload)
+        if cid:
+            return redirect("/admin?tab=courses&msg=" + urllib.parse.quote("Course published to live site!"))
+        return redirect("/admin?tab=courses&err=" + urllib.parse.quote("Course title is required."))
+
+    if path == "/admin/courses/update" and method == "POST":
+        cid = get_int(payload.get("id", "0"), 0, low=0)
+        if db.update_course(conn, cid, payload):
+            return redirect("/admin?tab=courses&msg=" + urllib.parse.quote("Course updated!"))
+        return redirect("/admin?tab=courses&err=" + urllib.parse.quote("Course ID and title are required."))
+
+    if path == "/admin/courses/delete" and method == "POST":
+        cid = get_int(payload.get("id", "0"), 0, low=0)
+        db.delete_course(conn, cid)
+        return redirect("/admin?tab=courses&msg=" + urllib.parse.quote("Course deleted."))
 
     # ---------- admin: salaries ----------
     if path == "/admin/salaries/create" and method == "POST":
