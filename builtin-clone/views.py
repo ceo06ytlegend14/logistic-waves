@@ -383,6 +383,7 @@ def header(user, active=""):
         )
 
     mobile_links = "".join([
+        nav_link("Home", "/", "home"),
         nav_link("Companies", "/companies", "companies"),
         nav_link("Jobs", "/jobs", "jobs"),
         nav_link("Articles", "/article-blogs", "articles"),
@@ -398,6 +399,7 @@ def header(user, active=""):
       <div class="container header-inner">
         {brand_logo()}
         <nav class="main-nav" aria-label="Primary">
+          {nav_link("Home", "/", "home")}
           {nav_link("Companies", "/companies", "companies")}
           {nav_link("Jobs", "/jobs", "jobs")}
           {nav_link("Articles", "/article-blogs", "articles")}
@@ -1138,7 +1140,7 @@ def home_page(conn, user):
     </section>"""
 
     editorial_articles = db.cached_query(
-        "home_editorial",
+        "home_editorial_v2",
         60,
         lambda: [db.as_dict(r) for r in conn.execute(
             """SELECT * FROM articles
@@ -3673,9 +3675,6 @@ def courses_page(conn, user, f=None):
             <article class="course-simple-card" onclick="openCourseModal(\'{cid}\');">
               <div class="course-simple-thumb">
                 <img src="{e(c["thumb"])}" alt="{e(c["title"])}" width="480" height="270" loading="lazy" decoding="async">
-                <div class="course-center-play">
-                  <i class="fa-solid fa-play"></i>
-                </div>
                 <button class="course-share-btn" type="button" onclick="event.stopPropagation(); shareCourse(\'{e(c["title"])}\');" title="Share lesson">
                   <i class="fa-solid fa-arrow-up-from-bracket"></i>
                 </button>
@@ -3934,7 +3933,7 @@ def courses_page(conn, user, f=None):
     </script>
     '''
 
-    extra_css = '<link rel="stylesheet" href="/static/courses.css?v=20261126_apple2">';
+    extra_css = '<link rel="stylesheet" href="/static/courses.css?v=20261127_no_play">';
     return layout("Engineering Courses & Masterclasses", body, user, active="courses", page_class="course-simple-page", description="Browse video courses and engineering lessons.", extra_head=extra_css)
 
 
