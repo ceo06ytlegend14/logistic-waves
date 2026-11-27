@@ -23,6 +23,7 @@ from datetime import datetime
 import db
 import seed
 import views
+import cloudinary_helper
 
 # ---------- CSRF protection (stateless HMAC-SHA256 for serverless compatibility) ----------
 def _resolve_csrf_secret() -> bytes:
@@ -133,7 +134,7 @@ mimetypes.add_type("image/svg+xml", ".svg")
 POST_PAGE_PATHS = {
     "/auth/login", "/auth/signup", "/logout", "/profile", "/alerts",
     "/alerts/delete", "/alerts/update", "/tracker/delete", "/employers/post-job",
-    "/employers/jobs/update", "/employers/jobs/archive",
+    "/employers/jobs/update", "/employers/jobs/archive", "/employers/applications/status",
     "/admin/seed", "/admin/videos/create", "/admin/articles/create",
     "/admin/articles/update", "/admin/articles/delete",
     "/admin/jobs/create", "/admin/jobs/update", "/admin/jobs/delete",
@@ -503,7 +504,7 @@ def route(conn, method, path, query, payload, user, token, host, client_ip="", c
     if path in (
         "/tracker", "/saved", "/alerts", "/profile", "/employers/post-job",
         "/alerts/delete", "/alerts/update", "/tracker/delete",
-        "/employers/jobs/update", "/employers/jobs/archive",
+        "/employers/jobs/update", "/employers/jobs/archive", "/employers/applications/status",
     ) and not user:
         return login_required_page(user, path + ("?" + urllib.parse.urlencode(query) if query else ""))
 
@@ -569,9 +570,11 @@ def route(conn, method, path, query, payload, user, token, host, client_ip="", c
         if user and user.get("role") != "employer":
             return Response(views.employers_page(conn, None))
         posted = db.employer_jobs(conn, user["id"]) if user else []
+        applicants = db.employer_applications(conn, user["id"]) if user else []
         return Response(views.employers_page(conn, user, posted,
                                              message=query.get("message", ""),
-                                             error=query.get("error", "")))
+                                             error=query.get("error", ""),
+                                             applicants=applicants))
 
     if path == "/employers/post-job":
         if user.get("role") != "employer":
@@ -580,10 +583,20 @@ def route(conn, method, path, query, payload, user, token, host, client_ip="", c
             _, err = db.create_job(conn, payload, user["id"])
             if err:
                 posted = db.employer_jobs(conn, user["id"])
-                return Response(views.employers_page(conn, user, posted, error=err))
+                applicants = db.employer_applications(conn, user["id"])
+                return Response(views.employers_page(conn, user, posted, error=err, applicants=applicants))
             return redirect("/employers?" + urllib.parse.urlencode(
                 {"message": "Job published — it now appears in search."}))
         return redirect("/employers#post")
+
+    if path == "/employers/applications/status" and method == "POST":
+        if user.get("role") != "employer":
+            return Response("Employer access required.", status=403)
+        app_id = get_int(payload.get("id"), 0, 0, 10**9)
+        status = _clip(payload.get("status", ""), 40)
+        if status not in ALLOWED_APP_STATUSES or not db.update_employer_application_status(conn, user["id"], app_id, status):
+            return redirect("/employers?" + urllib.parse.urlencode({"error": "Could not update applicant status."}))
+        return redirect("/employers?" + urllib.parse.urlencode({"message": f"Applicant updated to {status}."}))
 
     if path == "/employers/jobs/update" and method == "POST":
         if user.get("role") != "employer":
@@ -1322,6 +1335,12 @@ class Handler(BaseHTTPRequestHandler):
             # Set the per-request CSRF token so views can embed it in forms
             views._set_csrf(get_csrf_token(token))
             resp = route(conn, self.command, path, query, payload, user, token, host, client_ip, csrf_header)
+            if (
+                self.command in ("POST", "PUT", "PATCH", "DELETE")
+                and path.startswith(("/admin/", "/employers/", "/api/employer/"))
+                and resp.status < 400
+            ):
+                db.invalidate_cache("home_")
             self._send(resp)
         except (ConnectionResetError, BrokenPipeError, ConnectionAbortedError):
             pass

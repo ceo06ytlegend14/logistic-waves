@@ -506,7 +506,7 @@ def layout(title, body, user=None, active="", description="", page_class="", ext
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/styles.css?v=20261127_flex_hdr">
+  <link rel="stylesheet" href="/static/styles.css?v=20261127_flex_hdr2">
   <link rel="stylesheet" href="/static/home-recreation.css?v=20261126_apple2">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   {extra_head}
@@ -1898,7 +1898,7 @@ def job_detail_page(conn, user, job, similar):
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..800&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="/static/styles.css?v=20261127_flex_hdr">
+  <link rel="stylesheet" href="/static/styles.css?v=20261127_flex_hdr2">
   <link rel="stylesheet" href="/static/home-recreation.css?v=20261126_apple2">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link rel="stylesheet" href="/static/thesandbox-css/builtin-theme.css">
@@ -2681,6 +2681,32 @@ def articles_page(conn, user, q="", category="", tag="", featured=None):
                 hub_content = f.read()
         except Exception as ex:
             hub_content = f"<!-- Error loading editorial hub: {ex} -->"
+
+    latest_editorial = conn.execute(
+        """SELECT id, slug, title, category, tag, thumb, accent FROM articles
+           WHERE COALESCE(is_today, 0) = 0
+           ORDER BY id DESC LIMIT 4"""
+    ).fetchall()
+    if latest_editorial and '<div class="nav-cards">' in hub_content:
+        nav_cards_html = []
+        for idx, r in enumerate(latest_editorial):
+            a = dict(r)
+            slug = a.get("slug") or f"article-{a['id']}"
+            title = a.get("title") or "Editorial Briefing"
+            cat = a.get("category") or a.get("tag") or "Logistics"
+            thumb = _article_cover_url(a, idx)
+            nav_cards_html.append(f'''<article class="card">
+<a class="card-media" href="/articles/{e(slug)}"><img alt="{e(title)}" src="{e(thumb)}" decoding="async" width="674" height="368" loading="lazy"/></a>
+<span class="cat">{e(cat)}</span>
+<h3><a href="/articles/{e(slug)}">{e(title)}</a></h3>
+</article>''')
+        hub_content = re.sub(
+            r'<div class="nav-cards">.*?</div>',
+            '<div class="nav-cards">\n' + "\n".join(nav_cards_html) + '\n</div>',
+            hub_content,
+            count=1,
+            flags=re.DOTALL,
+        )
 
     today_articles = conn.execute(
         """SELECT id, slug, title, excerpt, author, published, category, tag, read_time, accent, thumb, is_today, duration, guest FROM articles 

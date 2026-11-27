@@ -158,6 +158,85 @@ CREATE TABLE IF NOT EXISTS rate_limits (
   rl_key TEXT NOT NULL,
   ts BIGINT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS branches (
+  id INTEGER PRIMARY KEY,
+  code TEXT UNIQUE NOT NULL,
+  name TEXT NOT NULL,
+  city TEXT,
+  country TEXT DEFAULT 'Vietnam',
+  address TEXT,
+  phone TEXT,
+  manager_name TEXT,
+  status TEXT DEFAULT 'Active',
+  created_at TEXT
+);
+CREATE TABLE IF NOT EXISTS drivers (
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER,
+  name TEXT NOT NULL,
+  phone TEXT,
+  vehicle_type TEXT,
+  license_plate TEXT,
+  branch_id INTEGER,
+  status TEXT DEFAULT 'Available',
+  created_at TEXT
+);
+CREATE TABLE IF NOT EXISTS orders (
+  id INTEGER PRIMARY KEY,
+  tracking_code TEXT UNIQUE NOT NULL,
+  sender_name TEXT NOT NULL,
+  sender_phone TEXT,
+  recipient_name TEXT NOT NULL,
+  recipient_phone TEXT,
+  origin_branch_id INTEGER,
+  dest_branch_id INTEGER,
+  driver_id INTEGER,
+  service_type TEXT DEFAULT 'Express Freight',
+  weight_kg REAL DEFAULT 1.0,
+  cod_amount INTEGER DEFAULT 0,
+  shipping_fee INTEGER DEFAULT 0,
+  status TEXT DEFAULT 'Pending',
+  notes TEXT,
+  created_by INTEGER,
+  created_at TEXT,
+  updated_at TEXT
+);
+CREATE TABLE IF NOT EXISTS parcels (
+  id INTEGER PRIMARY KEY,
+  order_id INTEGER NOT NULL,
+  barcode TEXT UNIQUE NOT NULL,
+  description TEXT,
+  weight_kg REAL DEFAULT 1.0,
+  dimensions TEXT,
+  status TEXT DEFAULT 'Pending',
+  current_location TEXT,
+  updated_at TEXT
+);
+CREATE TABLE IF NOT EXISTS parcel_events (
+  id INTEGER PRIMARY KEY,
+  order_id INTEGER NOT NULL,
+  status TEXT NOT NULL,
+  location TEXT,
+  note TEXT,
+  photo_url TEXT,
+  created_by INTEGER,
+  created_at TEXT
+);
+CREATE TABLE IF NOT EXISTS transactions (
+  id INTEGER PRIMARY KEY,
+  order_id INTEGER NOT NULL,
+  type TEXT NOT NULL,
+  amount INTEGER DEFAULT 0,
+  currency TEXT DEFAULT 'VND',
+  payment_method TEXT DEFAULT 'COD',
+  status TEXT DEFAULT 'Pending',
+  reference TEXT,
+  created_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_orders_tracking ON orders(tracking_code);
+CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
+CREATE INDEX IF NOT EXISTS idx_parcel_events_order ON parcel_events(order_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_order ON transactions(order_id);
 CREATE INDEX IF NOT EXISTS idx_rate_limits_key_ts ON rate_limits(rl_key, ts);
 CREATE INDEX IF NOT EXISTS idx_articles_slug ON articles(slug);
 CREATE INDEX IF NOT EXISTS idx_applications_user ON applications(user_id);
@@ -198,7 +277,7 @@ class PgCursor:
         has_returning = "RETURNING" in pg_sql.upper()
 
         if is_insert and not has_returning:
-            target_tables = ("users", "alerts", "applications", "subscribers", "jobs", "companies", "articles", "salaries")
+            target_tables = ("users", "alerts", "applications", "subscribers", "jobs", "companies", "articles", "salaries", "branches", "drivers", "orders", "parcels", "parcel_events", "transactions")
             for tbl in target_tables:
                 if f"into {tbl}" in pg_sql.lower() or f"into \"{tbl}\"" in pg_sql.lower():
                     pg_sql = pg_sql.rstrip().rstrip(";") + " RETURNING id"
@@ -448,12 +527,165 @@ def _sanitize_legacy_placeholders(conn):
     )
 
 
+def _ensure_ops_schema_pg(conn):
+    """Ensure Logistics Operations tables exist in PostgreSQL."""
+    stmts = [
+        """CREATE TABLE IF NOT EXISTS branches (
+          id SERIAL PRIMARY KEY, code TEXT UNIQUE NOT NULL, name TEXT NOT NULL,
+          city TEXT, country TEXT DEFAULT 'Vietnam', address TEXT, phone TEXT,
+          manager_name TEXT, status TEXT DEFAULT 'Active', created_at TEXT
+        )""",
+        """CREATE TABLE IF NOT EXISTS drivers (
+          id SERIAL PRIMARY KEY, user_id INTEGER, name TEXT NOT NULL, phone TEXT,
+          vehicle_type TEXT, license_plate TEXT, branch_id INTEGER,
+          status TEXT DEFAULT 'Available', created_at TEXT
+        )""",
+        """CREATE TABLE IF NOT EXISTS orders (
+          id SERIAL PRIMARY KEY, tracking_code TEXT UNIQUE NOT NULL,
+          sender_name TEXT NOT NULL, sender_phone TEXT,
+          recipient_name TEXT NOT NULL, recipient_phone TEXT,
+          origin_branch_id INTEGER, dest_branch_id INTEGER, driver_id INTEGER,
+          service_type TEXT DEFAULT 'Express Freight', weight_kg DOUBLE PRECISION DEFAULT 1.0,
+          cod_amount INTEGER DEFAULT 0, shipping_fee INTEGER DEFAULT 0,
+          status TEXT DEFAULT 'Pending', notes TEXT, created_by INTEGER,
+          created_at TEXT, updated_at TEXT
+        )""",
+        """CREATE TABLE IF NOT EXISTS parcels (
+          id SERIAL PRIMARY KEY, order_id INTEGER NOT NULL, barcode TEXT UNIQUE NOT NULL,
+          description TEXT, weight_kg DOUBLE PRECISION DEFAULT 1.0, dimensions TEXT,
+          status TEXT DEFAULT 'Pending', current_location TEXT, updated_at TEXT
+        )""",
+        """CREATE TABLE IF NOT EXISTS parcel_events (
+          id SERIAL PRIMARY KEY, order_id INTEGER NOT NULL, status TEXT NOT NULL,
+          location TEXT, note TEXT, photo_url TEXT, created_by INTEGER, created_at TEXT
+        )""",
+        """CREATE TABLE IF NOT EXISTS transactions (
+          id SERIAL PRIMARY KEY, order_id INTEGER NOT NULL, type TEXT NOT NULL,
+          amount INTEGER DEFAULT 0, currency TEXT DEFAULT 'VND',
+          payment_method TEXT DEFAULT 'COD', status TEXT DEFAULT 'Pending',
+          reference TEXT, created_at TEXT
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_orders_tracking ON orders(tracking_code)",
+        "CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)",
+        "CREATE INDEX IF NOT EXISTS idx_parcel_events_order ON parcel_events(order_id)",
+        "CREATE INDEX IF NOT EXISTS idx_transactions_order ON transactions(order_id)",
+    ]
+    for s in stmts:
+        conn.execute(s)
+    conn.commit()
+
+
+def _ensure_hr_schema_pg(conn):
+    """Ensure all core HR / Jobs / Articles / User tables exist in PostgreSQL."""
+    stmts = [
+        """CREATE TABLE IF NOT EXISTS companies (
+          id SERIAL PRIMARY KEY, slug TEXT UNIQUE NOT NULL, name TEXT NOT NULL,
+          initials TEXT NOT NULL, color TEXT NOT NULL, tagline TEXT, industries TEXT,
+          description TEXT, location TEXT, employees INTEGER, offices INTEGER,
+          founded INTEGER, benefits INTEGER, office_type TEXT, remote_policy TEXT,
+          hiring_now INTEGER DEFAULT 1, open_jobs INTEGER DEFAULT 0, website TEXT,
+          perks TEXT, tech_stack TEXT, teams TEXT, cover_accent TEXT
+        )""",
+        """CREATE TABLE IF NOT EXISTS jobs (
+          id SERIAL PRIMARY KEY, slug TEXT, title TEXT NOT NULL, company_id INTEGER,
+          company_slug TEXT, company_name TEXT, company_initials TEXT, company_color TEXT,
+          category TEXT, level TEXT, workplace TEXT, location TEXT,
+          salary_min INTEGER, salary_max INTEGER, salary_display TEXT,
+          industries TEXT, skills TEXT, description TEXT, posted_at TEXT,
+          posted_label TEXT, is_remote INTEGER DEFAULT 0, accent TEXT,
+          status TEXT DEFAULT 'active', created_by INTEGER
+        )""",
+        """CREATE TABLE IF NOT EXISTS articles (
+          id SERIAL PRIMARY KEY, slug TEXT UNIQUE, title TEXT, excerpt TEXT,
+          body TEXT, author TEXT, published TEXT, category TEXT, tag TEXT,
+          read_time TEXT, accent TEXT, thumb TEXT, is_today INTEGER DEFAULT 0,
+          duration TEXT, guest TEXT
+        )""",
+        """CREATE TABLE IF NOT EXISTS salaries (
+          id SERIAL PRIMARY KEY, title TEXT, category TEXT, median INTEGER,
+          low INTEGER, high INTEGER, samples INTEGER, trend TEXT
+        )""",
+        """CREATE TABLE IF NOT EXISTS users (
+          id SERIAL PRIMARY KEY, name TEXT NOT NULL, email TEXT UNIQUE NOT NULL,
+          salt TEXT NOT NULL, password_hash TEXT NOT NULL,
+          role TEXT NOT NULL DEFAULT 'candidate', headline TEXT, location TEXT,
+          created_at TEXT
+        )""",
+        """CREATE TABLE IF NOT EXISTS sessions (
+          token TEXT PRIMARY KEY, user_id INTEGER NOT NULL, expires_at TEXT NOT NULL
+        )""",
+        """CREATE TABLE IF NOT EXISTS saved_jobs (
+          user_id INTEGER NOT NULL, job_id INTEGER NOT NULL, created_at TEXT,
+          PRIMARY KEY (user_id, job_id)
+        )""",
+        """CREATE TABLE IF NOT EXISTS follows (
+          user_id INTEGER NOT NULL, company_id INTEGER NOT NULL, created_at TEXT,
+          PRIMARY KEY (user_id, company_id)
+        )""",
+        """CREATE TABLE IF NOT EXISTS applications (
+          id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL, job_id INTEGER NOT NULL,
+          status TEXT DEFAULT 'Applied', note TEXT, created_at TEXT,
+          UNIQUE (user_id, job_id)
+        )""",
+        """CREATE TABLE IF NOT EXISTS alerts (
+          id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL, query TEXT,
+          filters TEXT, frequency TEXT DEFAULT 'Daily', created_at TEXT
+        )""",
+        """CREATE TABLE IF NOT EXISTS subscribers (
+          id SERIAL PRIMARY KEY, email TEXT UNIQUE, created_at TEXT
+        )""",
+        """CREATE TABLE IF NOT EXISTS demo_seed_state (
+          key TEXT PRIMARY KEY, created_at TEXT NOT NULL
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_articles_slug ON articles(slug)",
+        "CREATE INDEX IF NOT EXISTS idx_applications_user ON applications(user_id)",
+        "CREATE INDEX IF NOT EXISTS idx_saved_jobs_user ON saved_jobs(user_id)",
+        "CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status)",
+        "CREATE INDEX IF NOT EXISTS idx_jobs_company ON jobs(company_slug)",
+        "CREATE INDEX IF NOT EXISTS idx_jobs_category ON jobs(category)",
+        "CREATE INDEX IF NOT EXISTS idx_jobs_posted ON jobs(posted_at)",
+        "CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id)",
+        "CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)",
+        "CREATE INDEX IF NOT EXISTS idx_companies_slug ON companies(slug)",
+    ]
+    for s in stmts:
+        conn.execute(s)
+    conn.commit()
+
+
+def _sync_pg_sequences(conn):
+    """Ensure PostgreSQL SERIAL sequences are synced past MAX(id) after seeded inserts."""
+    for tbl in ("companies", "jobs", "articles", "salaries", "users", "applications", "alerts", "subscribers"):
+        try:
+            conn.execute(
+                f"SELECT setval(pg_get_serial_sequence('{tbl}', 'id'), COALESCE((SELECT MAX(id) FROM {tbl}), 1), true)"
+            )
+        except Exception:
+            pass
+    conn.commit()
+
+
 def init_db():
     conn = connect()
     if isinstance(conn, PgConn):
         try:
             conn.execute("CREATE TABLE IF NOT EXISTS rate_limits (rl_key TEXT NOT NULL, ts BIGINT NOT NULL)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_rate_limits_key_ts ON rate_limits(rl_key, ts)")
+            _ensure_hr_schema_pg(conn)
+            if conn.execute("SELECT COUNT(*) FROM companies").fetchone()[0] == 0:
+                _seed(conn)
+            _sync_pg_sequences(conn)
+            admin_email = (os.environ.get("ADMIN_EMAIL") or "admin@logisticwaves.com").strip().lower()
+            admin_user = conn.execute("SELECT id FROM users WHERE lower(email)=?", (admin_email,)).fetchone()
+            if not admin_user:
+                bootstrap_pw = os.environ.get("ADMIN_PASSWORD") or secrets.token_urlsafe(18)
+                salt, digest = hash_password(bootstrap_pw)
+                conn.execute(
+                    "INSERT INTO users (name,email,salt,password_hash,role,headline,location,created_at) VALUES (?,?,?,?,?,?,?,?)",
+                    ("System Administrator", admin_email, salt, digest, "admin", "Platform Admin", "Ho Chi Minh City, Vietnam", _now()),
+                )
+                conn.commit()
+            seed_workspace_demo_data(conn)
             _sanitize_legacy_placeholders(conn)
             sync_company_open_jobs(conn)
         except Exception as ex:
@@ -1113,6 +1345,36 @@ def employer_jobs(conn, user_id):
     ).fetchall()]
 
 
+def employer_applications(conn, employer_id):
+    rows = conn.execute(
+        """SELECT a.id, a.status, a.note, a.created_at,
+                  j.id AS job_id, j.slug AS job_slug, j.title AS job_title, j.company_name,
+                  u.name AS candidate_name, u.email AS candidate_email,
+                  u.headline AS candidate_headline, u.location AS candidate_location
+           FROM applications a
+           JOIN jobs j ON j.id = a.job_id
+           JOIN users u ON u.id = a.user_id
+           WHERE j.created_by=?
+           ORDER BY a.created_at DESC""",
+        (employer_id,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def update_employer_application_status(conn, employer_id, app_id, status):
+    own = conn.execute(
+        """SELECT a.id FROM applications a
+           JOIN jobs j ON j.id = a.job_id
+           WHERE a.id=? AND j.created_by=?""",
+        (app_id, employer_id),
+    ).fetchone()
+    if not own:
+        return False
+    conn.execute("UPDATE applications SET status=? WHERE id=?", (status, app_id))
+    conn.commit()
+    return True
+
+
 def update_employer_job(conn, user_id, job_id, data):
     title = data.get("title")
     company_slug = data.get("company_slug")
@@ -1299,3 +1561,275 @@ def global_search(conn, q, limit=5):
         (like, like, limit),
     ).fetchall()]
     return {"jobs": jobs, "companies": companies, "articles": articles}
+
+
+
+# ---------- Logistics Operations (Branches, Drivers, Orders, Parcels, Transactions) ----------
+
+def seed_ops_data(conn):
+    """Seed initial Vietnam & regional hubs, drivers, orders, parcels, events, and transactions."""
+    try:
+        if conn.execute("SELECT COUNT(*) FROM branches").fetchone()[0] > 0:
+            return
+    except Exception:
+        return
+    now = _now()
+    branches_seed = [
+        ("SGN-01", "Ho Chi Minh City Port Hub", "Ho Chi Minh City", "Vietnam", "Cat Lai Port Terminal, Thu Duc", "+84 28 3897 6100", "Nguyen Minh Tuan", "Active"),
+        ("HAN-01", "Hanoi Northern Logistics Center", "Hanoi", "Vietnam", "Gia Lam Logistics Park, Long Bien", "+84 24 3876 5400", "Tran Thu Ha", "Active"),
+        ("HPH-01", "Hai Phong Maritime Gateway", "Hai Phong", "Vietnam", "Dinh Vu Deepwater Port, Hai An", "+84 225 3859 200", "Le Hoang Nam", "Active"),
+        ("DAD-01", "Da Nang Central Hub", "Da Nang", "Vietnam", "Lien Chieu Industrial Corridor", "+84 236 3822 100", "Pham Van Khanh", "Active"),
+        ("SIN-01", "Singapore Regional Gateway", "Singapore", "Singapore", "Tuas Mega Port Sector 4", "+65 6555 8820", "Daniel Tan", "Active"),
+    ]
+    for code, name, city, country, addr, phone, mgr, status in branches_seed:
+        conn.execute(
+            "INSERT OR IGNORE INTO branches (code,name,city,country,address,phone,manager_name,status,created_at) VALUES (?,?,?,?,?,?,?,?,?)",
+            (code, name, city, country, addr, phone, mgr, status, now),
+        )
+    branch_map = {r["code"]: r["id"] for r in conn.execute("SELECT id, code FROM branches").fetchall()}
+
+    drivers_seed = [
+        ("Nguyen Van Hung", "+84 903 118 402", "2.5T Box Truck", "51C-884.12", branch_map.get("SGN-01"), "On Route"),
+        ("Tran Quoc Bao", "+84 912 459 310", "5T Container Van", "29H-441.09", branch_map.get("HAN-01"), "Available"),
+        ("Le Duc Anh", "+84 935 772 881", "Express Cargo Van", "43C-219.55", branch_map.get("DAD-01"), "On Route"),
+        ("Vo Thanh Long", "+84 908 663 120", "15T Tractor Trailer", "15C-702.44", branch_map.get("HPH-01"), "Available"),
+    ]
+    for name, phone, vtype, plate, bid, status in drivers_seed:
+        conn.execute(
+            "INSERT INTO drivers (name,phone,vehicle_type,license_plate,branch_id,status,created_at) VALUES (?,?,?,?,?,?,?)",
+            (name, phone, vtype, plate, bid, status, now),
+        )
+    driver_rows = conn.execute("SELECT id FROM drivers ORDER BY id ASC").fetchall()
+    d1 = driver_rows[0]["id"] if len(driver_rows) > 0 else None
+    d2 = driver_rows[1]["id"] if len(driver_rows) > 1 else None
+    d3 = driver_rows[2]["id"] if len(driver_rows) > 2 else None
+
+    orders_seed = [
+        ("LW-2026-8801", "Saigon Newport Logistics", "+84 28 3742 2234", "Viettel Post Hanoi Hub", "+84 24 6266 0306",
+         branch_map.get("SGN-01"), branch_map.get("HAN-01"), d1, "Air & Express Freight", 24.5, 4500000, 385000, "In Transit", "Priority electronics & spare parts"),
+        ("LW-2026-8802", "Gemadept Cold Chain", "+84 28 3823 6236", "Central Retail Da Nang", "+84 236 3668 900",
+         branch_map.get("SGN-01"), branch_map.get("DAD-01"), d3, "Cold Chain Express", 42.0, 0, 520000, "Out for Delivery", "Temperature-controlled 2-8C"),
+        ("LW-2026-8803", "Viconship Hai Phong", "+84 225 3836 705", "Thang Long Industrial Park", "+84 24 3881 1200",
+         branch_map.get("HPH-01"), branch_map.get("HAN-01"), d2, "Port-to-Door Freight", 18.0, 2100000, 290000, "Delivered", "Signed & verified at Gate B"),
+        ("LW-2026-8804", "Pacific Rim Components", "+65 6221 9900", "Thu Duc Hi-Tech Park", "+84 28 3736 0192",
+         branch_map.get("SIN-01"), branch_map.get("SGN-01"), None, "Cross-Border Express", 12.4, 0, 640000, "Picked Up", "Customs cleared at Cat Lai"),
+    ]
+    for code, sname, sphone, rname, rphone, ob, db_id, drv, svc, wt, cod, fee, st, notes in orders_seed:
+        cur = conn.execute(
+            """INSERT OR IGNORE INTO orders
+            (tracking_code,sender_name,sender_phone,recipient_name,recipient_phone,origin_branch_id,dest_branch_id,driver_id,service_type,weight_kg,cod_amount,shipping_fee,status,notes,created_at,updated_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (code, sname, sphone, rname, rphone, ob, db_id, drv, svc, wt, cod, fee, st, notes, now, now),
+        )
+        oid = cur.lastrowid
+        if not oid:
+            row = conn.execute("SELECT id FROM orders WHERE tracking_code=?", (code,)).fetchone()
+            oid = row["id"] if row else None
+        if oid:
+            conn.execute(
+                "INSERT OR IGNORE INTO parcels (order_id,barcode,description,weight_kg,dimensions,status,current_location,updated_at) VALUES (?,?,?,?,?,?,?,?)",
+                (oid, f"PCL-{code}", notes, wt, "60x40x35 cm", st, "Transit Hub", now),
+            )
+            conn.execute(
+                "INSERT INTO parcel_events (order_id,status,location,note,photo_url,created_at) VALUES (?,?,?,?,?,?)",
+                (oid, "Picked Up", "Origin Branch", f"Shipment {code} received and scanned.", "", now),
+            )
+            if st in ("In Transit", "Out for Delivery", "Delivered"):
+                conn.execute(
+                    "INSERT INTO parcel_events (order_id,status,location,note,photo_url,created_at) VALUES (?,?,?,?,?,?)",
+                    (oid, st, "Regional Transit Hub", f"Updated status to {st}.", "", now),
+                )
+            conn.execute(
+                "INSERT INTO transactions (order_id,type,amount,currency,payment_method,status,reference,created_at) VALUES (?,?,?,?,?,?,?,?)",
+                (oid, "Shipping Fee", fee, "VND", "Bank Transfer" if cod == 0 else "COD", "Paid" if st == "Delivered" else "Pending", f"TXN-{code}", now),
+            )
+            if cod > 0:
+                conn.execute(
+                    "INSERT INTO transactions (order_id,type,amount,currency,payment_method,status,reference,created_at) VALUES (?,?,?,?,?,?,?,?)",
+                    (oid, "COD Collection", cod, "VND", "COD", "Collected" if st == "Delivered" else "Pending", f"COD-{code}", now),
+                )
+    conn.commit()
+
+
+def list_branches(conn):
+    return [dict(r) for r in conn.execute("SELECT * FROM branches ORDER BY id ASC").fetchall()]
+
+
+def create_branch(conn, code, name, city, country, address, phone, manager_name):
+    now = _now()
+    cur = conn.execute(
+        "INSERT INTO branches (code,name,city,country,address,phone,manager_name,status,created_at) VALUES (?,?,?,?,?,?,?,'Active',?)",
+        (code.strip().upper(), name.strip(), city.strip(), country.strip() or "Vietnam", address.strip(), phone.strip(), manager_name.strip(), now),
+    )
+    conn.commit()
+    return cur.lastrowid
+
+
+def list_drivers(conn):
+    rows = conn.execute(
+        """SELECT d.*, b.code AS branch_code, b.name AS branch_name
+           FROM drivers d LEFT JOIN branches b ON b.id = d.branch_id
+           ORDER BY d.id DESC"""
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def create_driver(conn, name, phone, vehicle_type, license_plate, branch_id):
+    now = _now()
+    cur = conn.execute(
+        "INSERT INTO drivers (name,phone,vehicle_type,license_plate,branch_id,status,created_at) VALUES (?,?,?,?,?,'Available',?)",
+        (name.strip(), phone.strip(), vehicle_type.strip(), license_plate.strip().upper(), branch_id or None, now),
+    )
+    conn.commit()
+    return cur.lastrowid
+
+
+def update_driver_status(conn, driver_id, status):
+    conn.execute("UPDATE drivers SET status=? WHERE id=?", (status, driver_id))
+    conn.commit()
+
+
+def list_orders(conn, q="", status="", driver_id=None):
+    where, params = ["1=1"], []
+    if q:
+        like = f"%{_escape_like(q)}%"
+        where.append("(o.tracking_code LIKE ? ESCAPE '\\' OR o.sender_name LIKE ? ESCAPE '\\' OR o.recipient_name LIKE ? ESCAPE '\\')")
+        params.extend([like, like, like])
+    if status:
+        where.append("o.status=?")
+        params.append(status)
+    if driver_id is not None:
+        where.append("o.driver_id=?")
+        params.append(driver_id)
+    rows = conn.execute(
+        f"""SELECT o.*,
+                   ob.code AS origin_code, ob.city AS origin_city,
+                   db.code AS dest_code, db.city AS dest_city,
+                   d.name AS driver_name, d.vehicle_type AS driver_vehicle, d.license_plate AS driver_plate
+            FROM orders o
+            LEFT JOIN branches ob ON ob.id = o.origin_branch_id
+            LEFT JOIN branches db ON db.id = o.dest_branch_id
+            LEFT JOIN drivers d ON d.id = o.driver_id
+            WHERE {' AND '.join(where)}
+            ORDER BY o.id DESC""",
+        params,
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_order_by_tracking(conn, tracking_code):
+    code = (tracking_code or "").strip().upper()
+    if not code:
+        return None
+    row = conn.execute(
+        """SELECT o.*,
+                  ob.code AS origin_code, ob.name AS origin_name, ob.city AS origin_city,
+                  db.code AS dest_code, db.name AS dest_name, db.city AS dest_city,
+                  d.name AS driver_name, d.phone AS driver_phone, d.vehicle_type AS driver_vehicle, d.license_plate AS driver_plate
+           FROM orders o
+           LEFT JOIN branches ob ON ob.id = o.origin_branch_id
+           LEFT JOIN branches db ON db.id = o.dest_branch_id
+           LEFT JOIN drivers d ON d.id = o.driver_id
+           WHERE upper(o.tracking_code)=?""",
+        (code,),
+    ).fetchone()
+    if not row:
+        return None
+    order = dict(row)
+    order["parcels"] = [dict(r) for r in conn.execute("SELECT * FROM parcels WHERE order_id=? ORDER BY id ASC", (order["id"],)).fetchall()]
+    order["events"] = [dict(r) for r in conn.execute("SELECT * FROM parcel_events WHERE order_id=? ORDER BY id DESC", (order["id"],)).fetchall()]
+    order["transactions"] = [dict(r) for r in conn.execute("SELECT * FROM transactions WHERE order_id=? ORDER BY id DESC", (order["id"],)).fetchall()]
+    return order
+
+
+def create_order(conn, data, user_id=None):
+    now = _now()
+    code = (data.get("tracking_code") or "").strip().upper()
+    if not code:
+        code = f"LW-2026-{secrets.randbelow(9000) + 1000}"
+    weight = float(data.get("weight_kg") or 1.0)
+    cod = int(data.get("cod_amount") or 0)
+    fee = int(data.get("shipping_fee") or max(50000, int(weight * 25000)))
+    cur = conn.execute(
+        """INSERT INTO orders
+        (tracking_code,sender_name,sender_phone,recipient_name,recipient_phone,origin_branch_id,dest_branch_id,driver_id,service_type,weight_kg,cod_amount,shipping_fee,status,notes,created_by,created_at,updated_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'Pending',?,?,?,?)""",
+        (
+            code,
+            data["sender_name"].strip(),
+            (data.get("sender_phone") or "").strip(),
+            data["recipient_name"].strip(),
+            (data.get("recipient_phone") or "").strip(),
+            data.get("origin_branch_id") or None,
+            data.get("dest_branch_id") or None,
+            data.get("driver_id") or None,
+            (data.get("service_type") or "Express Freight").strip(),
+            weight,
+            cod,
+            fee,
+            (data.get("notes") or "").strip(),
+            user_id,
+            now,
+            now,
+        ),
+    )
+    oid = cur.lastrowid
+    conn.execute(
+        "INSERT INTO parcels (order_id,barcode,description,weight_kg,dimensions,status,current_location,updated_at) VALUES (?,?,?,?,?,'Pending',?,?)",
+        (oid, f"PCL-{code}", (data.get("notes") or "Standard Parcel").strip(), weight, (data.get("dimensions") or "40x30x25 cm").strip(), "Origin Branch", now),
+    )
+    conn.execute(
+        "INSERT INTO parcel_events (order_id,status,location,note,photo_url,created_by,created_at) VALUES (?,?,?,?,?,?,?)",
+        (oid, "Pending", "Origin Branch", f"Order {code} created.", (data.get("photo_url") or "").strip(), user_id, now),
+    )
+    conn.execute(
+        "INSERT INTO transactions (order_id,type,amount,currency,payment_method,status,reference,created_at) VALUES (?,?,?,?,?,?,?,?)",
+        (oid, "Shipping Fee", fee, "VND", "COD" if cod > 0 else "Bank Transfer", "Pending", f"TXN-{code}", now),
+    )
+    if cod > 0:
+        conn.execute(
+            "INSERT INTO transactions (order_id,type,amount,currency,payment_method,status,reference,created_at) VALUES (?,?,?,?,?,?,?,?)",
+            (oid, "COD Collection", cod, "VND", "COD", "Pending", f"COD-{code}", now),
+        )
+    conn.commit()
+    return oid, code
+
+
+def update_order_status(conn, order_id, status, location="", note="", photo_url="", driver_id=None, user_id=None):
+    now = _now()
+    if driver_id is not None:
+        conn.execute("UPDATE orders SET status=?, driver_id=?, updated_at=? WHERE id=?", (status, driver_id or None, now, order_id))
+    else:
+        conn.execute("UPDATE orders SET status=?, updated_at=? WHERE id=?", (status, now, order_id))
+    conn.execute("UPDATE parcels SET status=?, current_location=?, updated_at=? WHERE order_id=?", (status, location or status, now, order_id))
+    conn.execute(
+        "INSERT INTO parcel_events (order_id,status,location,note,photo_url,created_by,created_at) VALUES (?,?,?,?,?,?,?)",
+        (order_id, status, location or "Logistics Hub", note or f"Status updated to {status}.", photo_url or "", user_id, now),
+    )
+    if status == "Delivered":
+        conn.execute("UPDATE transactions SET status='Paid' WHERE order_id=? AND type='Shipping Fee'", (order_id,))
+        conn.execute("UPDATE transactions SET status='Collected' WHERE order_id=? AND type='COD Collection'", (order_id,))
+    conn.commit()
+
+
+def list_transactions(conn, limit=50):
+    rows = conn.execute(
+        """SELECT t.*, o.tracking_code, o.sender_name, o.recipient_name
+           FROM transactions t
+           LEFT JOIN orders o ON o.id = t.order_id
+           ORDER BY t.id DESC LIMIT ?""",
+        (limit,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def ops_stats(conn):
+    return {
+        "branches": conn.execute("SELECT COUNT(*) FROM branches").fetchone()[0],
+        "drivers": conn.execute("SELECT COUNT(*) FROM drivers").fetchone()[0],
+        "orders": conn.execute("SELECT COUNT(*) FROM orders").fetchone()[0],
+        "in_transit": conn.execute("SELECT COUNT(*) FROM orders WHERE status IN ('Picked Up','In Transit','Out for Delivery')").fetchone()[0],
+        "delivered": conn.execute("SELECT COUNT(*) FROM orders WHERE status='Delivered'").fetchone()[0],
+        "revenue_vnd": conn.execute("SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE type='Shipping Fee'").fetchone()[0],
+        "cod_vnd": conn.execute("SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE type='COD Collection'").fetchone()[0],
+    }
