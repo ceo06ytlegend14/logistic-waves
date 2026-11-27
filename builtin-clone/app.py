@@ -136,14 +136,14 @@ POST_PAGE_PATHS = {
     "/alerts/delete", "/alerts/update", "/tracker/delete", "/employers/post-job",
     "/employers/jobs/update", "/employers/jobs/archive", "/employers/applications/status",
     "/admin/seed", "/admin/videos/create", "/admin/articles/create",
-    "/admin/articles/update", "/admin/articles/delete",
-    "/admin/jobs/create", "/admin/jobs/update", "/admin/jobs/delete",
+    "/admin/articles/update", "/admin/articles/delete", "/admin/articles/duplicate",
+    "/admin/jobs/create", "/admin/jobs/update", "/admin/jobs/delete", "/admin/jobs/duplicate",
     "/admin/companies/create", "/admin/companies/update", "/admin/companies/delete",
     "/admin/users/create", "/admin/users/delete", "/admin/users/role",
     "/admin/applications/delete", "/admin/applications/status",
     "/admin/subscribers/delete",
     "/admin/salaries/create", "/admin/salaries/update", "/admin/salaries/delete",
-    "/admin/settings/save", "/admin/courses/create", "/admin/courses/update", "/admin/courses/delete",
+    "/admin/settings/save", "/admin/courses/create", "/admin/courses/update", "/admin/courses/delete", "/admin/courses/duplicate",
     "/api/newsletter", "/apply", "/saved/toggle", "/follow/toggle",
 }
 
@@ -1004,6 +1004,77 @@ def route(conn, method, path, query, payload, user, token, host, client_ip="", c
         cid = get_int(payload.get("id", "0"), 0, low=0)
         db.delete_course(conn, cid)
         return redirect("/admin?tab=courses&msg=" + urllib.parse.quote("Course deleted."))
+
+    if path == "/admin/courses/duplicate" and method == "POST":
+        cid = get_int(payload.get("id", "0"), 0, low=0)
+        src = conn.execute("SELECT * FROM courses WHERE id=?", (cid,)).fetchone()
+        if src:
+            d = dict(src)
+            new_title = f"{d['title']} (Copy)"
+            db.create_course(conn, {
+                "title": new_title,
+                "channel": d.get("channel") or "Logistics Waves Academy",
+                "instructor": d.get("instructor") or "Logistics Waves Faculty",
+                "duration": d.get("duration") or "25m",
+                "published_date": d.get("published_date") or "Nov 2026",
+                "thumb": d.get("thumb") or "/static/images/fw_today_1.svg",
+                "description": d.get("description") or "",
+                "chapters_json": d.get("chapters_json") or "[]",
+            })
+            return redirect("/admin?tab=courses&msg=" + urllib.parse.quote(f"Duplicated '{d['title']}' — click Edit to customize!"))
+        return redirect("/admin?tab=courses&err=" + urllib.parse.quote("Course not found."))
+
+    if path == "/admin/articles/duplicate" and method == "POST":
+        art_id = get_int(payload.get("id", "0"), 0, low=0)
+        tab = payload.get("tab", "articles")
+        src = conn.execute("SELECT * FROM articles WHERE id=?", (art_id,)).fetchone()
+        if src:
+            d = dict(src)
+            new_title = f"{d['title']} (Copy)"
+            new_slug = f"{(views.slugify(d['title']) or 'article')[:50]}-copy-{secrets.token_hex(2)}"
+            conn.execute(
+                """INSERT INTO articles (slug, title, excerpt, body, author, published, category, tag, read_time, accent, thumb, is_today, duration, guest)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    new_slug, new_title, d.get("excerpt") or "", d.get("body") or "",
+                    d.get("author") or "Editorial Staff", datetime.utcnow().strftime("%b %d, %Y"),
+                    d.get("category") or "Maritime & Supply Chain", d.get("tag") or "Maritime Insights",
+                    d.get("read_time") or "6 min read", d.get("accent") or "#034f9a",
+                    d.get("thumb") or "/static/images/fw_today_1.jpg",
+                    d.get("is_today") or 0, d.get("duration") or "", d.get("guest") or "",
+                ),
+            )
+            conn.commit()
+            db.invalidate_cache()
+            return redirect(f"/admin?tab={tab}&msg=" + urllib.parse.quote(f"Duplicated '{d['title']}' — click Edit to customize!"))
+        return redirect(f"/admin?tab={tab}&err=" + urllib.parse.quote("Article not found."))
+
+    if path == "/admin/jobs/duplicate" and method == "POST":
+        jid = get_int(payload.get("id", "0"), 0, low=0)
+        tab = payload.get("tab", "jobs")
+        src = conn.execute("SELECT * FROM jobs WHERE id=?", (jid,)).fetchone()
+        if src:
+            d = dict(src)
+            new_title = f"{d['title']} (Copy)"
+            new_slug = f"{(views.slugify(d['title']) or 'job')[:50]}-copy-{secrets.token_hex(2)}"
+            conn.execute(
+                """INSERT INTO jobs (slug, title, company_id, company_slug, company_name, company_initials, company_color,
+                   category, level, workplace, location, salary_min, salary_max, salary_display, industries, skills,
+                   description, posted_at, posted_label, is_remote, accent, status, created_by)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    new_slug, new_title, d.get("company_id"), d.get("company_slug"), d.get("company_name"),
+                    d.get("company_initials"), d.get("company_color"), d.get("category"), d.get("level"),
+                    d.get("workplace"), d.get("location"), d.get("salary_min"), d.get("salary_max"),
+                    d.get("salary_display"), d.get("industries"), d.get("skills"), d.get("description"),
+                    datetime.utcnow().isoformat(timespec="seconds"), "Just now", d.get("is_remote") or 0,
+                    d.get("accent") or "#034f9a", "active", user["id"],
+                ),
+            )
+            conn.commit()
+            db.invalidate_cache()
+            return redirect(f"/admin?tab={tab}&msg=" + urllib.parse.quote(f"Duplicated '{d['title']}' — click Edit to customize!"))
+        return redirect(f"/admin?tab={tab}&err=" + urllib.parse.quote("Job not found."))
 
     # ---------- admin: salaries ----------
     if path == "/admin/salaries/create" and method == "POST":
