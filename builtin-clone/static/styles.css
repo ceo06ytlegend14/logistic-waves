@@ -4594,6 +4594,56 @@ body {
   }
 }
 
+/* ==========================================================================
+   BORDERLESS HOMEPAGE CLEANUP
+   ========================================================================== */
+.editorial-sec-header,
+.opp-header-left {
+  border-bottom: none !important;
+  padding-bottom: 4px !important;
+}
+
+.home-best-jobs-section,
+.home-split-directory-section,
+.home-opportunities-section,
+.home-learning-section {
+  border-top: none !important;
+  border-bottom: none !important;
+}
+
+.stacked-story + .stacked-story,
+.recent-row-item,
+.best-job-footer,
+.dir-footer,
+.dir-company-row {
+  border-top: none !important;
+  border-bottom: none !important;
+}
+
+.best-job-card,
+.opp-card,
+.home-learning-card,
+.best-job-logo,
+.dir-logo,
+.dir-count-pill,
+.flame-pill,
+.opp-arrow-btn {
+  border: none !important;
+}
+
+.best-job-card,
+.opp-card,
+.home-learning-card {
+  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.04) !important;
+}
+
+.best-job-card:hover,
+.opp-card:hover,
+.home-learning-card:hover {
+  border-color: transparent !important;
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.08) !important;
+}
+
 @media (max-width: 860px) {
   .site-header {
     height: auto !important;
