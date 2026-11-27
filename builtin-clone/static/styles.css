@@ -3882,6 +3882,48 @@ body {
   opacity: 1 !important;
 }
 
+.smoke-white-hero .hero-bg-slide {
+  position: absolute !important;
+  inset: 0 !important;
+  background-position: center center !important;
+  background-size: cover !important;
+  background-repeat: no-repeat !important;
+  opacity: 0;
+  transition: opacity 1.2s ease-in-out !important;
+  will-change: opacity;
+}
+
+.smoke-white-hero .hero-bg-slide.active {
+  opacity: 1 !important;
+}
+
+.smoke-white-hero .hero-slide-dots {
+  position: absolute;
+  right: 28px;
+  bottom: 18px;
+  z-index: 5;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.smoke-white-hero .hero-slide-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.55);
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.25);
+  transition: width 0.25s ease, background 0.25s ease;
+}
+
+.smoke-white-hero .hero-slide-dot.active {
+  width: 22px;
+  background: #ffffff;
+}
+
 /* 2. Seamless Smoke-White Cinematic Gradient Mask */
 .smoke-white-hero .hero-smoke-overlay {
   position: absolute !important;
