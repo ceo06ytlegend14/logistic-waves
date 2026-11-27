@@ -501,7 +501,7 @@ def layout(title, body, user=None, active="", description="", page_class="", ext
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/styles.css?v=20261127_wttj_companies">
+  <link rel="stylesheet" href="/static/styles.css?v=20261127_wttj_v2">
   <link rel="stylesheet" href="/static/home-recreation.css?v=20261126_apple2">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   {extra_head}
@@ -1241,9 +1241,20 @@ def home_page(conn, user):
       </div>
     </section>
 
-    <!-- 4. Company Showcase Carousel (Category Tabs + Cover Cards) -->
-    <section class="home-companies-wttj" id="companies-directory">
+    <!-- 4 & 5. Company Showcase — replaces LATEST OPPORTUNITIES, white bg, sector tabs -->
+    <section class="home-opportunities-section home-companies-wttj" id="companies-directory">
       <div class="container">
+        <div class="opp-header-row wttj-header-row">
+          <div class="opp-header-left">
+            <span class="editorial-sec-title">COMPANIES</span>
+            <span class="editorial-dot"></span>
+          </div>
+          <div class="opp-controls">
+            <button type="button" class="opp-arrow-btn" onclick="scrollWttjCarousel(-1);" aria-label="Previous">&larr;</button>
+            <button type="button" class="opp-arrow-btn" onclick="scrollWttjCarousel(1);" aria-label="Next">&rarr;</button>
+            <a href="/companies" class="subnav-explore-btn" style="margin-left: 8px;">View All &rarr;</a>
+          </div>
+        </div>
         <div class="wttj-tabs-wrap">
           <div class="wttj-tabs" role="tablist" aria-label="Filter companies by sector">
             {wttj_tabs_html}
@@ -1262,26 +1273,6 @@ def home_page(conn, user):
         </div>
         <div class="wttj-section-foot">
           <a href="/companies" class="wttj-all-link">Explore all {c['companies']} companies &rarr;</a>
-        </div>
-      </div>
-    </section>
-
-    <!-- 5. Latest Opportunities Carousel -->
-    <section class="home-opportunities-section">
-      <div class="container">
-        <div class="opp-header-row">
-          <div class="opp-header-left">
-            <span class="editorial-sec-title">LATEST OPPORTUNITIES</span>
-            <span class="editorial-dot"></span>
-          </div>
-          <div class="opp-controls">
-            <button type="button" class="opp-arrow-btn" onclick="scrollOppTrack(-1);" aria-label="Previous">&larr;</button>
-            <button type="button" class="opp-arrow-btn" onclick="scrollOppTrack(1);" aria-label="Next">&rarr;</button>
-            <a href="/jobs" class="subnav-explore-btn" style="margin-left: 8px;">View All &rarr;</a>
-          </div>
-        </div>
-        <div class="opp-carousel-track" id="opp-track">
-          {"".join(opp_cards_html)}
         </div>
       </div>
     </section>
@@ -1894,7 +1885,7 @@ def job_detail_page(conn, user, job, similar):
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..800&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="/static/styles.css?v=20261127_wttj_companies">
+  <link rel="stylesheet" href="/static/styles.css?v=20261127_wttj_v2">
   <link rel="stylesheet" href="/static/home-recreation.css?v=20261126_apple2">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link rel="stylesheet" href="/static/thesandbox-css/builtin-theme.css">

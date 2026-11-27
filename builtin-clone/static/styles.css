@@ -4968,10 +4968,10 @@ body {
    Section 4: Welcome-to-the-Jungle Style Company Showcase Carousel
    ========================================================================== */
 .home-companies-wttj {
-  background: #f4f3ee;
-  padding: 36px 0 44px;
-  border-top: 1px solid #e7e5dc;
-  border-bottom: 1px solid #e7e5dc;
+  background: #ffffff;
+  padding: 0 0 44px;
+  border-top: none;
+  border-bottom: none;
 }
 .wttj-tabs-wrap {
   display: flex;
@@ -5251,7 +5251,7 @@ body {
 }
 @media (max-width: 768px) {
   .home-companies-wttj {
-    padding: 26px 0 34px;
+    padding: 0 0 28px;
   }
   .wttj-tabs-wrap {
     justify-content: flex-start;
