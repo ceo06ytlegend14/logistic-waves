@@ -501,7 +501,7 @@ def layout(title, body, user=None, active="", description="", page_class="", ext
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/styles.css?v=20261127_wttj_v2">
+  <link rel="stylesheet" href="/static/styles.css?v=20261127_wttj_v3">
   <link rel="stylesheet" href="/static/home-recreation.css?v=20261126_apple2">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   {extra_head}
@@ -1244,15 +1244,17 @@ def home_page(conn, user):
     <!-- 4 & 5. Company Showcase — replaces LATEST OPPORTUNITIES, white bg, sector tabs -->
     <section class="home-opportunities-section home-companies-wttj" id="companies-directory">
       <div class="container">
-        <div class="opp-header-row wttj-header-row">
-          <div class="opp-header-left">
-            <span class="editorial-sec-title">COMPANIES</span>
-            <span class="editorial-dot"></span>
+        <div class="fwt-header-row">
+          <div class="fwt-header-title-wrap">
+            <h2 class="fwt-header-title">Companies</h2>
+            <div class="fwt-header-bar"></div>
           </div>
-          <div class="opp-controls">
-            <button type="button" class="opp-arrow-btn" onclick="scrollWttjCarousel(-1);" aria-label="Previous">&larr;</button>
-            <button type="button" class="opp-arrow-btn" onclick="scrollWttjCarousel(1);" aria-label="Next">&rarr;</button>
-            <a href="/companies" class="subnav-explore-btn" style="margin-left: 8px;">View All &rarr;</a>
+          <div style="display:flex; align-items:center; gap:16px;">
+            <a href="/companies" class="fwt-view-all-link" style="font-size:12.5px; font-weight:700; color:#0066cc; text-decoration:none;">View All Companies &rarr;</a>
+            <div class="fwt-nav-controls">
+              <button type="button" class="fwt-nav-btn" onclick="scrollWttjCarousel(-1);" aria-label="Previous">&lt;</button>
+              <button type="button" class="fwt-nav-btn" onclick="scrollWttjCarousel(1);" aria-label="Next">&gt;</button>
+            </div>
           </div>
         </div>
         <div class="wttj-tabs-wrap">
@@ -1885,7 +1887,7 @@ def job_detail_page(conn, user, job, similar):
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..800&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="/static/styles.css?v=20261127_wttj_v2">
+  <link rel="stylesheet" href="/static/styles.css?v=20261127_wttj_v3">
   <link rel="stylesheet" href="/static/home-recreation.css?v=20261126_apple2">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link rel="stylesheet" href="/static/thesandbox-css/builtin-theme.css">
