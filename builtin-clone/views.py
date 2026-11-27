@@ -495,13 +495,18 @@ def layout(title, body, user=None, active="", description="", page_class="", ext
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="{e(desc)}">
+  <meta property="og:title" content="{e(title)} | Logistic Waves">
+  <meta property="og:description" content="{e(desc)}">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Logistic Waves">
+  <meta name="twitter:card" content="summary_large_image">
   <meta name="csrf-token" content="{e(_get_csrf())}">
   <title>{e(title)} | Logistic Waves</title>
   <link rel="icon" type="image/png" href="/static/favicon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/styles.css?v=20261126_blue_smoke">
+  <link rel="stylesheet" href="/static/styles.css?v=20261127_thumb_lg">
   <link rel="stylesheet" href="/static/home-recreation.css?v=20261126_apple2">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   {extra_head}
@@ -1098,7 +1103,7 @@ def home_page(conn, user):
                   <h4 class="recent-row-title">{e(a['title'])}</h4>
                   <span class="article-author-tag" style="font-size: 9.5px;">{e((a.get('author') or 'Editorial Staff').upper())}</span>
                 </div>
-                <img src="{e(_ed_img(a, i))}" class="recent-thumb-img" alt="{e(a['title'])}" width="96" height="68" loading="lazy" decoding="async">
+                <img src="{e(_ed_img(a, i))}" class="recent-thumb-img" alt="{e(a['title'])}" width="140" height="92" loading="lazy" decoding="async">
               </a>''' for i, a in enumerate(recent_arts))
         picks_inner_html = f'''
             <div class="todays-picks-layout">
@@ -1871,7 +1876,7 @@ def job_detail_page(conn, user, job, similar):
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..800&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="/static/styles.css?v=20261126_blue_smoke">
+  <link rel="stylesheet" href="/static/styles.css?v=20261127_thumb_lg">
   <link rel="stylesheet" href="/static/home-recreation.css?v=20261126_apple2">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link rel="stylesheet" href="/static/thesandbox-css/builtin-theme.css">

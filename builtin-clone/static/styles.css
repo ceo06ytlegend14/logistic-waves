@@ -1621,10 +1621,10 @@ button svg,
   color: var(--blue, #244fe7);
 }
 .recent-thumb-img {
-  width: 96px;
-  height: 64px;
+  width: 140px;
+  height: 92px;
   object-fit: cover;
-  border-radius: 10px;
+  border-radius: 12px;
   flex-shrink: 0;
 }
 
@@ -3856,7 +3856,7 @@ body {
   position: relative !important;
   width: 100% !important;
   min-height: 360px !important;
-  background: #f8fafc !important;
+  background: #e0f2fe !important;
   display: flex !important;
   flex-direction: column !important;
   justify-content: center !important;
@@ -3882,19 +3882,19 @@ body {
   opacity: 1 !important;
 }
 
-/* 2. Seamless Smoke-White Cinematic Gradient Mask */
+/* 2. Seamless Smoke-Blue Cinematic Gradient Mask */
 .smoke-white-hero .hero-smoke-overlay {
   position: absolute !important;
   inset: 0 !important;
   z-index: 2 !important;
   background: linear-gradient(
     90deg,
-    #f8fafc 0%,
-    #f8fafc 38%,
-    rgba(248, 250, 252, 0.90) 45%,
-    rgba(248, 250, 252, 0.45) 54%,
-    rgba(248, 250, 252, 0.08) 64%,
-    transparent 74%
+    #e0f2fe 0%,
+    #e0f2fe 36%,
+    rgba(224, 242, 254, 0.92) 44%,
+    rgba(219, 234, 254, 0.56) 54%,
+    rgba(191, 219, 254, 0.16) 65%,
+    transparent 76%
   ) !important;
   pointer-events: none !important;
 }
@@ -3922,9 +3922,9 @@ body {
   .smoke-white-hero .hero-smoke-overlay {
     background: linear-gradient(
       180deg,
-      rgba(248, 250, 252, 0.94) 0%,
-      rgba(248, 250, 252, 0.90) 65%,
-      rgba(248, 250, 252, 0.78) 100%
+      rgba(224, 242, 254, 0.95) 0%,
+      rgba(224, 242, 254, 0.90) 65%,
+      rgba(219, 234, 254, 0.78) 100%
     ) !important;
   }
   .smoke-white-hero .hero-inner-wrap {
@@ -3997,7 +3997,7 @@ body {
   flex-wrap: wrap !important;
   gap: 14px !important;
   align-items: center !important;
-  margin-bottom: 32px !important;
+  margin-bottom: 0 !important;
 }
 
 .smoke-white-hero .hero-btn-primary {
