@@ -501,7 +501,7 @@ def layout(title, body, user=None, active="", description="", page_class="", ext
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/styles.css?v=20261127_wttj_v3">
+  <link rel="stylesheet" href="/static/styles.css?v=20261127_wttj_v4">
   <link rel="stylesheet" href="/static/home-recreation.css?v=20261126_apple2">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   {extra_head}
@@ -751,7 +751,7 @@ def logistic_waves_today_section(conn):
         art_url = f"/articles/{ep['slug']}"
         cards_html.append(f'''
         <article class="fwt-card" data-episode-id="{ep['id']}">
-          <div class="fwt-thumb-wrap" onclick="openFwtModal({ep['id']});">
+          <a class="fwt-thumb-wrap" href="{art_url}">
             <img src="{ep['thumb']}" alt="{e(ep['title'])}" class="fwt-thumb-img" width="480" height="270" loading="lazy" decoding="async">
             <div class="fwt-play-btn" aria-hidden="true">
               <i class="fa-solid fa-play"></i>
@@ -759,7 +759,7 @@ def logistic_waves_today_section(conn):
             <button type="button" class="fwt-share-btn" onclick="event.stopPropagation(); shareFwtEpisode('{e(ep['title'])}', '{art_url}');" aria-label="Share episode">
               <i class="fa-solid fa-arrow-up-from-bracket"></i>
             </button>
-          </div>
+          </a>
           <div class="fwt-body">
             <span class="fwt-series-tag">{e(ep['series'])}</span>
             <h3 class="fwt-card-title">
@@ -1889,7 +1889,7 @@ def job_detail_page(conn, user, job, similar):
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..800&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="/static/styles.css?v=20261127_wttj_v3">
+  <link rel="stylesheet" href="/static/styles.css?v=20261127_wttj_v4">
   <link rel="stylesheet" href="/static/home-recreation.css?v=20261126_apple2">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link rel="stylesheet" href="/static/thesandbox-css/builtin-theme.css">
