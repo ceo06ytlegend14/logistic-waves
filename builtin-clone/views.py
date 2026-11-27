@@ -503,7 +503,7 @@ def layout(title, body, user=None, active="", description="", page_class="", ext
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/styles.css?v=20261127_wttj_v4">
+  <link rel="stylesheet" href="/static/styles.css?v=20261127_hero_slides">
   <link rel="stylesheet" href="/static/home-recreation.css?v=20261126_apple2">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   {extra_head}
@@ -1112,7 +1112,12 @@ def home_page(conn, user):
     <!-- 1. Enterprise Hero: Insights for Smarter Logistics (HD Photographic Smoke-White Master Composition) -->
     <section class="lw-hero-banner-section smoke-white-hero">
       <div class="hero-shell">
-        <div class="hero-photo-hd" aria-hidden="true"></div>
+        <div class="hero-photo-hd" id="heroSlideContainer" aria-hidden="true">
+          <div class="hero-bg-slide active" style="background-image: url('/static/images/login_concept_hero_bg.jpg');"></div>
+          <div class="hero-bg-slide" style="background-image: url('/static/images/cargo_ship_hero.jpg');"></div>
+          <div class="hero-bg-slide" style="background-image: url('/static/images/editorial/hub_02.jpg');"></div>
+          <div class="hero-bg-slide" style="background-image: url('/static/images/editorial/hub_03.jpg');"></div>
+        </div>
         <div class="hero-smoke-overlay" aria-hidden="true"></div>
 
         <div class="hero-inner-wrap">
@@ -1136,8 +1141,35 @@ def home_page(conn, user):
             </div>
           </div>
         </div>
+
+        <div class="hero-slide-dots" aria-label="Hero banner slides">
+          <button type="button" class="hero-slide-dot active" data-slide="0" aria-label="Slide 1"></button>
+          <button type="button" class="hero-slide-dot" data-slide="1" aria-label="Slide 2"></button>
+          <button type="button" class="hero-slide-dot" data-slide="2" aria-label="Slide 3"></button>
+          <button type="button" class="hero-slide-dot" data-slide="3" aria-label="Slide 4"></button>
+        </div>
       </div>
-    </section>"""
+    </section>
+    <script>
+      (function() {{
+        const slides = document.querySelectorAll('#heroSlideContainer .hero-bg-slide');
+        const dots = document.querySelectorAll('.hero-slide-dots .hero-slide-dot');
+        if (!slides.length) return;
+        let idx = 0;
+        let timer = null;
+        function showSlide(next) {{
+          idx = (next + slides.length) % slides.length;
+          slides.forEach((s, i) => s.classList.toggle('active', i === idx));
+          dots.forEach((d, i) => d.classList.toggle('active', i === idx));
+        }}
+        function resetTimer() {{
+          if (timer) clearInterval(timer);
+          timer = setInterval(() => showSlide(idx + 1), 10000);
+        }}
+        dots.forEach((d, i) => d.addEventListener('click', () => {{ showSlide(i); resetTimer(); }}));
+        resetTimer();
+      }})();
+    </script>"""
 
     editorial_articles = db.cached_query(
         "home_editorial_v2",
@@ -1891,7 +1923,7 @@ def job_detail_page(conn, user, job, similar):
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..800&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="/static/styles.css?v=20261127_wttj_v4">
+  <link rel="stylesheet" href="/static/styles.css?v=20261127_hero_slides">
   <link rel="stylesheet" href="/static/home-recreation.css?v=20261126_apple2">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link rel="stylesheet" href="/static/thesandbox-css/builtin-theme.css">
@@ -3281,7 +3313,7 @@ COURSE_LINES = [
                 "title": "Logistic Wave Today | November 3",
                 "date": "Nov 4, 2026",
                 "duration": "24m",
-                "thumb": "/static/images/fw_today_1.svg",
+                "thumb": "/static/images/fw_today_1.svg?v=2",
                 "desc": "Freight markets are tightening, diesel prices are creating new challenges for carriers, and the latest economic indicators suggest shifting contract volumes across national routes.",
                 "link_text": "Read more...",
                 "channel": "Logistic Wave Media",
@@ -3298,7 +3330,7 @@ COURSE_LINES = [
                 "title": "Diesel Prices Collapse, Then Rebound: What's Driving Volatility?",
                 "date": "Nov 4, 2026",
                 "duration": "18m",
-                "thumb": "/static/images/fw_today_2.svg",
+                "thumb": "/static/images/fw_today_2.svg?v=2",
                 "desc": "The diesel market is experiencing extreme volatility, dropping sharply then rebounding on geopolitical news. Zach Strickland breaks down refinery spreads and wholesale impacts.",
                 "link_text": "Read more...",
                 "channel": "Logistic Wave SONAR",
@@ -3315,7 +3347,7 @@ COURSE_LINES = [
                 "title": "Why Your Trucking Insurance Costs Are Rising & How to Fight Back",
                 "date": "Nov 4, 2026",
                 "duration": "22m",
-                "thumb": "/static/images/fw_today_3.svg",
+                "thumb": "/static/images/fw_today_3.svg?v=2",
                 "desc": "Control your trucking insurance costs by focusing on risk reduction before losses occur. Peter Niro from Progressive Insurance shares underwriting metrics and safety tips.",
                 "link_text": "Read more...",
                 "channel": "Logistic Wave Today",
@@ -3332,7 +3364,7 @@ COURSE_LINES = [
                 "title": "Logistics Alert: Capacity SHRINKS for 11 Straight Months",
                 "date": "Nov 4, 2026",
                 "duration": "19m",
-                "thumb": "/static/images/fw_today_4.svg",
+                "thumb": "/static/images/fw_today_4.svg?v=2",
                 "desc": "The latest ISM Manufacturing PMI and LMI reports confirm what many in logistics already feel: demand is strong, but capacity is heavily constrained across dry van and reefer.",
                 "link_text": "Read more...",
                 "channel": "SONAR Market Intelligence",
@@ -3349,7 +3381,7 @@ COURSE_LINES = [
                 "title": "Truckload Rates Explode: How Shippers Adapt to Rising Costs",
                 "date": "Nov 4, 2026",
                 "duration": "26m",
-                "thumb": "/static/images/fw_today_5.svg",
+                "thumb": "/static/images/fw_today_5.svg?v=2",
                 "desc": "The freight market is experiencing an inflationary leg in its current cycle, pushing truckload rates up over 4% across major lanes. Chris Pickett details defensive routing strategies.",
                 "link_text": "Read more...",
                 "channel": "Logistic Wave Today",

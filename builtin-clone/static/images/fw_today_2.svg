@@ -40,10 +40,6 @@
     <path d="M 1 7 L 1 12 L 11 12 L 11 7"/>
   </g>
 
-  <!-- Play Button (Left Center) -->
-  <circle cx="110" cy="140" r="22" fill="#1D2226"/>
-  <polygon points="104,130 120,140 104,150" fill="#FFFFFF"/>
-
   <!-- Bottom Lower Third Bar -->
   <rect x="0" y="190" width="400" height="35" fill="#0F1419" opacity="0.9"/>
   <text x="16" y="212" font-family="-apple-system, sans-serif" font-size="11" font-weight="800" fill="#FFFFFF" letter-spacing="1">ZACH STRICKLAND</text>
