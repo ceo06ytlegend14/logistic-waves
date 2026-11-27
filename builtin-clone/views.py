@@ -406,7 +406,7 @@ def header(user, active=""):
         <div class="header-actions">
           <button class="icon-btn search-trigger" type="button" aria-label="Open search">{icon("search", 22)}</button>
           {account}
-          <a class="btn btn-outline-light employer-btn" href="/employers">For Employers</a>
+          <a class="btn btn-outline-light employer-btn" href="/employers">FOR EMPLOYERS &rarr;</a>
           <button class="icon-btn mobile-menu-btn" type="button" aria-label="Open menu">{icon("menu", 24)}</button>
         </div>
       </div>
@@ -506,7 +506,7 @@ def layout(title, body, user=None, active="", description="", page_class="", ext
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/styles.css?v=20261127_nav_learn">
+  <link rel="stylesheet" href="/static/styles.css?v=20261127_flex_hdr">
   <link rel="stylesheet" href="/static/home-recreation.css?v=20261126_apple2">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   {extra_head}
@@ -1067,79 +1067,70 @@ def home_page(conn, user):
     )
     _ed_img = _article_cover_url
 
+    def _newsroom_meta(art, extra_cls=""):
+        cat = (art.get("category") or art.get("tag") or "Logistics").strip()
+        pub = (art.get("published") or art.get("read_time") or art.get("author") or "").strip()
+        cls = f"newsroom-meta {extra_cls}".strip()
+        sep_pub = f'<span>&middot;</span><span>{e(pub)}</span>' if pub else ""
+        return f'<div class="{cls}"><span class="newsroom-meta-cat">{e(cat)}</span>{sep_pub}</div>'
+
     if editorial_articles:
         lead_art = editorial_articles[0]
         stacked_arts = editorial_articles[1:3]
-        recent_arts = editorial_articles[:5]
+        brief_arts = editorial_articles[3:7]
         stacked_html = "".join(f'''
-                <article class="stacked-story">
-                  <a href="/articles/{e(a['slug'])}" class="stacked-img-wrap">
-                    <img src="{e(_ed_img(a, i + 1))}" alt="{e(a['title'])}" width="400" height="225" loading="lazy" decoding="async">
-                  </a>
-                  <span class="article-kicker">{e((a.get('category') or 'EDITORIAL').upper())}</span>
-                  <h3 class="stacked-title">
-                    <a href="/articles/{e(a['slug'])}">{e(a['title'])}</a>
-                  </h3>
-                  <span class="article-author-tag">{e((a.get('author') or 'Editorial Staff').upper())}</span>
-                </article>''' for i, a in enumerate(stacked_arts))
-        lead_html = f'''
-              <article class="article-lead-card">
-                <a href="/articles/{e(lead_art['slug'])}" class="article-lead-img-wrap">
-                  <img src="{e(_ed_img(lead_art, 0))}" alt="{e(lead_art['title'])}" width="720" height="405" loading="lazy" decoding="async">
+              <article class="stacked-story">
+                <a href="/articles/{e(a['slug'])}" class="stacked-img-wrap">
+                  <img src="{e(_ed_img(a, i + 1))}" alt="{e(a['title'])}" width="400" height="250" loading="lazy" decoding="async">
                 </a>
-                <div class="article-lead-content">
-                  <span class="article-kicker">{e((lead_art.get('tag') or lead_art.get('category') or 'FEATURED').upper())}</span>
-                  <h2 class="article-lead-title">
-                    <a href="/articles/{e(lead_art['slug'])}">{e(lead_art['title'])}</a>
-                  </h2>
-                  <p class="article-lead-excerpt">{e(lead_art.get('excerpt') or '')}</p>
-                  <span class="article-author-tag">{e((lead_art.get('author') or 'Editorial Staff').upper())}</span>
-                </div>
-              </article>'''
-        recent_html = "".join(f'''
-              <a href="/articles/{e(a['slug'])}" class="recent-row-item">
-                <div class="recent-row-left">
-                  <span class="article-kicker" style="font-size: 10px;">{e((a.get('category') or 'NEWS').upper())}</span>
-                  <h4 class="recent-row-title">{e(a['title'])}</h4>
-                  <span class="article-author-tag" style="font-size: 9.5px;">{e((a.get('author') or 'Editorial Staff').upper())}</span>
-                </div>
-                <img src="{e(_ed_img(a, i))}" class="recent-thumb-img" alt="{e(a['title'])}" width="140" height="92" loading="lazy" decoding="async">
-              </a>''' for i, a in enumerate(recent_arts))
-        picks_inner_html = f'''
-            <div class="todays-picks-layout">
-              <div class="todays-picks-stacked">{stacked_html}</div>
-              {lead_html}
-            </div>'''
+                <h3 class="stacked-title">
+                  <a href="/articles/{e(a['slug'])}">{e(a['title'])}</a>
+                </h3>
+                {_newsroom_meta(a)}
+              </article>''' for i, a in enumerate(stacked_arts))
+        lead_html = f'''
+            <article class="article-lead-card newsroom-lead-col">
+              <a href="/articles/{e(lead_art['slug'])}" class="article-lead-img-wrap">
+                <img src="{e(_ed_img(lead_art, 0))}" alt="{e(lead_art['title'])}" width="720" height="450" decoding="async">
+              </a>
+              <div class="article-lead-content">
+                <h2 class="article-lead-title newsroom-lead-heading">
+                  <a href="/articles/{e(lead_art['slug'])}">{e(lead_art['title'])}</a>
+                </h2>
+                {_newsroom_meta(lead_art, "newsroom-meta-lead")}
+                <p class="article-lead-excerpt newsroom-lead-copy">{e(lead_art.get('excerpt') or '')}</p>
+              </div>
+            </article>'''
+        brief_html = "".join(f'''
+              <article class="newsroom-brief-item">
+                <h4><a href="/articles/{e(a['slug'])}">{e(a['title'])}</a></h4>
+                <p class="newsroom-brief-excerpt">{e(a.get('excerpt') or '')}</p>
+                {_newsroom_meta(a)}
+              </article>''' for a in brief_arts)
+        if not brief_html:
+            brief_html = '<p class="newsroom-brief-excerpt">More intelligence briefings coming soon.</p>'
+        bento_body_html = f'''
+          <div class="newsroom-grid-3">
+            <div class="todays-picks-stacked">{stacked_html}</div>
+            {lead_html}
+            <div class="newsroom-briefs-col">{brief_html}</div>
+          </div>'''
     else:
-        picks_inner_html = empty_state("No editorial articles published yet", "Publish an article from the admin dashboard to feature it here.", "/article-blogs", "Explore Intelligence Hub")
-        recent_html = '<p style="color:#64748b;font-size:13px;">No recent articles yet.</p>'
+        bento_body_html = empty_state("No editorial articles published yet", "Publish an article from the admin dashboard to feature it here.", "/article-blogs", "Explore Intelligence Hub")
 
     body += f"""
-    <!-- 2. Editorial Showcase: Today's Picks & Most Recent -->
-    <section class="home-editorial-section">
+    <!-- 2. Editorial Showcase: 3-Column Newsroom Bento Card -->
+    <section class="home-editorial-section newsroom-section">
       <div class="container">
-        <div class="editorial-grid-12">
-          
-          <!-- Left 8 Columns: Today's Picks -->
-          <div>
-            <div class="editorial-sec-header">
-              <span class="editorial-sec-title">TODAY'S PICKS</span>
-              <span class="editorial-dot"></span>
-            </div>
-            {picks_inner_html}
+        <div class="newsroom-bento-card">
+          <div class="newsroom-bento-head">
+            <h2 class="newsroom-bento-title">
+              <span class="editorial-dot" aria-hidden="true"></span>
+              Today's Briefings
+            </h2>
+            <a class="newsroom-bento-more" href="/article-blogs">See all briefings &rarr;</a>
           </div>
-
-          <!-- Right 4 Columns: Most Recent -->
-          <div>
-            <div class="editorial-sec-header">
-              <span class="editorial-sec-title">MOST RECENT</span>
-              <span class="editorial-dot"></span>
-            </div>
-            <div class="most-recent-list">
-              {recent_html}
-            </div>
-          </div>
-
+          {bento_body_html}
         </div>
       </div>
     </section>
@@ -1907,7 +1898,7 @@ def job_detail_page(conn, user, job, similar):
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..800&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="/static/styles.css?v=20261127_nav_learn">
+  <link rel="stylesheet" href="/static/styles.css?v=20261127_flex_hdr">
   <link rel="stylesheet" href="/static/home-recreation.css?v=20261126_apple2">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link rel="stylesheet" href="/static/thesandbox-css/builtin-theme.css">
