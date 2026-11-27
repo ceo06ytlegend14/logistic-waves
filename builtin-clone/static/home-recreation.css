@@ -282,10 +282,10 @@
   color: var(--blue, #244fe7);
 }
 .recent-thumb-img {
-  width: 140px;
-  height: 92px;
+  width: 96px;
+  height: 64px;
   object-fit: cover;
-  border-radius: 12px;
+  border-radius: 10px;
   flex-shrink: 0;
 }
 

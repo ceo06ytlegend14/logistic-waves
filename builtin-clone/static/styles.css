@@ -1621,10 +1621,10 @@ button svg,
   color: var(--blue, #244fe7);
 }
 .recent-thumb-img {
-  width: 140px;
-  height: 92px;
+  width: 96px;
+  height: 64px;
   object-fit: cover;
-  border-radius: 12px;
+  border-radius: 10px;
   flex-shrink: 0;
 }
 
@@ -3856,7 +3856,7 @@ body {
   position: relative !important;
   width: 100% !important;
   min-height: 360px !important;
-  background: #e0f2fe !important;
+  background: #f8fafc !important;
   display: flex !important;
   flex-direction: column !important;
   justify-content: center !important;
@@ -3882,19 +3882,19 @@ body {
   opacity: 1 !important;
 }
 
-/* 2. Seamless Smoke-Blue Cinematic Gradient Mask */
+/* 2. Seamless Smoke-White Cinematic Gradient Mask */
 .smoke-white-hero .hero-smoke-overlay {
   position: absolute !important;
   inset: 0 !important;
   z-index: 2 !important;
   background: linear-gradient(
     90deg,
-    #e0f2fe 0%,
-    #e0f2fe 36%,
-    rgba(224, 242, 254, 0.92) 44%,
-    rgba(219, 234, 254, 0.56) 54%,
-    rgba(191, 219, 254, 0.16) 65%,
-    transparent 76%
+    #f8fafc 0%,
+    #f8fafc 38%,
+    rgba(248, 250, 252, 0.90) 45%,
+    rgba(248, 250, 252, 0.45) 54%,
+    rgba(248, 250, 252, 0.08) 64%,
+    transparent 74%
   ) !important;
   pointer-events: none !important;
 }
@@ -3922,9 +3922,9 @@ body {
   .smoke-white-hero .hero-smoke-overlay {
     background: linear-gradient(
       180deg,
-      rgba(224, 242, 254, 0.95) 0%,
-      rgba(224, 242, 254, 0.90) 65%,
-      rgba(219, 234, 254, 0.78) 100%
+      rgba(248, 250, 252, 0.94) 0%,
+      rgba(248, 250, 252, 0.90) 65%,
+      rgba(248, 250, 252, 0.78) 100%
     ) !important;
   }
   .smoke-white-hero .hero-inner-wrap {
@@ -3997,7 +3997,7 @@ body {
   flex-wrap: wrap !important;
   gap: 14px !important;
   align-items: center !important;
-  margin-bottom: 0 !important;
+  margin-bottom: 32px !important;
 }
 
 .smoke-white-hero .hero-btn-primary {
@@ -4420,31 +4420,25 @@ body {
 
 
 /* ==========================================================================
-   FLEXPORT-STYLE CLEAN WHITE HEADER OVERRIDES
+   SMOKE WHITE HEADER & FOOTER OVERRIDES
    ========================================================================== */
 .site-header {
-  background: #ffffff !important;
+  background: #f8fafc !important;
   color: #0f172a !important;
-  border-bottom: 1px solid #d4d4d8 !important;
-  box-shadow: none !important;
-}
-
-.site-header .main-nav {
-  gap: 32px !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05) !important;
 }
 
 .site-header .main-nav a {
-  color: #18181b !important;
-  font-weight: 600 !important;
-  font-size: 13px !important;
-  letter-spacing: 0.06em !important;
-  text-transform: uppercase !important;
+  color: #334155 !important;
+  font-weight: 700 !important;
+  font-size: 14.5px !important;
   transition: color 0.18s ease !important;
 }
 
 .site-header .main-nav a:hover,
 .site-header .main-nav a.active {
-  color: #2338ff !important;
+  color: #0284c7 !important;
 }
 
 .site-header .brand-lw-main {
@@ -4454,7 +4448,7 @@ body {
 }
 
 .site-header .brand-lw-accent {
-  color: #2338ff !important;
+  color: #0284c7 !important;
   font-weight: 900 !important;
   text-shadow: none !important;
 }
@@ -4466,182 +4460,53 @@ body {
 
 .site-header .search-trigger,
 .site-header .icon-btn {
-  color: #18181b !important;
+  color: #334155 !important;
 }
 
 .site-header .search-trigger svg {
-  stroke: #18181b !important;
-  color: #18181b !important;
+  stroke: #334155 !important;
+  color: #334155 !important;
 }
 
 .site-header .search-trigger:hover,
 .site-header .icon-btn:hover {
-  color: #2338ff !important;
+  color: #0284c7 !important;
 }
 
 .site-header .search-trigger:hover svg {
-  stroke: #2338ff !important;
+  stroke: #0284c7 !important;
 }
 
-.site-header .header-auth,
-.site-header .header-auth a {
-  color: #18181b !important;
-  font-weight: 600 !important;
-  font-size: 13px !important;
-  letter-spacing: 0.04em !important;
-  text-transform: uppercase !important;
+.site-header .header-auth a,
+.site-header .header-actions a {
+  color: #0f172a !important;
+  font-weight: 700 !important;
 }
 
 .site-header .employer-btn,
 .site-header a.employer-btn {
-  background: #2338ff !important;
-  color: #ffffff !important;
-  border: 1px solid #2338ff !important;
-  border-radius: 0 !important;
-  padding: 12px 20px !important;
-  font-size: 12.5px !important;
-  font-weight: 700 !important;
-  letter-spacing: 0.06em !important;
-  text-transform: uppercase !important;
-  transition: background 0.18s ease, border-color 0.18s ease !important;
+  background: transparent !important;
+  color: #0066cc !important;
+  border: 1.5px solid #0066cc !important;
+  border-radius: 9999px !important;
+  padding: 6px 16px !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  letter-spacing: -0.01em !important;
+  text-transform: none !important;
+  transition: all 0.2s ease !important;
   text-decoration: none !important;
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
-  gap: 8px !important;
 }
 
 .site-header .employer-btn:hover,
 .site-header a.employer-btn:hover {
-  background: #1a2be0 !important;
+  background: #0066cc !important;
   color: #ffffff !important;
-  border-color: #1a2be0 !important;
+  border-color: #0066cc !important;
   text-decoration: none !important;
-}
-
-/* Section 6: Homepage Learning & Courses */
-.home-learning-section {
-  padding: 36px 0 56px;
-  background: #ffffff;
-}
-.home-learning-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 20px;
-}
-.home-learning-card {
-  display: flex;
-  flex-direction: column;
-  text-decoration: none;
-  background: #f8fafc;
-  border-radius: 14px;
-  overflow: hidden;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-.home-learning-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
-}
-.home-learning-thumb-wrap {
-  position: relative;
-  aspect-ratio: 16 / 9;
-  overflow: hidden;
-  background: #0f172a;
-}
-.home-learning-thumb-wrap img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-.home-learning-duration {
-  position: absolute;
-  right: 8px;
-  bottom: 8px;
-  background: rgba(15, 23, 42, 0.82);
-  color: #ffffff;
-  font-size: 11px;
-  font-weight: 700;
-  padding: 2px 8px;
-  border-radius: 6px;
-}
-.home-learning-body {
-  padding: 14px 16px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.home-learning-title {
-  margin: 0;
-  font-size: 14.5px;
-  font-weight: 700;
-  line-height: 1.35;
-  color: #0f172a;
-}
-.home-learning-meta {
-  margin: 0;
-  font-size: 12px;
-  color: #64748b;
-}
-@media (max-width: 1024px) {
-  .home-learning-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-@media (max-width: 560px) {
-  .home-learning-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* ==========================================================================
-   BORDERLESS HOMEPAGE CLEANUP
-   ========================================================================== */
-.editorial-sec-header,
-.opp-header-left {
-  border-bottom: none !important;
-  padding-bottom: 4px !important;
-}
-
-.home-best-jobs-section,
-.home-split-directory-section,
-.home-opportunities-section,
-.home-learning-section {
-  border-top: none !important;
-  border-bottom: none !important;
-}
-
-.stacked-story + .stacked-story,
-.recent-row-item,
-.best-job-footer,
-.dir-footer,
-.dir-company-row {
-  border-top: none !important;
-  border-bottom: none !important;
-}
-
-.best-job-card,
-.opp-card,
-.home-learning-card,
-.best-job-logo,
-.dir-logo,
-.dir-count-pill,
-.flame-pill,
-.opp-arrow-btn {
-  border: none !important;
-}
-
-.best-job-card,
-.opp-card,
-.home-learning-card {
-  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.04) !important;
-}
-
-.best-job-card:hover,
-.opp-card:hover,
-.home-learning-card:hover {
-  border-color: transparent !important;
-  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.08) !important;
 }
 
 @media (max-width: 860px) {
@@ -5096,192 +4961,5 @@ body {
     border-top: 2px solid #e2e8f0 !important;
     padding-top: 28px !important;
     margin-top: 10px !important;
-  }
-}
-
-/* ==========================================================================
-   3-Column Newsroom Bento Layout (Cool-Gray Canvas + Boxed Editorial Card)
-   ========================================================================== */
-.home-editorial-section.newsroom-section {
-  background: #f1f5f9 !important;
-  padding: 28px 0 36px !important;
-  border-bottom: 1px solid #e2e8f0;
-}
-.newsroom-bento-card {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 20px;
-  padding: 24px 28px 28px;
-  box-shadow: 0 2px 14px rgba(15, 23, 42, 0.04);
-}
-.newsroom-bento-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-  padding-bottom: 14px;
-  margin-bottom: 22px;
-  border-bottom: 1px solid #e2e8f0;
-}
-.newsroom-bento-title {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-family: var(--font-display);
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: -0.025em;
-  color: #004b87;
-  margin: 0;
-}
-.newsroom-bento-more {
-  font-family: var(--font-text);
-  font-size: 13px;
-  font-weight: 600;
-  color: #0071e3;
-  text-decoration: none;
-}
-.newsroom-bento-more:hover {
-  text-decoration: underline;
-}
-.newsroom-grid-3 {
-  display: grid;
-  grid-template-columns: 3fr 5fr 4fr;
-  gap: 26px;
-  align-items: start;
-}
-.newsroom-lead-col {
-  min-width: 0;
-}
-.newsroom-lead-heading {
-  font-family: var(--font-display);
-  font-size: 23px !important;
-  font-weight: 700 !important;
-  line-height: 1.22 !important;
-  letter-spacing: -0.026em !important;
-  margin: 0 0 8px !important;
-}
-.newsroom-lead-copy {
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  margin-bottom: 0 !important;
-}
-.newsroom-meta {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  font-family: var(--font-text);
-  font-size: 11.5px;
-  font-weight: 500;
-  color: #64748b;
-  margin: 4px 0 0;
-}
-.newsroom-meta-lead {
-  margin: 0 0 10px;
-}
-.newsroom-meta-cat {
-  color: #0066cc;
-  font-weight: 600;
-}
-.newsroom-briefs-col {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  border-left: 1px solid #e2e8f0;
-  padding-left: 24px;
-}
-.newsroom-brief-item {
-  padding: 13px 0;
-  border-bottom: 1px solid #e2e8f0;
-}
-.newsroom-brief-item:first-child {
-  padding-top: 0;
-}
-.newsroom-brief-item:last-child {
-  padding-bottom: 0;
-  border-bottom: none;
-}
-.newsroom-brief-item h4 {
-  font-family: var(--font-display);
-  font-size: 15.5px;
-  font-weight: 700;
-  line-height: 1.32;
-  letter-spacing: -0.018em;
-  color: #0f172a;
-  margin: 0;
-}
-.newsroom-brief-item h4 a {
-  color: inherit;
-  text-decoration: none;
-}
-.newsroom-brief-item h4 a:hover {
-  color: #0071e3;
-}
-.newsroom-brief-excerpt {
-  font-family: var(--font-text);
-  font-size: 13px;
-  line-height: 1.5;
-  color: #475569;
-  margin: 6px 0 0;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-@media (max-width: 1024px) {
-  .newsroom-grid-3 {
-    grid-template-columns: 260px 1fr;
-    gap: 24px;
-  }
-  .newsroom-briefs-col {
-    grid-column: 1 / -1;
-    border-left: none;
-    padding-left: 0;
-    border-top: 1px solid #e2e8f0;
-    padding-top: 20px;
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 18px 24px;
-  }
-  .newsroom-brief-item {
-    padding: 0 0 14px;
-  }
-  .newsroom-brief-item:nth-last-child(-n+2) {
-    border-bottom: none;
-    padding-bottom: 0;
-  }
-}
-
-@media (max-width: 680px) {
-  .home-editorial-section.newsroom-section {
-    padding: 20px 0 28px !important;
-  }
-  .newsroom-bento-card {
-    padding: 18px 16px 20px;
-    border-radius: 16px;
-  }
-  .newsroom-grid-3 {
-    grid-template-columns: 1fr;
-    gap: 20px;
-  }
-  .newsroom-lead-col {
-    order: -1;
-  }
-  .newsroom-briefs-col {
-    grid-template-columns: 1fr;
-    gap: 0;
-  }
-  .newsroom-brief-item {
-    padding: 14px 0;
-    border-bottom: 1px solid #e2e8f0 !important;
-  }
-  .newsroom-brief-item:last-child {
-    border-bottom: none !important;
-    padding-bottom: 0;
   }
 }
