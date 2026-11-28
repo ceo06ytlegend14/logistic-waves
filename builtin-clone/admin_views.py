@@ -979,35 +979,55 @@ def render_edit_modals(all_companies):
         "</script>\n"
     )
 
-def _render_pagination(tab: str, page: int, total: int, per_page: int = 20, q: str = "") -> str:
-    """Render server-side pagination controls for admin tables."""
+def _render_pagination(tab: str, page: int, total: int, per_page: int = 20, q: str = "", extra_params=None) -> str:
+    """Render numbered SaaS pagination controls for admin tables."""
     import urllib.parse as _up
-    q_suffix = f"&amp;q={_up.quote(q)}" if q else ""
+    parts = [f"tab={_up.quote(tab)}"]
+    if q:
+        parts.append(f"q={_up.quote(q)}")
+    for k, v in (extra_params or {}).items():
+        if v:
+            parts.append(f"{_up.quote(str(k))}={_up.quote(str(v))}")
+    base_qs = "&amp;".join(parts)
     total_pages = max(1, (total + per_page - 1) // per_page)
-    if total_pages <= 1:
-        return ""
     page = max(1, min(page, total_pages))
-    prev_btn = (
-        f"<a href='/admin?tab={e(tab)}&amp;page={page - 1}{q_suffix}' class='btn-ctrl btn-ctrl-light' style='padding:5px 12px;font-size:12px;'>&laquo; Prev</a>"
-        if page > 1 else
-        "<span class='btn-ctrl btn-ctrl-light' style='padding:5px 12px;font-size:12px;opacity:.45;cursor:not-allowed;'>&laquo; Prev</span>"
-    )
-    next_btn = (
-        f"<a href='/admin?tab={e(tab)}&amp;page={page + 1}{q_suffix}' class='btn-ctrl btn-ctrl-light' style='padding:5px 12px;font-size:12px;'>Next &raquo;</a>"
-        if page < total_pages else
-        "<span class='btn-ctrl btn-ctrl-light' style='padding:5px 12px;font-size:12px;opacity:.45;cursor:not-allowed;'>Next &raquo;</span>"
-    )
+    start_idx = ((page - 1) * per_page + 1) if total > 0 else 0
+    end_idx = min(total, page * per_page)
+    if total_pages <= 1:
+        return (
+            "<div class='pg-bar'>"
+            f"<span style='font-size:12.5px;color:#64748b;'>Showing {start_idx}&ndash;{end_idx} of {total}</span>"
+            "</div>"
+        )
+    prev_btn = f"<a href='/admin?{base_qs}&amp;page={page - 1}' class='pg-btn{' disabled' if page <= 1 else ''}' aria-label='Previous'>&lsaquo;</a>"
+    next_btn = f"<a href='/admin?{base_qs}&amp;page={page + 1}' class='pg-btn{' disabled' if page >= total_pages else ''}' aria-label='Next'>&rsaquo;</a>"
+    nums = []
+    window = sorted({1, total_pages, max(1, page - 1), page, min(total_pages, page + 1), min(total_pages, page + 2)})
+    prev_n = 0
+    for n in window:
+        if prev_n and n - prev_n > 1:
+            nums.append("<span style='color:#94a3b8;padding:0 4px;'>&hellip;</span>")
+        cls = "pg-btn active" if n == page else "pg-btn"
+        nums.append(f"<a href='/admin?{base_qs}&amp;page={n}' class='{cls}'>{n}</a>")
+        prev_n = n
     return (
-        "<div style='display:flex;align-items:center;justify-content:space-between;padding:14px 24px;border-top:1px solid #e2e8f0;'>"
-        f"<span style='font-size:12.5px;color:#64748b;'>Page <strong>{page}</strong> of <strong>{total_pages}</strong> ({total} total)</span>"
-        f"<div style='display:flex;gap:8px;'>{prev_btn}{next_btn}</div>"
+        "<div class='pg-bar'>"
+        f"<span style='font-size:12.5px;color:#64748b;'>Showing <strong>{start_idx}&ndash;{end_idx}</strong> of <strong>{total}</strong></span>"
+        f"<div class='pg-nums'>{prev_btn}{''.join(nums)}{next_btn}</div>"
         "</div>"
     )
 
 
-def render_admin_dashboard(conn, user, message="", error="", tab="overview", page=1, q=""):
+def render_admin_dashboard(conn, user, message="", error="", tab="overview", page=1, q="", filters=None):
     page = max(1, int(page or 1))
     q = (q or "").strip()
+    filters = filters or {}
+    f_cat = (filters.get("category") or "").strip()
+    f_loc = (filters.get("location") or "").strip()
+    f_workplace = (filters.get("workplace") or "").strip()
+    f_status = (filters.get("status") or "").strip()
+    f_verified = (filters.get("verified") or "").strip()
+    f_industry = (filters.get("industry") or "").strip()
     per_page = 20
     offset = (page - 1) * per_page
 
@@ -1061,65 +1081,74 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
             ).fetchall()]
 
     if tab == "articles":
+        art_where = []
+        art_args = []
         if like:
-            tab_total = conn.execute(
-                "SELECT COUNT(*) FROM articles WHERE title LIKE ? ESCAPE '\\' OR category LIKE ? ESCAPE '\\' OR author LIKE ? ESCAPE '\\'",
-                (like, like, like)
-            ).fetchone()[0]
-            all_articles = [dict(r) for r in conn.execute(
-                "SELECT id, slug, title, category, tag, author, published, is_today, read_time, duration, guest, thumb, excerpt, body "
-                "FROM articles WHERE title LIKE ? ESCAPE '\\' OR category LIKE ? ESCAPE '\\' OR author LIKE ? ESCAPE '\\' "
-                "ORDER BY id DESC LIMIT ? OFFSET ?",
-                (like, like, like, per_page, offset)
-            ).fetchall()]
-        else:
-            tab_total = counts["articles"]
-            all_articles = [dict(r) for r in conn.execute(
-                "SELECT id, slug, title, category, tag, author, published, is_today, read_time, duration, guest, thumb, excerpt, body "
-                "FROM articles ORDER BY id DESC LIMIT ? OFFSET ?",
-                (per_page, offset)
-            ).fetchall()]
+            art_where.append("(title LIKE ? ESCAPE '\\' OR category LIKE ? ESCAPE '\\' OR author LIKE ? ESCAPE '\\')")
+            art_args.extend([like, like, like])
+        if f_cat:
+            art_where.append("category = ?")
+            art_args.append(f_cat)
+        aw_sql = (" WHERE " + " AND ".join(art_where)) if art_where else ""
+        tab_total = conn.execute(f"SELECT COUNT(*) FROM articles{aw_sql}", art_args).fetchone()[0]
+        all_articles = [dict(r) for r in conn.execute(
+            f"SELECT id, slug, title, category, tag, author, published, is_today, read_time, duration, guest, thumb, excerpt, body "
+            f"FROM articles{aw_sql} ORDER BY id DESC LIMIT ? OFFSET ?",
+            art_args + [per_page, offset]
+        ).fetchall()]
 
     if tab in ("overview", "jobs"):
         j_limit = 5 if tab == "overview" else per_page
         j_offset = 0 if tab == "overview" else offset
-        if like and tab == "jobs":
-            total_jobs_count = conn.execute(
-                "SELECT COUNT(*) FROM jobs WHERE title LIKE ? ESCAPE '\\' OR company_name LIKE ? ESCAPE '\\' OR location LIKE ? ESCAPE '\\'",
-                (like, like, like)
-            ).fetchone()[0]
-            all_jobs = [dict(r) for r in conn.execute(
-                "SELECT id, slug, title, company_id, company_slug, company_name, category, level, workplace, location, salary_min, salary_max, salary_display, skills, description, posted_at, COALESCE(featured, 0) AS featured, COALESCE(status, 'active') AS status "
-                "FROM jobs WHERE title LIKE ? ESCAPE '\\' OR company_name LIKE ? ESCAPE '\\' OR location LIKE ? ESCAPE '\\' "
-                "ORDER BY id DESC LIMIT ? OFFSET ?",
-                (like, like, like, j_limit, j_offset)
-            ).fetchall()]
-        else:
-            all_jobs = [dict(r) for r in conn.execute(
-                "SELECT id, slug, title, company_id, company_slug, company_name, category, level, workplace, location, salary_min, salary_max, salary_display, skills, description, posted_at, COALESCE(featured, 0) AS featured, COALESCE(status, 'active') AS status "
-                "FROM jobs ORDER BY id DESC LIMIT ? OFFSET ?",
-                (j_limit, j_offset)
-            ).fetchall()]
+        job_where = []
+        job_args = []
+        if tab == "jobs":
+            if like:
+                job_where.append("(title LIKE ? ESCAPE '\\' OR company_name LIKE ? ESCAPE '\\' OR location LIKE ? ESCAPE '\\')")
+                job_args.extend([like, like, like])
+            if f_cat:
+                job_where.append("category = ?")
+                job_args.append(f_cat)
+            if f_loc:
+                job_where.append("location LIKE ? ESCAPE '\\'")
+                job_args.append(f"%{db._escape_like(f_loc)}%")
+            if f_workplace:
+                job_where.append("workplace = ?")
+                job_args.append(f_workplace)
+            if f_status:
+                job_where.append("COALESCE(status, 'active') = ?")
+                job_args.append(f_status)
+        jw_sql = (" WHERE " + " AND ".join(job_where)) if job_where else ""
+        if tab == "jobs":
+            total_jobs_count = conn.execute(f"SELECT COUNT(*) FROM jobs{jw_sql}", job_args).fetchone()[0]
+        all_jobs = [dict(r) for r in conn.execute(
+            f"SELECT id, slug, title, company_id, company_slug, company_name, company_initials, company_color, category, level, workplace, location, salary_min, salary_max, salary_display, skills, description, posted_at, COALESCE(featured, 0) AS featured, COALESCE(status, 'active') AS status "
+            f"FROM jobs{jw_sql} ORDER BY id DESC LIMIT ? OFFSET ?",
+            job_args + [j_limit, j_offset]
+        ).fetchall()]
 
     if tab == "companies":
+        co_where = []
+        co_args = []
         if like:
-            tab_total = conn.execute(
-                "SELECT COUNT(*) FROM companies WHERE name LIKE ? ESCAPE '\\' OR industries LIKE ? ESCAPE '\\' OR location LIKE ? ESCAPE '\\'",
-                (like, like, like)
-            ).fetchone()[0]
-            all_companies = [dict(r) for r in conn.execute(
-                "SELECT id, slug, name, initials, color, tagline, industries, location, employees, website, description, open_jobs, COALESCE(verified, 1) AS verified "
-                "FROM companies WHERE name LIKE ? ESCAPE '\\' OR industries LIKE ? ESCAPE '\\' OR location LIKE ? ESCAPE '\\' "
-                "ORDER BY name ASC LIMIT ? OFFSET ?",
-                (like, like, like, per_page, offset)
-            ).fetchall()]
-        else:
-            tab_total = counts["companies"]
-            all_companies = [dict(r) for r in conn.execute(
-                "SELECT id, slug, name, initials, color, tagline, industries, location, employees, website, description, open_jobs, COALESCE(verified, 1) AS verified "
-                "FROM companies ORDER BY name ASC LIMIT ? OFFSET ?",
-                (per_page, offset)
-            ).fetchall()]
+            co_where.append("(name LIKE ? ESCAPE '\\' OR industries LIKE ? ESCAPE '\\' OR location LIKE ? ESCAPE '\\')")
+            co_args.extend([like, like, like])
+        if f_industry:
+            co_where.append("industries LIKE ? ESCAPE '\\'")
+            co_args.append(f"%{db._escape_like(f_industry)}%")
+        if f_loc:
+            co_where.append("location LIKE ? ESCAPE '\\'")
+            co_args.append(f"%{db._escape_like(f_loc)}%")
+        if f_verified in ("0", "1"):
+            co_where.append("COALESCE(verified, 1) = ?")
+            co_args.append(int(f_verified))
+        cw_sql = (" WHERE " + " AND ".join(co_where)) if co_where else ""
+        tab_total = conn.execute(f"SELECT COUNT(*) FROM companies{cw_sql}", co_args).fetchone()[0]
+        all_companies = [dict(r) for r in conn.execute(
+            f"SELECT id, slug, name, initials, color, tagline, industries, location, employees, website, description, open_jobs, COALESCE(verified, 1) AS verified "
+            f"FROM companies{cw_sql} ORDER BY name ASC LIMIT ? OFFSET ?",
+            co_args + [per_page, offset]
+        ).fetchall()]
     elif tab in ("overview", "jobs"):
         all_companies = [dict(r) for r in conn.execute(
             "SELECT slug, name FROM companies ORDER BY name ASC"
@@ -1277,22 +1306,38 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
         c_clr = e(j.get('company_color') or '#2563eb')
         c_init = e(j.get('company_initials') or 'CO')
         st_val = (j.get('status') or 'active').lower()
-        st_pill = "<span class='pill-badge pill-green'>Active</span>" if st_val == "active" else ("<span class='pill-badge pill-amber'>Draft</span>" if st_val == "draft" else "<span class='pill-badge'>Archived</span>")
+        st_cls = "st-active" if st_val == "active" else ("st-pending" if st_val == "pending" else ("st-draft" if st_val == "draft" else "st-archived"))
+        feat_on = bool(j.get('featured'))
+        check_td = "" if is_overview else f"<td style='width:38px;text-align:center;'><input type='checkbox' class='admin-check row-check' value='{j['id']}' onchange='updateBulkBar()'></td>"
         title_cell = (
-            "<td style='min-width:220px;'><div style='display:flex;align-items:center;gap:10px;'>"
-            "<span style='display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;background:" + c_clr + ";color:#fff;font-weight:800;font-size:11.5px;flex-shrink:0;'>" + c_init + "</span>"
-            "<div style='min-width:0;'><div style='font-weight:700;color:#0f172a;line-height:1.3;'>" + e(j['title']) + "</div>"
-            "<small style='color:#64748b;'>" + e(j['company_name']) + "</small></div></div></td>"
+            "<td style='min-width:230px;'><div style='display:flex;align-items:center;gap:10px;'>"
+            "<span style='display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:9px;background:" + c_clr + ";color:#fff;font-weight:800;font-size:11.5px;flex-shrink:0;'>" + c_init + "</span>"
+            "<div style='min-width:0;'><div style='font-weight:700;color:#0f172a;line-height:1.3;'>" + e(j['title']) +
+            (" <span title='Featured Listing' style='color:#d97706;font-size:12px;'>&#9733;</span>" if feat_on else "") +
+            "</div><small style='color:#64748b;'>" + e(j.get('category') or 'General') + ("" if not is_overview else " &middot; " + e(j['company_name'])) + "</small></div></div></td>"
         )
-        cat_td = "<td><div style='font-size:12.5px;font-weight:600;color:#334155;'>" + e(j.get('category') or 'General') + "</div><span class='pill-badge pill-blue' style='margin-top:3px;'>" + e(j.get('workplace') or 'Hybrid') + "</span></td>"
-        loc_td = "<td><div style='font-size:12.5px;color:#475569;'>" + e(j.get('location') or 'Remote') + "</div><div style='font-size:12.5px;font-weight:700;color:#0f172a;margin-top:2px;'>" + e(j['salary_display'] or 'Competitive') + "</div></td>"
-        feat_td = "" if is_overview else ("<td>" + st_pill + (" <span class='pill-badge pill-amber'>&#9733;</span>" if j.get('featured') else "") + "</td>")
+        comp_td = "" if is_overview else ("<td style='font-weight:600;color:#334155;white-space:nowrap;'>" + e(j['company_name']) + "</td>")
+        loc_td = (
+            "<td><span style='font-size:12.5px;color:#475569;display:inline-flex;align-items:center;gap:5px;'>"
+            "<i class='fa-solid fa-location-dot' style='color:#94a3b8;font-size:11px;'></i> " + e(j.get('location') or 'Remote') + "</span></td>"
+        )
+        type_td = "<td><span class='pill-badge pill-blue'>" + e(j.get('workplace') or 'Hybrid') + "</span></td>"
+        sal_td = "" if is_overview else ("<td style='font-weight:700;color:#0f172a;white-space:nowrap;font-size:12.5px;'>" + e(j['salary_display'] or 'Competitive') + "</td>")
         posted_td = "" if is_overview else "<td style='color:#64748b;font-size:12.5px;white-space:nowrap;'>" + e(j['posted_at']) + "</td>"
+        status_td = "" if is_overview else (
+            "<td><select class='status-select-pill " + st_cls + "' onchange=\"saveInlineStatus(this, 'jobs', " + str(j['id']) + ", 'status')\">"
+            "<option value='active'" + (" selected" if st_val == "active" else "") + ">&bull; Active</option>"
+            "<option value='pending'" + (" selected" if st_val == "pending" else "") + ">&bull; Pending</option>"
+            "<option value='draft'" + (" selected" if st_val == "draft" else "") + ">&bull; Draft</option>"
+            "<option value='archived'" + (" selected" if st_val == "archived" else "") + ">&bull; Archived</option>"
+            "</select></td>"
+        )
         return (
             "<tr>"
-            + title_cell + cat_td + loc_td + feat_td + posted_td +
+            + check_td + title_cell + comp_td + loc_td + type_td + sal_td + posted_td + status_td +
             "<td style='width:140px;text-align:center;'>"
             "<div class='action-btns' style='justify-content:center;'>"
+            "<a href='/job/" + e(j['slug']) + "/" + str(j['id']) + "' target='_blank' class='btn-action-round' title='View Live'><i class='fa-regular fa-eye'></i></a>"
             "<button type='button' class='btn-action-round btn-action-edit' title='Manage Full Details (Wrench)' "
             "data-id='" + str(j['id']) + "' data-tab='" + tab_ctx + "' data-slug='" + e(j.get('slug') or '') + "' "
             "data-title='" + e(j['title']) + "' data-company-slug='" + e(j.get('company_slug') or '') + "' "
@@ -1305,7 +1350,6 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
             "data-apply-url='" + e(j.get('apply_url') or '') + "' data-apply-email='" + e(j.get('apply_email') or '') + "' "
             "data-featured='" + str(j.get('featured') or 0) + "' "
             "onclick='openJobEditModal(this)'><i class='fa-solid fa-wrench'></i></button>"
-            "<a href='/job/" + e(j['slug']) + "/" + str(j['id']) + "' target='_blank' class='btn-action-round'><i class='fa-solid fa-arrow-up-right-from-square'></i></a>"
             "<form method='post' action='/admin/jobs/duplicate' style='display:inline;'>"
             f"{_csrf_field()}"
             "<input type='hidden' name='id' value='" + str(j['id']) + "'>"
@@ -1316,7 +1360,7 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
             f"{_csrf_field()}"
             "<input type='hidden' name='id' value='" + str(j['id']) + "'>"
             "<input type='hidden' name='tab' value='" + tab_ctx + "'>"
-            "<button type='submit' class='btn-action-delete'><i class='fa-solid fa-trash-can'></i></button>"
+            "<button type='submit' class='btn-action-delete' title='Delete'><i class='fa-solid fa-trash-can'></i></button>"
             "</form></div></td></tr>"
         )
 
@@ -1341,41 +1385,95 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
     elif tab == "articles":
         def article_row(a):
             today_badge = "<span class='pill-badge pill-blue' style='margin-left:6px;'>Today</span>" if a['is_today'] else ""
+            # Thumbnail cell
+            thumb_url = a.get('thumb') or ''
+            thumb_cell = (
+                "<td style='width:68px;padding:6px 8px;'>"
+                + (
+                    "<img src='" + e(thumb_url) + "' alt='' style='width:60px;height:40px;object-fit:cover;"
+                    "border-radius:6px;display:block;' loading='lazy'>"
+                    if thumb_url else
+                    "<div style='width:60px;height:40px;background:#e2e8f0;border-radius:6px;display:flex;"
+                    "align-items:center;justify-content:center;'>"
+                    "<i class='fa-solid fa-image' style='color:#94a3b8;font-size:16px;'></i></div>"
+                )
+                + "</td>"
+            )
+            # Status inline select colour-coded
+            st = (a.get('status') or 'published').lower()
+            st_colors = {'published': '#10b981', 'draft': '#f59e0b', 'scheduled': '#3874ff', 'archived': '#94a3b8'}
+            st_color = st_colors.get(st, '#64748b')
+            status_cell = (
+                "<td style='white-space:nowrap;'>"
+                "<select class='excel-cell excel-select' style='min-width:115px;border-left:3px solid " + st_color + ";'"
+                " onchange=\"var c={'published':'#10b981','draft':'#f59e0b','scheduled':'#3874ff','archived':'#94a3b8'};"
+                "this.style.borderLeftColor=c[this.value]||'#64748b';saveInlineCell(this,'articles'," + str(a['id']) + ",'status');\">"
+                + "".join(
+                    "<option value='" + v + "'" + (" selected" if st == v else "") + ">" + v.capitalize() + "</option>"
+                    for v in ['published', 'draft', 'scheduled', 'archived']
+                )
+                + "</select></td>"
+            )
+            # Views formatted
+            views = a.get('views') or 0
+            views_str = (f"{views/1000:.1f}K" if views >= 1000 else str(views))
+            # Author with avatar initial
+            author_name = a.get('author') or 'Editorial'
+            author_cell = (
+                "<td><div style='display:flex;align-items:center;gap:7px;min-width:120px;'>"
+                "<span style='width:26px;height:26px;border-radius:50%;background:#3874ff;color:#fff;"
+                "font-size:11px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;"
+                "flex-shrink:0;'>" + e(author_name[0].upper()) + "</span>"
+                + _excel_input("articles", a['id'], "author", author_name, "Author")
+                + "</div></td>"
+            )
             return (
                 "<tr>"
-                "<td style='min-width:240px;'>" + _excel_input("articles", a['id'], "title", a['title'], "Title", extra_style="font-weight:700;color:#0f172a;") +
-                "<small style='color:#64748b;padding-left:6px;'>/" + e(a['slug']) + "</small>" + today_badge + "</td>"
-                "<td>" + _excel_input("articles", a['id'], "category", a.get('category') or 'General', "Category") + "</td>"
-                "<td>" + _excel_input("articles", a['id'], "tag", a.get('tag') or '', "Tag") + "</td>"
-                "<td>" + _excel_input("articles", a['id'], "author", a.get('author') or 'Editorial Staff', "Author") + "</td>"
-                "<td style='white-space:nowrap;color:#64748b;'>" + e(a['published']) + "</td>"
-                "<td><div class='action-btns'>"
-                "<button type='button' class='btn-action-round btn-action-edit' title='Manage Full Details (Wrench)' "
-                "data-id='" + str(a['id']) + "' data-tab='articles' data-slug='" + e(a.get('slug') or '') + "' "
-                "data-title='" + e(a['title']) + "' data-category='" + e(a.get('category') or '') + "' "
-                "data-author='" + e(a.get('author') or '') + "' data-tag='" + e(a.get('tag') or '') + "' "
-                "data-read-time='" + e(a.get('read_time') or '') + "' data-guest='" + e(a.get('guest') or '') + "' "
-                "data-duration='" + e(a.get('duration') or '') + "' data-thumb='" + e(a.get('thumb') or '') + "' "
-                "data-excerpt='" + e(a.get('excerpt') or '') + "' data-body='" + e(a.get('body') or '') + "' "
-                "data-status='" + e(a.get('status') or 'published') + "' data-published='" + e(a.get('published') or '') + "' "
-                "data-seo-title='" + e(a.get('seo_title') or '') + "' data-seo-description='" + e(a.get('seo_description') or '') + "' "
-                "data-featured='" + str(a.get('featured') or 0) + "' data-allow-comments='" + str(a.get('allow_comments', 1)) + "' "
-                "onclick='openArticleEditModal(this)'><i class='fa-solid fa-wrench'></i></button>"
-                "<a href='/articles/" + e(a['slug']) + "' target='_blank' class='btn-action-round'><i class='fa-solid fa-arrow-up-right-from-square'></i></a>"
-                "<form method='post' action='/admin/articles/duplicate' style='display:inline;'>"
-                f"{_csrf_field()}"
-                "<input type='hidden' name='id' value='" + str(a['id']) + "'>"
-                "<input type='hidden' name='tab' value='articles'>"
-                "<button type='submit' class='btn-action-round' title='Duplicate &amp; Edit'><i class='fa-regular fa-copy'></i></button>"
-                "</form>"
-                "<form method='post' action='/admin/articles/delete' onsubmit=\"return confirm('Delete?');\" style='display:inline;'>"
-                f"{_csrf_field()}"
-                "<input type='hidden' name='id' value='" + str(a['id']) + "'>"
-                "<input type='hidden' name='tab' value='articles'>"
-                "<button type='submit' class='btn-action-delete'><i class='fa-solid fa-trash-can'></i></button>"
-                "</form></div></td></tr>"
+                + thumb_cell
+                + "<td style='min-width:220px;'>"
+                + _excel_input("articles", a['id'], "title", a['title'], "Title", extra_style="font-weight:700;color:#0f172a;")
+                + "<small style='color:#64748b;padding-left:6px;display:block;margin-top:1px;'>"
+                + "/" + e(a.get('slug') or '') + "</small>"
+                + today_badge + "</td>"
+                + "<td><span class='pill-badge pill-blue' style='font-size:11.5px;'>"
+                + e(a.get('category') or 'General') + "</span><br>"
+                + "<small style='color:#94a3b8;'>"
+                + _excel_input("articles", a['id'], "tag", a.get('tag') or '', "Tag")
+                + "</small></td>"
+                + author_cell
+                + status_cell
+                + "<td style='white-space:nowrap;text-align:right;min-width:90px;'>"
+                + "<span style='font-weight:700;color:#0f172a;font-size:13px;'>" + views_str + "</span>"
+                + "<div style='font-size:11px;color:#94a3b8;margin-top:2px;'>" + e(a.get('published') or '') + "</div>"
+                + "</td>"
+                + "<td><div class='action-btns'>"
+                + "<button type='button' class='btn-action-round btn-action-edit' title='Full Edit' "
+                + "data-id='" + str(a['id']) + "' data-tab='articles' data-slug='" + e(a.get('slug') or '') + "' "
+                + "data-title='" + e(a['title']) + "' data-category='" + e(a.get('category') or '') + "' "
+                + "data-author='" + e(a.get('author') or '') + "' data-tag='" + e(a.get('tag') or '') + "' "
+                + "data-read-time='" + e(a.get('read_time') or '') + "' data-guest='" + e(a.get('guest') or '') + "' "
+                + "data-duration='" + e(a.get('duration') or '') + "' data-thumb='" + e(a.get('thumb') or '') + "' "
+                + "data-excerpt='" + e(a.get('excerpt') or '') + "' data-body='" + e(a.get('body') or '') + "' "
+                + "data-status='" + e(a.get('status') or 'published') + "' data-published='" + e(a.get('published') or '') + "' "
+                + "data-seo-title='" + e(a.get('seo_title') or '') + "' data-seo-description='" + e(a.get('seo_description') or '') + "' "
+                + "data-featured='" + str(a.get('featured') or 0) + "' data-allow-comments='" + str(a.get('allow_comments', 1)) + "' "
+                + "onclick='openArticleEditModal(this)'><i class='fa-solid fa-wrench'></i></button>"
+                + "<a href='/articles/" + e(a.get('slug') or '') + "' target='_blank' class='btn-action-round'>"
+                + "<i class='fa-solid fa-arrow-up-right-from-square'></i></a>"
+                + "<form method='post' action='/admin/articles/duplicate' style='display:inline;'>"
+                + f"{_csrf_field()}"
+                + "<input type='hidden' name='id' value='" + str(a['id']) + "'>"
+                + "<input type='hidden' name='tab' value='articles'>"
+                + "<button type='submit' class='btn-action-round' title='Duplicate'><i class='fa-regular fa-copy'></i></button>"
+                + "</form>"
+                + "<form method='post' action='/admin/articles/delete' onsubmit=\"return confirm('Delete?');\" style='display:inline;'>"
+                + f"{_csrf_field()}"
+                + "<input type='hidden' name='id' value='" + str(a['id']) + "'>"
+                + "<input type='hidden' name='tab' value='articles'>"
+                + "<button type='submit' class='btn-action-delete'><i class='fa-solid fa-trash-can'></i></button>"
+                + "</form></div></td></tr>"
             )
-        articles_rows = "".join([article_row(a) for a in all_articles]) or _empty_row(6, "No articles found.")
+        articles_rows = "".join([article_row(a) for a in all_articles]) or _empty_row(7, "No articles found.")
         active_content = (
             "<div class='table-card' style='width:100%;'>"
             "<div class='table-header-bar'>"
@@ -1383,10 +1481,18 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
             "<div style='display:flex;gap:8px;align-items:center;'>"
             "<button type='button' class='btn-add-new' onclick=\"openCreateModal('create-article-modal')\"><i class='fa-solid fa-plus'></i> Add New Article</button>"
             "<span id='excelSaveStatus' style='font-size:12px;font-weight:700;color:#10b981;display:none;'>Saved ✓</span>"
-            "<button type='button' class='btn-ctrl btn-ctrl-light' onclick=\"exportAdminTableCSV(this, 'articles.csv')\" style='padding:6px 12px;font-size:12px;'><i class='fa-solid fa-file-excel' style='color:#10b981;'></i> Export Excel</button>"
+            "<button type='button' class='btn-ctrl btn-ctrl-light' onclick=\"exportAdminTableCSV(this,'articles.csv')\" style='padding:6px 12px;font-size:12px;'><i class='fa-solid fa-file-excel' style='color:#10b981;'></i> Export CSV</button>"
             "</div></div>"
             "<table class='clean-table'>"
-            "<thead><tr><th>Title &amp; Slug</th><th>Category</th><th>Tag</th><th>Author</th><th>Date</th><th>Action</th></tr></thead>"
+            "<thead><tr>"
+            "<th style='width:68px;'>Cover</th>"
+            "<th>Title &amp; Slug</th>"
+            "<th>Category / Tag</th>"
+            "<th>Author</th>"
+            "<th>Status</th>"
+            "<th style='text-align:right;'>Views / Date</th>"
+            "<th>Action</th>"
+            "</tr></thead>"
             "<tbody>" + articles_rows + "</tbody>"
             "</table>" + _render_pagination("articles", page, tab_total if tab_total is not None else counts["articles"], per_page, q) + "</div>"
         )
@@ -1396,61 +1502,135 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
             "<option value='" + e(c["slug"]) + "'>" + e(c["name"]) + "</option>"
             for c in all_companies
         ])
-        jobs_rows = "".join([render_job_row(j, "jobs") for j in all_jobs]) or _empty_row(7, "No jobs found.")
+        cat_opts = "".join(
+            f"<option value='{e(c)}'{' selected' if f_cat == c else ''}>{e(c)}</option>"
+            for c in ["Engineering", "Product", "Data", "Design", "Operations", "Logistics & Supply Chain", "Marketing", "Sales", "Finance", "HR & Recruiting"]
+        )
+        wp_opts = "".join(
+            f"<option value='{e(w)}'{' selected' if f_workplace == w else ''}>{e(w)}</option>"
+            for w in ["Fully Remote", "Hybrid", "On Site"]
+        )
+        st_opts = "".join(
+            f"<option value='{e(sv)}'{' selected' if f_status == sv else ''}>{e(sl)}</option>"
+            for sv, sl in [("active", "Active"), ("pending", "Pending"), ("draft", "Draft"), ("archived", "Archived")]
+        )
+        filter_bar = (
+            "<form method='get' action='/admin' class='admin-filter-bar'>"
+            "<input type='hidden' name='tab' value='jobs'>"
+            "<div class='admin-filter-search'><i class='fa-solid fa-magnifying-glass'></i>"
+            f"<input type='text' name='q' value='{e(q)}' placeholder='Search by job title, company, or location...'></div>"
+            f"<select name='category' class='admin-filter-select' onchange='this.form.submit()'><option value=''>All Categories</option>{cat_opts}</select>"
+            f"<input type='text' name='location' value='{e(f_loc)}' class='admin-filter-select' style='width:140px;' placeholder='All Locations'>"
+            f"<select name='workplace' class='admin-filter-select' onchange='this.form.submit()'><option value=''>All Types</option>{wp_opts}</select>"
+            f"<select name='status' class='admin-filter-select' onchange='this.form.submit()'><option value=''>All Status</option>{st_opts}</select>"
+            "<a href='/admin?tab=jobs' class='admin-filter-reset'><i class='fa-solid fa-rotate-left'></i> Reset</a>"
+            "</form>"
+        )
+        jobs_rows = "".join([render_job_row(j, "jobs") for j in all_jobs]) or _empty_row(9, "No jobs found.")
         active_content = (
+            filter_bar +
             "<div class='table-card' style='width:100%;'>"
             "<div class='table-header-bar'>"
-            "<div><h3 class='table-title'><i class='fa-solid fa-briefcase' style='color:#10b981;margin-right:8px;'></i> Active Job Listings (" + str(total_jobs_count) + ")</h3></div>"
+            "<div><h3 class='table-title'><i class='fa-solid fa-briefcase' style='color:#2563eb;margin-right:8px;'></i> Job Listings (" + str(total_jobs_count) + ")</h3></div>"
             "<div style='display:flex;gap:8px;align-items:center;'>"
-            "<button type='button' class='btn-add-new' style='background:#10b981;' onclick=\"openCreateModal('create-job-modal')\"><i class='fa-solid fa-plus'></i> Post New Job</button>"
-            "<span id='excelSaveStatus' style='font-size:12px;font-weight:700;color:#10b981;display:none;'>Saved ✓</span>"
-            "<button type='button' class='btn-ctrl btn-ctrl-light' onclick=\"exportAdminTableCSV(this, 'jobs.csv')\" style='padding:6px 12px;font-size:12px;'><i class='fa-solid fa-file-excel' style='color:#10b981;'></i> Export Excel</button>"
+            "<span id='excelSaveStatus' style='font-size:12px;font-weight:700;color:#10b981;display:none;'>Saved &#10003;</span>"
+            "<button type='button' class='btn-ctrl btn-ctrl-light' onclick=\"exportAdminTableCSV(this, 'jobs.csv')\" style='padding:7px 12px;font-size:12.5px;'><i class='fa-solid fa-file-excel' style='color:#10b981;'></i> Export Excel</button>"
+            "<button type='button' class='btn-add-new btn-add-solid' style='background:#2563eb;' onclick=\"openCreateModal('create-job-modal')\"><i class='fa-solid fa-plus'></i> Post New Job</button>"
+            "</div></div>"
+            "<div class='admin-bulk-bar' id='adminBulkBar'>"
+            "<span><strong id='bulkSelectedCount'>0</strong> selected</span>"
+            "<div style='display:flex;gap:8px;'>"
+            "<button type='button' class='btn-ctrl btn-ctrl-success' style='padding:5px 10px;font-size:12px;' onclick=\"runBulkAction('jobs','active')\">Set Active</button>"
+            "<button type='button' class='btn-ctrl btn-ctrl-light' style='padding:5px 10px;font-size:12px;' onclick=\"runBulkAction('jobs','draft')\">Set Draft</button>"
+            "<button type='button' class='btn-ctrl btn-ctrl-light' style='padding:5px 10px;font-size:12px;color:#ef4444;' onclick=\"runBulkAction('jobs','delete')\">Delete Selected</button>"
             "</div></div>"
             "<table class='clean-table'>"
-            "<thead><tr><th>Role &amp; Company</th><th>Category &amp; Type</th><th>Location &amp; Salary</th><th>Status</th><th>Posted</th><th style='text-align:center;'>Action</th></tr></thead>"
+            "<thead><tr><th style='width:38px;text-align:center;'><input type='checkbox' class='admin-check' onchange='toggleAllRows(this)'></th><th>Job Title</th><th>Company</th><th>Location</th><th>Job Type</th><th>Salary</th><th>Posted</th><th>Status</th><th style='text-align:center;'>Actions</th></tr></thead>"
             "<tbody>" + jobs_rows + "</tbody>"
-            "</table>" + _render_pagination("jobs", page, total_jobs_count, per_page, q) + "</div>"
+            "</table>" + _render_pagination("jobs", page, total_jobs_count, per_page, q, {"category": f_cat, "location": f_loc, "workplace": f_workplace, "status": f_status}) + "</div>"
         )
 
     elif tab == "companies":
         def company_row(c):
             clr = e(c.get('color') or '#3874ff')
+            # Verification badge
+            verified = c.get('verified', 1)
+            verif_badge = (
+                "<span style='display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;"
+                "color:#10b981;'><i class='fa-solid fa-circle-check'></i> Verified</span>"
+                if verified else
+                "<span style='display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;"
+                "color:#94a3b8;'><i class='fa-regular fa-circle'></i> Unverified</span>"
+            )
+            # Status inline select
+            st = (c.get('status') or 'active').lower()
+            st_colors = {'active': '#10b981', 'review': '#f59e0b', 'suspended': '#ef4444', 'inactive': '#94a3b8'}
+            st_color = st_colors.get(st, '#64748b')
+            status_cell = (
+                "<td style='white-space:nowrap;'>"
+                "<select class='excel-cell excel-select' style='min-width:110px;border-left:3px solid " + st_color + ";'"
+                " onchange=\"var c={'active':'#10b981','review':'#f59e0b','suspended':'#ef4444','inactive':'#94a3b8'};"
+                "this.style.borderLeftColor=c[this.value]||'#64748b';saveInlineCell(this,'companies'," + str(c['id']) + ",'status');\">"
+                + "".join(
+                    "<option value='" + v + "'" + (" selected" if st == v else "") + ">" + v.capitalize() + "</option>"
+                    for v in ['active', 'review', 'suspended', 'inactive']
+                )
+                + "</select></td>"
+            )
+            # Joined date – use created_at if available else fallback
+            joined = c.get('created_at') or c.get('joined') or ''
+            if joined and 'T' in str(joined):
+                joined = str(joined)[:10]
+            # Total jobs & open jobs
+            open_jobs = c.get('open_jobs') or 0
+            total_jobs = c.get('total_jobs') or open_jobs
             return (
                 "<tr>"
-                "<td style='min-width:210px;'><div style='display:flex;align-items:center;gap:10px;'>"
-                "<span style='display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;background:" + clr + ";color:#fff;font-weight:800;font-size:12px;flex-shrink:0;'>" + e(c.get('initials') or 'CO') + "</span>"
-                "<div style='flex:1;min-width:0;'>" + _excel_input("companies", c['id'], "name", c.get('name') or '', "Company Name", extra_style="font-weight:700;color:#0f172a;") +
-                "<small style='color:#64748b;padding-left:6px;'>" + e(c.get('slug') or '') + "</small></div>"
-                "</div></td>"
-                "<td>" + _excel_input("companies", c['id'], "industries", c.get('industries') or 'Logistics', "Industry") + "</td>"
-                "<td>" + _excel_input("companies", c['id'], "location", c.get('location') or '', "Headquarters") + "</td>"
-                "<td style='width:120px;'>" + _excel_input("companies", c['id'], "employees", str(c.get('employees') or 0), "Employees", input_type="number") + "</td>"
-                "<td><select class='excel-cell excel-select' style='min-width:105px;' onchange=\"saveInlineCell(this, 'companies', " + str(c['id']) + ", 'verified')\">"
-                "<option value='1'" + (" selected" if c.get('verified', 1) else "") + ">&#10003; Verified</option>"
-                "<option value='0'" + (" selected" if not c.get('verified', 1) else "") + ">Unverified</option>"
-                "</select></td>"
-                "<td><span class='pill-badge pill-green'>" + str(c.get('open_jobs') or 0) + " Openings</span></td>"
-                "<td><div class='action-btns'>"
-                "<button type='button' class='btn-action-round btn-action-edit' title='Manage Full Details (Wrench)' "
-                "data-id='" + str(c.get('id') or '') + "' data-tab='companies' data-slug='" + e(c.get('slug') or '') + "' "
-                "data-name='" + e(c.get('name') or '') + "' data-tagline='" + e(c.get('tagline') or '') + "' "
-                "data-industries='" + e(c.get('industries') or '') + "' data-location='" + e(c.get('location') or '') + "' "
-                "data-employees='" + str(c.get('employees') or 1000) + "' data-color='" + e(c.get('color') or '#2563eb') + "' "
-                "data-website='" + e(c.get('website') or '') + "' data-description='" + e(c.get('description') or '') + "' "
-                "data-logo-url='" + e(c.get('logo_url') or '') + "' data-banner-url='" + e(c.get('banner_url') or '') + "' "
-                "data-benefits='" + e(c.get('benefits') or '') + "' data-offices='" + e(c.get('offices') or '') + "' "
-                "data-social-links='" + e(c.get('social_links') or '') + "' data-status='" + e(c.get('status') or 'published') + "' "
-                "data-verified='" + str(c.get('verified', 1)) + "' data-featured='" + str(c.get('featured') or 0) + "' "
-                "onclick='openCompanyEditModal(this)'><i class='fa-solid fa-wrench'></i></button>"
-                "<a href='/company/" + e(c.get('slug') or '') + "' target='_blank' class='btn-action-round'><i class='fa-solid fa-arrow-up-right-from-square'></i></a>"
-                "<form method='post' action='/admin/companies/delete' onsubmit=\"return confirm('Delete company and all jobs?');\" style='display:inline;'>"
-                f"{_csrf_field()}"
-                "<input type='hidden' name='id' value='" + str(c.get('id') or '') + "'>"
-                "<input type='hidden' name='tab' value='companies'>"
-                "<button type='submit' class='btn-action-delete'><i class='fa-solid fa-trash-can'></i></button>"
-                "</form></div></td></tr>"
+                "<td style='min-width:220px;'><div style='display:flex;align-items:center;gap:10px;'>"
+                "<span style='display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;"
+                "border-radius:9px;background:" + clr + ";color:#fff;font-weight:800;font-size:12.5px;flex-shrink:0;'>"
+                + e(c.get('initials') or 'CO') + "</span>"
+                "<div style='flex:1;min-width:0;'>"
+                + _excel_input("companies", c['id'], "name", c.get('name') or '', "Company Name", extra_style="font-weight:700;color:#0f172a;")
+                + "<small style='color:#64748b;padding-left:6px;'>" + e(c.get('slug') or '') + "</small>"
+                + "</div></div></td>"
+                + "<td>" + _excel_input("companies", c['id'], "industries", c.get('industries') or 'Logistics', "Industry") + "</td>"
+                + "<td>" + _excel_input("companies", c['id'], "location", c.get('location') or '', "Headquarters") + "</td>"
+                + "<td style='text-align:center;white-space:nowrap;'>"
+                + "<span style='font-weight:700;color:#0f172a;font-size:14px;'>" + str(total_jobs) + "</span>"
+                + "<div style='font-size:11px;color:#10b981;'>" + str(open_jobs) + " open</div>"
+                + "</td>"
+                + "<td>" + verif_badge
+                + "<div style='margin-top:5px;'>"
+                + "<select class='excel-cell excel-select' style='min-width:100px;font-size:12px;'"
+                + " onchange=\"saveInlineCell(this,'companies'," + str(c['id']) + ",'verified')\">"
+                + "<option value='1'" + (" selected" if verified else "") + ">&#10003; Verified</option>"
+                + "<option value='0'" + (" selected" if not verified else "") + ">Unverified</option>"
+                + "</select></div></td>"
+                + status_cell
+                + "<td style='color:#64748b;font-size:12px;white-space:nowrap;'>" + e(str(joined)) + "</td>"
+                + "<td><div class='action-btns'>"
+                + "<button type='button' class='btn-action-round btn-action-edit' title='Full Edit' "
+                + "data-id='" + str(c.get('id') or '') + "' data-tab='companies' data-slug='" + e(c.get('slug') or '') + "' "
+                + "data-name='" + e(c.get('name') or '') + "' data-tagline='" + e(c.get('tagline') or '') + "' "
+                + "data-industries='" + e(c.get('industries') or '') + "' data-location='" + e(c.get('location') or '') + "' "
+                + "data-employees='" + str(c.get('employees') or 1000) + "' data-color='" + e(c.get('color') or '#2563eb') + "' "
+                + "data-website='" + e(c.get('website') or '') + "' data-description='" + e(c.get('description') or '') + "' "
+                + "data-logo-url='" + e(c.get('logo_url') or '') + "' data-banner-url='" + e(c.get('banner_url') or '') + "' "
+                + "data-benefits='" + e(c.get('benefits') or '') + "' data-offices='" + e(c.get('offices') or '') + "' "
+                + "data-social-links='" + e(c.get('social_links') or '') + "' data-status='" + e(c.get('status') or 'active') + "' "
+                + "data-verified='" + str(c.get('verified', 1)) + "' data-featured='" + str(c.get('featured') or 0) + "' "
+                + "onclick='openCompanyEditModal(this)'><i class='fa-solid fa-wrench'></i></button>"
+                + "<a href='/company/" + e(c.get('slug') or '') + "' target='_blank' class='btn-action-round'>"
+                + "<i class='fa-solid fa-arrow-up-right-from-square'></i></a>"
+                + "<form method='post' action='/admin/companies/delete' onsubmit=\"return confirm('Delete company and all jobs?');\" style='display:inline;'>"
+                + f"{_csrf_field()}"
+                + "<input type='hidden' name='id' value='" + str(c.get('id') or '') + "'>"
+                + "<input type='hidden' name='tab' value='companies'>"
+                + "<button type='submit' class='btn-action-delete'><i class='fa-solid fa-trash-can'></i></button>"
+                + "</form></div></td></tr>"
             )
-        companies_rows = "".join([company_row(c) for c in all_companies]) or _empty_row(6, "No companies found.")
+        companies_rows = "".join([company_row(c) for c in all_companies]) or _empty_row(8, "No companies found.")
         active_content = (
             "<div class='table-card' style='width:100%;'>"
             "<div class='table-header-bar'>"
@@ -1458,10 +1638,19 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
             "<div style='display:flex;gap:8px;align-items:center;'>"
             "<button type='button' class='btn-add-new' style='background:#8b5cf6;' onclick=\"openCreateModal('create-company-modal')\"><i class='fa-solid fa-plus'></i> Register Company</button>"
             "<span id='excelSaveStatus' style='font-size:12px;font-weight:700;color:#10b981;display:none;'>Saved ✓</span>"
-            "<button type='button' class='btn-ctrl btn-ctrl-light' onclick=\"exportAdminTableCSV(this, 'companies.csv')\" style='padding:6px 12px;font-size:12px;'><i class='fa-solid fa-file-excel' style='color:#10b981;'></i> Export Excel</button>"
+            "<button type='button' class='btn-ctrl btn-ctrl-light' onclick=\"exportAdminTableCSV(this,'companies.csv')\" style='padding:6px 12px;font-size:12px;'><i class='fa-solid fa-file-excel' style='color:#10b981;'></i> Export CSV</button>"
             "</div></div>"
             "<table class='clean-table'>"
-            "<thead><tr><th>Company</th><th>Industry</th><th>Headquarters</th><th>Team Size</th><th>Verified</th><th>Jobs</th><th>Action</th></tr></thead>"
+            "<thead><tr>"
+            "<th>Company</th>"
+            "<th>Industry</th>"
+            "<th>Headquarters</th>"
+            "<th style='text-align:center;'>Total Jobs</th>"
+            "<th>Verification</th>"
+            "<th>Status</th>"
+            "<th>Joined Date</th>"
+            "<th>Action</th>"
+            "</tr></thead>"
             "<tbody>" + companies_rows + "</tbody>"
             "</table>" + _render_pagination("companies", page, tab_total if tab_total is not None else counts["companies"], per_page, q) + "</div>"
         )
@@ -2082,6 +2271,37 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
         "document.querySelectorAll('form').forEach(function(f){"
         "  f.addEventListener('submit', function(){ if(window.tinymce) tinymce.triggerSave(); });"
         "});"
+        "function saveInlineStatus(el, table, id, field){"
+        "  el.classList.remove('st-active','st-pending','st-draft','st-archived','st-verified','st-unverified');"
+        "  if(field === 'verified'){ el.classList.add(el.value === '1' ? 'st-verified' : 'st-unverified'); }"
+        "  else { el.classList.add('st-' + (el.value || 'active')); }"
+        "  saveInlineCell(el, table, id, field);"
+        "}"
+        "function toggleAllRows(master){"
+        "  document.querySelectorAll('.row-check').forEach(function(cb){ cb.checked = master.checked; });"
+        "  updateBulkBar();"
+        "}"
+        "function updateBulkBar(){"
+        "  var checked = document.querySelectorAll('.row-check:checked');"
+        "  var bar = document.getElementById('adminBulkBar');"
+        "  var cnt = document.getElementById('bulkSelectedCount');"
+        "  if(cnt) cnt.textContent = checked.length;"
+        "  if(bar){ if(checked.length > 0) bar.classList.add('visible'); else bar.classList.remove('visible'); }"
+        "}"
+        "async function runBulkAction(table, action){"
+        "  var ids = Array.from(document.querySelectorAll('.row-check:checked')).map(function(c){ return parseInt(c.value, 10); }).filter(Boolean);"
+        "  if(!ids.length) return;"
+        "  if(action === 'delete' && !confirm('Delete ' + ids.length + ' selected items?')) return;"
+        "  var csrfEl = document.querySelector('input[name=_csrf]');"
+        "  var csrf = csrfEl ? csrfEl.value : '';"
+        "  var res = await fetch('/admin/api/bulk-action', {"
+        "    method:'POST', headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},"
+        "    body:JSON.stringify({table:table,action:action,ids:ids,_csrf:csrf})"
+        "  });"
+        "  var data = await res.json();"
+        "  if(data && data.ok){ window.location.reload(); }"
+        "  else { alert((data && data.error) || 'Bulk action failed'); }"
+        "}"
         "async function saveInlineCell(el, table, id, field){"
         "  var val = el.value;"
         "  var csrfEl = document.querySelector('input[name=_csrf]');"
