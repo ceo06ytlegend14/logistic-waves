@@ -793,8 +793,8 @@ def route(conn, method, path, query, payload, user, token, host, client_ip="", c
         val = (payload.get("value") or "").strip()
         allowed = {
             "jobs": {"title": 300, "category": 120, "workplace": 60, "location": 160, "salary_display": 80, "featured": 2, "status": 20},
-            "companies": {"name": 160, "industries": 200, "location": 160, "employees": 12, "verified": 2},
-            "articles": {"title": 300, "category": 120, "tag": 120, "author": 120},
+            "companies": {"name": 160, "industries": 200, "location": 160, "employees": 12, "verified": 2, "status": 20},
+            "articles": {"title": 300, "category": 120, "tag": 120, "author": 120, "status": 20, "featured": 2},
         }
         if table not in allowed or field not in allowed[table] or not row_id:
             return json_response({"ok": False, "error": "Invalid table, field, or id."}, status=400)
@@ -805,15 +805,49 @@ def route(conn, method, path, query, payload, user, token, host, client_ip="", c
             val = get_int(val, 0, low=0, high=10_000_000)
         elif field in ("featured", "verified"):
             val = 1 if str(val) in ("1", "true", "True", "yes") else 0
-        elif table == "jobs" and field == "status" and val not in ("active", "pending", "archived", "rejected"):
-            return json_response({"ok": False, "error": "Invalid job status."}, status=400)
+        elif field == "status":
+            allowed_statuses = {
+                "jobs": {"active", "pending", "draft", "archived", "rejected"},
+                "articles": {"published", "draft", "scheduled", "archived"},
+                "companies": {"active", "review", "suspended", "inactive", "published"},
+            }
+            if val not in allowed_statuses.get(table, set()):
+                return json_response({"ok": False, "error": "Invalid publication status."}, status=400)
         if table == "jobs" and field == "workplace":
             conn.execute("UPDATE jobs SET workplace=?, is_remote=? WHERE id=?", (val, 1 if "remote" in val.lower() else 0, row_id))
         else:
             conn.execute(f"UPDATE {table} SET {field}=? WHERE id=?", (val, row_id))
         conn.commit()
+        db.invalidate_cache()
         db.log_audit(conn, user.get("email"), f"inline_update:{field}", table, row_id, str(val))
         return json_response({"ok": True})
+
+    if path == "/admin/api/bulk-action" and method == "POST":
+        table = _clip(payload.get("table", ""), 30)
+        action = _clip(payload.get("action", ""), 30)
+        raw_ids = payload.get("ids") or []
+        if isinstance(raw_ids, str):
+            raw_ids = [x for x in raw_ids.split(",") if x.strip()]
+        ids = [get_int(x, 0, low=1) for x in raw_ids]
+        ids = [i for i in ids if i > 0][:100]
+        if table not in ("jobs", "companies", "articles") or not ids:
+            return json_response({"ok": False, "error": "Invalid table or empty selection."}, status=400)
+        placeholders = ",".join("?" for _ in ids)
+        if table == "jobs" and action in ("active", "draft", "pending", "archived"):
+            conn.execute(f"UPDATE {table} SET status=? WHERE id IN ({placeholders})", [action] + ids)
+        elif table == "articles" and action in ("published", "draft", "archived"):
+            conn.execute(f"UPDATE {table} SET status=? WHERE id IN ({placeholders})", [action] + ids)
+        elif action in ("verify", "unverify") and table == "companies":
+            conn.execute(f"UPDATE companies SET verified=? WHERE id IN ({placeholders})", [1 if action == "verify" else 0] + ids)
+        elif action == "delete":
+            if table == "companies":
+                conn.execute(f"DELETE FROM jobs WHERE company_id IN ({placeholders})", ids)
+            conn.execute(f"DELETE FROM {table} WHERE id IN ({placeholders})", ids)
+        else:
+            return json_response({"ok": False, "error": "Invalid bulk action."}, status=400)
+        conn.commit()
+        db.log_audit(conn, user.get("email"), f"bulk_{action}", table, ids[0], f"count={len(ids)} ids={ids[:10]}")
+        return json_response({"ok": True, "count": len(ids)})
 
     if path == "/admin/inbox/action" and method == "POST":
         kind = _clip(payload.get("kind", ""), 20)
@@ -839,7 +873,7 @@ def route(conn, method, path, query, payload, user, token, host, client_ip="", c
         tab = query.get("tab", "overview")
         page = get_int(query.get("page", "1"), 1, 1, 10000)
         q = query.get("q", "").strip()
-        return Response(views.admin_dashboard_page(conn, user, message=msg, error=err, tab=tab, page=page, q=q))
+        return Response(views.admin_dashboard_page(conn, user, message=msg, error=err, tab=tab, page=page, q=q, filters=query))
 
     if path == "/admin/seed" and method == "POST":
         action = payload.get("action", "")
@@ -901,22 +935,31 @@ def route(conn, method, path, query, payload, user, token, host, client_ip="", c
         thumb = _safe_media_url(payload.get("thumb", ""), "/static/images/fw_today_1.jpg")
         excerpt = _clip(payload.get("excerpt", ""), 1000)
         body = _clip(payload.get("body", ""), 200000)
+        status = (payload.get("status") or "published").strip().lower()
+        if status not in ("published", "draft", "archived"):
+            status = "published"
+        seo_title = _clip(payload.get("seo_title", ""), 300)
+        seo_description = _clip(payload.get("seo_description", ""), 500)
         slug = views.slugify(title) or "article"
         now_str = datetime.utcnow().strftime("%b %d, %Y")
         ex = conn.execute("SELECT id FROM articles WHERE slug=?", (slug,)).fetchone()
         if ex:
             conn.execute(
-                """UPDATE articles SET title=?, category=?, author=?, tag=?, read_time=?, thumb=?, excerpt=?, body=? WHERE id=?""",
-                (title, category, author, tag, read_time, thumb, excerpt, body, ex[0])
+                """UPDATE articles SET title=?, category=?, author=?, tag=?, read_time=?, thumb=?, excerpt=?, body=?,
+                   status=?, seo_title=?, seo_description=? WHERE id=?""",
+                (title, category, author, tag, read_time, thumb, excerpt, body, status, seo_title, seo_description, ex[0])
             )
         else:
             conn.execute(
-                """INSERT INTO articles (slug, title, excerpt, body, author, published, category, tag, read_time, accent, thumb, is_today)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,0)""",
-                (slug, title, excerpt, body, author, now_str, category, tag, read_time, "#034f9a", thumb)
+                """INSERT INTO articles (slug, title, excerpt, body, author, published, category, tag, read_time, accent, thumb, is_today,
+                   status, seo_title, seo_description) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (slug, title, excerpt, body, author, now_str, category, tag, read_time, "#034f9a", thumb, 0,
+                 status, seo_title, seo_description)
             )
         conn.commit()
-        return redirect("/admin?tab=articles&msg=" + urllib.parse.quote(f"Article '{title}' published successfully!"))
+        db.invalidate_cache()
+        status_label = "saved as draft" if status == "draft" else ("archived" if status == "archived" else "published")
+        return redirect("/admin?tab=articles&msg=" + urllib.parse.quote(f"Article '{title}' {status_label} successfully!"))
 
     if path == "/admin/articles/delete" and method == "POST":
         art_id = get_int(payload.get("id", "0"), 0, low=0)
@@ -943,12 +986,19 @@ def route(conn, method, path, query, payload, user, token, host, client_ip="", c
         status = (payload.get("status") or "published").strip().lower()
         if status not in ("published", "draft", "archived"):
             status = "published"
+        seo_title = _clip(payload.get("seo_title", ""), 300)
+        seo_description = _clip(payload.get("seo_description", ""), 500)
+        featured = 1 if payload.get("featured") in ("1", "true", "on", True) else 0
+        allow_comments = 1 if payload.get("allow_comments") in ("1", "true", "on", True) else 0
         if art_id:
             conn.execute(
-                """UPDATE articles SET title=?, category=?, author=?, tag=?, read_time=?, guest=?, duration=?, thumb=?, excerpt=?, body=?, status=? WHERE id=?""",
-                (title, category, author, tag, read_time, guest, duration, thumb, excerpt, body, status, art_id)
+                """UPDATE articles SET title=?, category=?, author=?, tag=?, read_time=?, guest=?, duration=?, thumb=?, excerpt=?, body=?,
+                   status=?, seo_title=?, seo_description=?, featured=?, allow_comments=? WHERE id=?""",
+                (title, category, author, tag, read_time, guest, duration, thumb, excerpt, body, status,
+                 seo_title, seo_description, featured, allow_comments, art_id)
             )
             conn.commit()
+            db.invalidate_cache()
             return redirect(f"/admin?tab={tab}&msg=" + urllib.parse.quote(f"Article '{title}' updated successfully!"))
         return redirect(f"/admin?tab={tab}&err=" + urllib.parse.quote("Article ID not found."))
 

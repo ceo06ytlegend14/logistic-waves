@@ -1068,14 +1068,18 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
         v_limit = 5 if tab == "overview" else 100
         if like and tab == "videos":
             today_videos = [dict(r) for r in conn.execute(
-                "SELECT id, slug, title, author, guest, duration, thumb, published, category, excerpt, body, tag, is_today, read_time "
+                "SELECT id, slug, title, author, guest, duration, thumb, published, category, excerpt, body, tag, is_today, read_time, "
+                "COALESCE(status, 'published') AS status, COALESCE(seo_title, '') AS seo_title, COALESCE(seo_description, '') AS seo_description, "
+                "COALESCE(featured, 0) AS featured, COALESCE(allow_comments, 1) AS allow_comments "
                 "FROM articles WHERE (tag='Logistic Waves Today' OR is_today=1) AND (title LIKE ? ESCAPE '\\' OR guest LIKE ? ESCAPE '\\' OR category LIKE ? ESCAPE '\\') "
                 "ORDER BY id DESC LIMIT ?",
                 (like, like, like, v_limit)
             ).fetchall()]
         else:
             today_videos = [dict(r) for r in conn.execute(
-                "SELECT id, slug, title, author, guest, duration, thumb, published, category, excerpt, body, tag, is_today, read_time "
+                "SELECT id, slug, title, author, guest, duration, thumb, published, category, excerpt, body, tag, is_today, read_time, "
+                "COALESCE(status, 'published') AS status, COALESCE(seo_title, '') AS seo_title, COALESCE(seo_description, '') AS seo_description, "
+                "COALESCE(featured, 0) AS featured, COALESCE(allow_comments, 1) AS allow_comments "
                 "FROM articles WHERE tag='Logistic Waves Today' OR is_today=1 ORDER BY id DESC LIMIT ?",
                 (v_limit,)
             ).fetchall()]
@@ -1092,7 +1096,9 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
         aw_sql = (" WHERE " + " AND ".join(art_where)) if art_where else ""
         tab_total = conn.execute(f"SELECT COUNT(*) FROM articles{aw_sql}", art_args).fetchone()[0]
         all_articles = [dict(r) for r in conn.execute(
-            f"SELECT id, slug, title, category, tag, author, published, is_today, read_time, duration, guest, thumb, excerpt, body "
+            f"SELECT id, slug, title, category, tag, author, published, is_today, read_time, duration, guest, thumb, excerpt, body, "
+            f"COALESCE(status, 'published') AS status, COALESCE(seo_title, '') AS seo_title, COALESCE(seo_description, '') AS seo_description, "
+            f"COALESCE(featured, 0) AS featured, COALESCE(allow_comments, 1) AS allow_comments "
             f"FROM articles{aw_sql} ORDER BY id DESC LIMIT ? OFFSET ?",
             art_args + [per_page, offset]
         ).fetchall()]
@@ -1145,7 +1151,9 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
         cw_sql = (" WHERE " + " AND ".join(co_where)) if co_where else ""
         tab_total = conn.execute(f"SELECT COUNT(*) FROM companies{cw_sql}", co_args).fetchone()[0]
         all_companies = [dict(r) for r in conn.execute(
-            f"SELECT id, slug, name, initials, color, tagline, industries, location, employees, website, description, open_jobs, COALESCE(verified, 1) AS verified "
+            f"SELECT id, slug, name, initials, color, tagline, industries, location, employees, website, description, open_jobs, COALESCE(verified, 1) AS verified, "
+            f"COALESCE(status, 'published') AS status, COALESCE(logo_url, '') AS logo_url, COALESCE(banner_url, '') AS banner_url, "
+            f"COALESCE(benefits, 0) AS benefits, COALESCE(offices, 0) AS offices, COALESCE(social_links, '') AS social_links, COALESCE(featured, 0) AS featured, founded "
             f"FROM companies{cw_sql} ORDER BY name ASC LIMIT ? OFFSET ?",
             co_args + [per_page, offset]
         ).fetchall()]
@@ -1435,9 +1443,8 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
                 + "<small style='color:#64748b;padding-left:6px;display:block;margin-top:1px;'>"
                 + "/" + e(a.get('slug') or '') + "</small>"
                 + today_badge + "</td>"
-                + "<td><span class='pill-badge pill-blue' style='font-size:11.5px;'>"
-                + e(a.get('category') or 'General') + "</span><br>"
-                + "<small style='color:#94a3b8;'>"
+                + "<td>" + _excel_input("articles", a['id'], "category", a.get('category') or 'General', "Category", extra_style="font-weight:600;color:#2563eb;")
+                + "<small style='color:#94a3b8;display:block;'>"
                 + _excel_input("articles", a['id'], "tag", a.get('tag') or '', "Tag")
                 + "</small></td>"
                 + author_cell
@@ -1474,14 +1481,28 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
                 + "</form></div></td></tr>"
             )
         articles_rows = "".join([article_row(a) for a in all_articles]) or _empty_row(7, "No articles found.")
+        art_cats = "".join(
+            f"<option value='{e(c)}'{' selected' if f_cat == c else ''}>{e(c)}</option>"
+            for c in ["Maritime & Supply Chain", "Logistics Tech", "Port Infrastructure", "Freight Rates", "Technology", "Career & Talent", "Drivers & Workforce", "Logistics & Brokerage", "Legal Issues"]
+        )
+        art_filter_bar = (
+            "<form method='get' action='/admin' class='admin-filter-bar'>"
+            "<input type='hidden' name='tab' value='articles'>"
+            "<div class='admin-filter-search'><i class='fa-solid fa-magnifying-glass'></i>"
+            f"<input type='text' name='q' value='{e(q)}' placeholder='Search articles by title, category, or author...'></div>"
+            f"<select name='category' class='admin-filter-select' onchange='this.form.submit()'><option value=''>All Categories</option>{art_cats}</select>"
+            "<a href='/admin?tab=articles' class='admin-filter-reset'><i class='fa-solid fa-rotate-left'></i> Reset</a>"
+            "</form>"
+        )
         active_content = (
+            art_filter_bar +
             "<div class='table-card' style='width:100%;'>"
             "<div class='table-header-bar'>"
-            "<div><h3 class='table-title'><i class='fa-solid fa-file-lines' style='color:#3874ff;margin-right:8px;'></i> All Articles &amp; Reports (" + str(tab_total if tab_total is not None else counts['articles']) + ")</h3></div>"
+            "<div><h3 class='table-title'><i class='fa-solid fa-file-lines' style='color:#2563eb;margin-right:8px;'></i> All Articles &amp; Reports (" + str(tab_total if tab_total is not None else counts['articles']) + ")</h3></div>"
             "<div style='display:flex;gap:8px;align-items:center;'>"
-            "<button type='button' class='btn-add-new' onclick=\"openCreateModal('create-article-modal')\"><i class='fa-solid fa-plus'></i> Add New Article</button>"
-            "<span id='excelSaveStatus' style='font-size:12px;font-weight:700;color:#10b981;display:none;'>Saved ✓</span>"
-            "<button type='button' class='btn-ctrl btn-ctrl-light' onclick=\"exportAdminTableCSV(this,'articles.csv')\" style='padding:6px 12px;font-size:12px;'><i class='fa-solid fa-file-excel' style='color:#10b981;'></i> Export CSV</button>"
+            "<span id='excelSaveStatus' style='font-size:12px;font-weight:700;color:#10b981;display:none;'>Saved &#10003;</span>"
+            "<button type='button' class='btn-ctrl btn-ctrl-light' onclick=\"exportAdminTableCSV(this,'articles.csv')\" style='padding:7px 12px;font-size:12.5px;'><i class='fa-solid fa-file-excel' style='color:#10b981;'></i> Export Excel</button>"
+            "<button type='button' class='btn-add-new btn-add-solid' style='background:#2563eb;' onclick=\"openCreateModal('create-article-modal')\"><i class='fa-solid fa-plus'></i> Add New Article</button>"
             "</div></div>"
             "<table class='clean-table'>"
             "<thead><tr>"
@@ -1494,7 +1515,7 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
             "<th>Action</th>"
             "</tr></thead>"
             "<tbody>" + articles_rows + "</tbody>"
-            "</table>" + _render_pagination("articles", page, tab_total if tab_total is not None else counts["articles"], per_page, q) + "</div>"
+            "</table>" + _render_pagination("articles", page, tab_total if tab_total is not None else counts["articles"], per_page, q, {"category": f_cat}) + "</div>"
         )
 
     elif tab == "jobs":
@@ -1552,107 +1573,100 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
 
     elif tab == "companies":
         def company_row(c):
-            clr = e(c.get('color') or '#3874ff')
-            # Verification badge
-            verified = c.get('verified', 1)
-            verif_badge = (
-                "<span style='display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;"
-                "color:#10b981;'><i class='fa-solid fa-circle-check'></i> Verified</span>"
-                if verified else
-                "<span style='display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;"
-                "color:#94a3b8;'><i class='fa-regular fa-circle'></i> Unverified</span>"
-            )
-            # Status inline select
+            clr = e(c.get('color') or '#2563eb')
+            is_ver = bool(c.get('verified', 1))
+            ver_cls = "st-verified" if is_ver else "st-unverified"
             st = (c.get('status') or 'active').lower()
-            st_colors = {'active': '#10b981', 'review': '#f59e0b', 'suspended': '#ef4444', 'inactive': '#94a3b8'}
-            st_color = st_colors.get(st, '#64748b')
-            status_cell = (
-                "<td style='white-space:nowrap;'>"
-                "<select class='excel-cell excel-select' style='min-width:110px;border-left:3px solid " + st_color + ";'"
-                " onchange=\"var c={'active':'#10b981','review':'#f59e0b','suspended':'#ef4444','inactive':'#94a3b8'};"
-                "this.style.borderLeftColor=c[this.value]||'#64748b';saveInlineCell(this,'companies'," + str(c['id']) + ",'status');\">"
-                + "".join(
-                    "<option value='" + v + "'" + (" selected" if st == v else "") + ">" + v.capitalize() + "</option>"
-                    for v in ['active', 'review', 'suspended', 'inactive']
-                )
-                + "</select></td>"
-            )
-            # Joined date – use created_at if available else fallback
-            joined = c.get('created_at') or c.get('joined') or ''
-            if joined and 'T' in str(joined):
-                joined = str(joined)[:10]
-            # Total jobs & open jobs
+            st_cls = "st-active" if st in ("active", "published") else ("st-draft" if st == "review" else "st-archived")
             open_jobs = c.get('open_jobs') or 0
-            total_jobs = c.get('total_jobs') or open_jobs
+            founded = c.get('founded') or '—'
+            logo_url = c.get('logo_url') or ''
+            avatar_html = (
+                f"<img src='{e(logo_url)}' alt='' style='width:36px;height:36px;border-radius:9px;object-fit:cover;flex-shrink:0;border:1px solid #e2e8f0;' loading='lazy'>"
+                if logo_url else
+                "<span style='display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:9px;background:" + clr + ";color:#fff;font-weight:800;font-size:12.5px;flex-shrink:0;'>" + e(c.get('initials') or 'CO') + "</span>"
+            )
             return (
                 "<tr>"
-                "<td style='min-width:220px;'><div style='display:flex;align-items:center;gap:10px;'>"
-                "<span style='display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;"
-                "border-radius:9px;background:" + clr + ";color:#fff;font-weight:800;font-size:12.5px;flex-shrink:0;'>"
-                + e(c.get('initials') or 'CO') + "</span>"
+                f"<td style='width:38px;text-align:center;'><input type='checkbox' class='admin-check row-check' value='{c['id']}' onchange='updateBulkBar()'></td>"
+                "<td style='min-width:210px;'><div style='display:flex;align-items:center;gap:10px;'>"
+                + avatar_html +
                 "<div style='flex:1;min-width:0;'>"
                 + _excel_input("companies", c['id'], "name", c.get('name') or '', "Company Name", extra_style="font-weight:700;color:#0f172a;")
-                + "<small style='color:#64748b;padding-left:6px;'>" + e(c.get('slug') or '') + "</small>"
-                + "</div></div></td>"
-                + "<td>" + _excel_input("companies", c['id'], "industries", c.get('industries') or 'Logistics', "Industry") + "</td>"
-                + "<td>" + _excel_input("companies", c['id'], "location", c.get('location') or '', "Headquarters") + "</td>"
-                + "<td style='text-align:center;white-space:nowrap;'>"
-                + "<span style='font-weight:700;color:#0f172a;font-size:14px;'>" + str(total_jobs) + "</span>"
-                + "<div style='font-size:11px;color:#10b981;'>" + str(open_jobs) + " open</div>"
-                + "</td>"
-                + "<td>" + verif_badge
-                + "<div style='margin-top:5px;'>"
-                + "<select class='excel-cell excel-select' style='min-width:100px;font-size:12px;'"
-                + " onchange=\"saveInlineCell(this,'companies'," + str(c['id']) + ",'verified')\">"
-                + "<option value='1'" + (" selected" if verified else "") + ">&#10003; Verified</option>"
-                + "<option value='0'" + (" selected" if not verified else "") + ">Unverified</option>"
-                + "</select></div></td>"
-                + status_cell
-                + "<td style='color:#64748b;font-size:12px;white-space:nowrap;'>" + e(str(joined)) + "</td>"
-                + "<td><div class='action-btns'>"
-                + "<button type='button' class='btn-action-round btn-action-edit' title='Full Edit' "
-                + "data-id='" + str(c.get('id') or '') + "' data-tab='companies' data-slug='" + e(c.get('slug') or '') + "' "
-                + "data-name='" + e(c.get('name') or '') + "' data-tagline='" + e(c.get('tagline') or '') + "' "
-                + "data-industries='" + e(c.get('industries') or '') + "' data-location='" + e(c.get('location') or '') + "' "
-                + "data-employees='" + str(c.get('employees') or 1000) + "' data-color='" + e(c.get('color') or '#2563eb') + "' "
-                + "data-website='" + e(c.get('website') or '') + "' data-description='" + e(c.get('description') or '') + "' "
-                + "data-logo-url='" + e(c.get('logo_url') or '') + "' data-banner-url='" + e(c.get('banner_url') or '') + "' "
-                + "data-benefits='" + e(c.get('benefits') or '') + "' data-offices='" + e(c.get('offices') or '') + "' "
-                + "data-social-links='" + e(c.get('social_links') or '') + "' data-status='" + e(c.get('status') or 'active') + "' "
-                + "data-verified='" + str(c.get('verified', 1)) + "' data-featured='" + str(c.get('featured') or 0) + "' "
-                + "onclick='openCompanyEditModal(this)'><i class='fa-solid fa-wrench'></i></button>"
-                + "<a href='/company/" + e(c.get('slug') or '') + "' target='_blank' class='btn-action-round'>"
-                + "<i class='fa-solid fa-arrow-up-right-from-square'></i></a>"
-                + "<form method='post' action='/admin/companies/delete' onsubmit=\"return confirm('Delete company and all jobs?');\" style='display:inline;'>"
-                + f"{_csrf_field()}"
-                + "<input type='hidden' name='id' value='" + str(c.get('id') or '') + "'>"
-                + "<input type='hidden' name='tab' value='companies'>"
-                + "<button type='submit' class='btn-action-delete'><i class='fa-solid fa-trash-can'></i></button>"
-                + "</form></div></td></tr>"
+                + "<small style='color:#64748b;padding-left:6px;display:block;'>" + e(c.get('slug') or '') + "</small></div>"
+                "</div></td>"
+                "<td style='min-width:150px;'>" + _excel_input("companies", c['id'], "industries", c.get('industries') or 'Logistics', "Industry") + "</td>"
+                "<td style='min-width:150px;'>" + _excel_input("companies", c['id'], "location", c.get('location') or 'Global', "Headquarters") + "</td>"
+                "<td style='width:110px;'>" + _excel_input("companies", c['id'], "employees", str(c.get('employees') or 0), "Team Size", input_type="number") +
+                "<div style='font-size:11px;color:#10b981;padding-left:6px;'>" + str(open_jobs) + " jobs</div></td>"
+                "<td><select class='status-select-pill " + ver_cls + "' onchange=\"saveInlineStatus(this, 'companies', " + str(c['id']) + ", 'verified')\">"
+                "<option value='1'" + (" selected" if is_ver else "") + ">&#10003; Verified</option>"
+                "<option value='0'" + (" selected" if not is_ver else "") + ">&bull; Unverified</option>"
+                "</select></td>"
+                "<td><select class='status-select-pill " + st_cls + "' onchange=\"saveInlineStatus(this, 'companies', " + str(c['id']) + ", 'status')\">"
+                "<option value='active'" + (" selected" if st in ('active', 'published') else "") + ">&bull; Active</option>"
+                "<option value='review'" + (" selected" if st == 'review' else "") + ">&bull; Review</option>"
+                "<option value='suspended'" + (" selected" if st == 'suspended' else "") + ">&bull; Suspended</option>"
+                "<option value='inactive'" + (" selected" if st == 'inactive' else "") + ">&bull; Inactive</option>"
+                "</select></td>"
+                "<td style='color:#64748b;font-size:12px;white-space:nowrap;'>" + e(str(founded)) + "</td>"
+                "<td><div class='action-btns'>"
+                "<button type='button' class='btn-action-round btn-action-edit' title='Manage Full Details (Wrench)' "
+                "data-id='" + str(c.get('id') or '') + "' data-tab='companies' data-slug='" + e(c.get('slug') or '') + "' "
+                "data-name='" + e(c.get('name') or '') + "' data-tagline='" + e(c.get('tagline') or '') + "' "
+                "data-industries='" + e(c.get('industries') or '') + "' data-location='" + e(c.get('location') or '') + "' "
+                "data-employees='" + str(c.get('employees') or 1000) + "' data-color='" + e(c.get('color') or '#2563eb') + "' "
+                "data-website='" + e(c.get('website') or '') + "' data-description='" + e(c.get('description') or '') + "' "
+                "data-logo-url='" + e(c.get('logo_url') or '') + "' data-banner-url='" + e(c.get('banner_url') or '') + "' "
+                "data-benefits='" + e(c.get('benefits') or '') + "' data-offices='" + e(c.get('offices') or '') + "' "
+                "data-social-links='" + e(c.get('social_links') or '') + "' data-status='" + e(c.get('status') or 'active') + "' "
+                "data-verified='" + str(c.get('verified', 1)) + "' data-featured='" + str(c.get('featured') or 0) + "' "
+                "onclick='openCompanyEditModal(this)'><i class='fa-solid fa-wrench'></i></button>"
+                "<a href='/company/" + e(c.get('slug') or '') + "' target='_blank' class='btn-action-round' title='View Live'><i class='fa-regular fa-eye'></i></a>"
+                "<form method='post' action='/admin/companies/delete' onsubmit=\"return confirm('Delete company and all jobs?');\" style='display:inline;'>"
+                f"{_csrf_field()}"
+                "<input type='hidden' name='id' value='" + str(c.get('id') or '') + "'>"
+                "<input type='hidden' name='tab' value='companies'>"
+                "<button type='submit' class='btn-action-delete' title='Delete'><i class='fa-solid fa-trash-can'></i></button>"
+                "</form></div></td></tr>"
             )
-        companies_rows = "".join([company_row(c) for c in all_companies]) or _empty_row(8, "No companies found.")
+        co_filter_bar = (
+            "<form method='get' action='/admin' class='admin-filter-bar'>"
+            "<input type='hidden' name='tab' value='companies'>"
+            "<div class='admin-filter-search'><i class='fa-solid fa-magnifying-glass'></i>"
+            f"<input type='text' name='q' value='{e(q)}' placeholder='Search companies, industry, or headquarters...'></div>"
+            f"<input type='text' name='industry' value='{e(f_industry)}' class='admin-filter-select' style='width:150px;' placeholder='All Industries'>"
+            f"<input type='text' name='location' value='{e(f_loc)}' class='admin-filter-select' style='width:150px;' placeholder='All Locations'>"
+            "<select name='verified' class='admin-filter-select' onchange='this.form.submit()'>"
+            "<option value=''>All Verification</option>"
+            f"<option value='1'{' selected' if f_verified == '1' else ''}>Verified Only</option>"
+            f"<option value='0'{' selected' if f_verified == '0' else ''}>Unverified Only</option>"
+            "</select>"
+            "<a href='/admin?tab=companies' class='admin-filter-reset'><i class='fa-solid fa-rotate-left'></i> Reset</a>"
+            "</form>"
+        )
+        companies_rows = "".join([company_row(c) for c in all_companies]) or _empty_row(9, "No companies found.")
         active_content = (
+            co_filter_bar +
             "<div class='table-card' style='width:100%;'>"
             "<div class='table-header-bar'>"
-            "<div><h3 class='table-title'><i class='fa-solid fa-building' style='color:#8b5cf6;margin-right:8px;'></i> Registered Companies (" + str(tab_total if tab_total is not None else counts['companies']) + ")</h3></div>"
+            "<div><h3 class='table-title'><i class='fa-solid fa-building' style='color:#7c3aed;margin-right:8px;'></i> Registered Companies (" + str(tab_total if tab_total is not None else counts['companies']) + ")</h3></div>"
             "<div style='display:flex;gap:8px;align-items:center;'>"
-            "<button type='button' class='btn-add-new' style='background:#8b5cf6;' onclick=\"openCreateModal('create-company-modal')\"><i class='fa-solid fa-plus'></i> Register Company</button>"
-            "<span id='excelSaveStatus' style='font-size:12px;font-weight:700;color:#10b981;display:none;'>Saved ✓</span>"
-            "<button type='button' class='btn-ctrl btn-ctrl-light' onclick=\"exportAdminTableCSV(this,'companies.csv')\" style='padding:6px 12px;font-size:12px;'><i class='fa-solid fa-file-excel' style='color:#10b981;'></i> Export CSV</button>"
+            "<span id='excelSaveStatus' style='font-size:12px;font-weight:700;color:#10b981;display:none;'>Saved &#10003;</span>"
+            "<button type='button' class='btn-ctrl btn-ctrl-light' onclick=\"exportAdminTableCSV(this,'companies.csv')\" style='padding:7px 12px;font-size:12.5px;'><i class='fa-solid fa-file-excel' style='color:#10b981;'></i> Export Excel</button>"
+            "<button type='button' class='btn-add-new btn-add-solid' style='background:#7c3aed;' onclick=\"openCreateModal('create-company-modal')\"><i class='fa-solid fa-plus'></i> Register Company</button>"
+            "</div></div>"
+            "<div class='admin-bulk-bar' id='adminBulkBar'>"
+            "<span><strong id='bulkSelectedCount'>0</strong> selected</span>"
+            "<div style='display:flex;gap:8px;'>"
+            "<button type='button' class='btn-ctrl btn-ctrl-success' style='padding:5px 10px;font-size:12px;' onclick=\"runBulkAction('companies','verify')\">Verify Selected</button>"
+            "<button type='button' class='btn-ctrl btn-ctrl-light' style='padding:5px 10px;font-size:12px;' onclick=\"runBulkAction('companies','unverify')\">Unverify</button>"
+            "<button type='button' class='btn-ctrl btn-ctrl-light' style='padding:5px 10px;font-size:12px;color:#ef4444;' onclick=\"runBulkAction('companies','delete')\">Delete Selected</button>"
             "</div></div>"
             "<table class='clean-table'>"
-            "<thead><tr>"
-            "<th>Company</th>"
-            "<th>Industry</th>"
-            "<th>Headquarters</th>"
-            "<th style='text-align:center;'>Total Jobs</th>"
-            "<th>Verification</th>"
-            "<th>Status</th>"
-            "<th>Joined Date</th>"
-            "<th>Action</th>"
-            "</tr></thead>"
+            "<thead><tr><th style='width:38px;text-align:center;'><input type='checkbox' class='admin-check' onchange='toggleAllRows(this)'></th><th>Company</th><th>Industry</th><th>Headquarters</th><th>Team Size / Jobs</th><th>Verified</th><th>Status</th><th>Founded</th><th>Action</th></tr></thead>"
             "<tbody>" + companies_rows + "</tbody>"
-            "</table>" + _render_pagination("companies", page, tab_total if tab_total is not None else counts["companies"], per_page, q) + "</div>"
+            "</table>" + _render_pagination("companies", page, tab_total if tab_total is not None else counts["companies"], per_page, q, {"industry": f_industry, "location": f_loc, "verified": f_verified}) + "</div>"
         )
 
     elif tab == "users":
@@ -1932,6 +1946,10 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
             "<div class='form-group'><label class='form-label'>Slide 4 Image URL</label><input class='form-control' name='hero_img_4' value='" + e(imgs[3]) + "'></div>"
             "</div>"
             "<input type='hidden' name='hero_images_text' value='" + e(hero_imgs_text) + "'>"
+            "<div style='display:grid;grid-template-columns:2fr 1fr;gap:12px;'>"
+            "<div class='form-group'><label class='form-label'>Site Announcement</label><input class='form-control' name='promo_ticker_text' value='" + e(site.get('promo_ticker_text') or '') + "' placeholder='Optional message shown in the site announcement bar'></div>"
+            "<div class='form-group'><label class='form-label'>Announcement Link</label><input class='form-control' name='promo_ticker_href' value='" + e(site.get('promo_ticker_href') or '/jobs') + "' placeholder='/jobs'></div>"
+            "</div>"
             "<div class='form-group'><label class='form-label'>Footer Brand Tagline</label><textarea class='form-control' name='footer_tagline' rows='2'>" + e(site.get('footer_tagline') or '') + "</textarea></div>"
             "<button type='submit' class='btn-submit-clean'><i class='fa-solid fa-floppy-disk'></i> Save All Live Settings</button>"
             "</form></div>"
@@ -2080,10 +2098,10 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
         "<title>Admin Dashboard | Logistic Waves</title>\n"
         "<link rel='icon' type='image/png' href='/static/favicon.png'>\n"
         "<link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css' crossorigin='anonymous' referrerpolicy='no-referrer'>\n"
-        "<link rel='stylesheet' href='/static/admin.css?v=20261112_03'>\n"
-        "<link rel='stylesheet' href='/static/cms-editor.css?v=20261128_cms'>\n"
+        "<link rel='stylesheet' href='/static/admin.css?v=20261128_v2'>\n"
+        "<link rel='stylesheet' href='/static/cms-editor.css?v=20261128_v2'>\n"
         "<script src='https://cdnjs.cloudflare.com/ajax/libs/tinymce/6.8.3/tinymce.min.js' referrerpolicy='origin'></script>\n"
-        "<script src='/static/cms-editor.js?v=20261128_cms' defer></script>\n"
+        "<script src='/static/cms-editor.js?v=20261128_v2' defer></script>\n"
         "</head>\n<body class='admin-body'>\n"
         "<div class='admin-layout'>\n"
 
@@ -2330,6 +2348,7 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
         "    var row = [];"
         "    var cells = tr.querySelectorAll('th, td');"
         "    for(var i=0; i<cells.length-1; i++){"
+        "      if(cells[i].querySelector('.admin-check')) continue;"
         "      var inp = cells[i].querySelector('input, select');"
         "      var txt = inp ? inp.value : cells[i].innerText;"
         "      txt = String(txt || '').replace(/\\s+/g,' ').trim().replace(/\"/g,'\"\"');"
