@@ -1322,9 +1322,10 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
             "</form></div></td></tr>"
         )
 
-    def _excel_input(table, row_id, field, val, placeholder="", input_type="text", extra_style=""):
+    def _excel_input(table, row_id, field, val, placeholder="", input_type="text", extra_style="", extra_class=""):
+        cls = "excel-cell" + (f" {extra_class}" if extra_class else "")
         return (
-            f"<input type='{input_type}' class='excel-cell' value='{e(val)}' placeholder='{e(placeholder)}' "
+            f"<input type='{input_type}' class='{cls}' value='{e(val)}' placeholder='{e(placeholder)}' "
             f"style='{extra_style}' "
             f"data-orig='{e(val)}' "
             f"onchange=\"saveInlineCell(this, '{table}', {int(row_id)}, '{field}')\" "
@@ -1435,69 +1436,63 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
 
     elif tab == "articles":
         def article_row(a):
-            today_badge = "<span class='pill-badge pill-blue' style='margin-left:6px;'>Today</span>" if a['is_today'] else ""
-            # Thumbnail cell
+            today_badge = "<span class='pill-badge pill-blue' style='margin-left:6px;font-size:10.5px;padding:2px 7px;'>Today</span>" if a['is_today'] else ""
             thumb_url = a.get('thumb') or ''
             thumb_cell = (
-                "<td style='width:68px;padding:6px 8px;'>"
+                "<td style='width:76px;'>"
                 + (
-                    "<img src='" + e(thumb_url) + "' alt='' style='width:60px;height:40px;object-fit:cover;"
-                    "border-radius:6px;display:block;' loading='lazy'>"
+                    "<img src='" + e(thumb_url) + "' alt='' class='table-thumb' style='width:64px;height:42px;border-radius:8px;object-fit:cover;display:block;' loading='lazy'>"
                     if thumb_url else
-                    "<div style='width:60px;height:40px;background:#e2e8f0;border-radius:6px;display:flex;"
-                    "align-items:center;justify-content:center;'>"
-                    "<i class='fa-solid fa-image' style='color:#94a3b8;font-size:16px;'></i></div>"
+                    "<div style='width:64px;height:42px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;display:flex;align-items:center;justify-content:center;'>"
+                    "<i class='fa-regular fa-image' style='color:#94a3b8;font-size:15px;'></i></div>"
                 )
                 + "</td>"
             )
-            # Status inline select colour-coded
             st = (a.get('status') or 'published').lower()
-            st_colors = {'published': '#10b981', 'draft': '#f59e0b', 'scheduled': '#3874ff', 'archived': '#94a3b8'}
-            st_color = st_colors.get(st, '#64748b')
+            st_cls = {
+                'published': 'st-published',
+                'draft': 'st-draft',
+                'scheduled': 'st-scheduled',
+                'archived': 'st-archived',
+            }.get(st, 'st-published')
             status_cell = (
                 "<td style='white-space:nowrap;'>"
-                "<select class='excel-cell excel-select' style='min-width:115px;border-left:3px solid " + st_color + ";'"
-                " onchange=\"var c={'published':'#10b981','draft':'#f59e0b','scheduled':'#3874ff','archived':'#94a3b8'};"
-                "this.style.borderLeftColor=c[this.value]||'#64748b';saveInlineCell(this,'articles'," + str(a['id']) + ",'status');\">"
-                + "".join(
-                    "<option value='" + v + "'" + (" selected" if st == v else "") + ">" + v.capitalize() + "</option>"
-                    for v in ['published', 'draft', 'scheduled', 'archived']
-                )
-                + "</select></td>"
+                "<select class='status-select-pill " + st_cls + "' onchange=\"saveInlineStatus(this, 'articles', " + str(a['id']) + ", 'status')\">"
+                "<option value='published'" + (" selected" if st == 'published' else "") + ">&bull; Published</option>"
+                "<option value='draft'" + (" selected" if st == 'draft' else "") + ">&bull; Draft</option>"
+                "<option value='scheduled'" + (" selected" if st == 'scheduled' else "") + ">&bull; Scheduled</option>"
+                "<option value='archived'" + (" selected" if st == 'archived' else "") + ">&bull; Archived</option>"
+                "</select></td>"
             )
-            # Views formatted
-            views = a.get('views') or 0
-            views_str = (f"{views/1000:.1f}K" if views >= 1000 else str(views))
-            # Author with avatar initial
+            read_t = e(a.get('read_time') or '4 min read')
             author_name = a.get('author') or 'Editorial'
             author_cell = (
-                "<td><div style='display:flex;align-items:center;gap:7px;min-width:120px;'>"
-                "<span style='width:26px;height:26px;border-radius:50%;background:#3874ff;color:#fff;"
-                "font-size:11px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;"
+                "<td><div style='display:flex;align-items:center;gap:8px;min-width:130px;'>"
+                "<span style='width:26px;height:26px;border-radius:50%;background:#eff6ff;color:#2563eb;border:1px solid #bfdbfe;"
+                "font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;"
                 "flex-shrink:0;'>" + e(author_name[0].upper()) + "</span>"
-                + _excel_input("articles", a['id'], "author", author_name, "Author")
-                + "</div></td>"
+                "<div style='flex:1;min-width:0;'>" + _excel_input("articles", a['id'], "author", author_name, "Author", extra_style="font-weight:500;color:#334155;") + "</div>"
+                "</div></td>"
             )
             return (
                 "<tr>"
+                f"<td style='width:38px;text-align:center;'><input type='checkbox' class='admin-check row-check' value='{a['id']}' onchange='updateBulkBar()'></td>"
                 + thumb_cell
-                + "<td style='min-width:220px;'>"
-                + _excel_input("articles", a['id'], "title", a['title'], "Title", extra_style="font-weight:700;color:#0f172a;")
-                + "<small style='color:#64748b;padding-left:6px;display:block;margin-top:1px;'>"
-                + "/" + e(a.get('slug') or '') + "</small>"
-                + today_badge + "</td>"
-                + "<td>" + _excel_input("articles", a['id'], "category", a.get('category') or 'General', "Category", extra_style="font-weight:600;color:#2563eb;")
-                + "<small style='color:#94a3b8;display:block;'>"
-                + _excel_input("articles", a['id'], "tag", a.get('tag') or '', "Tag")
-                + "</small></td>"
+                + "<td style='min-width:230px;max-width:340px;'>"
+                + _excel_input("articles", a['id'], "title", a['title'], "Article Title", extra_style="font-weight:600;color:#0f172a;font-size:13.5px;")
+                + "<div style='display:flex;align-items:center;gap:4px;margin-top:2px;'>"
+                + "<small style='color:#94a3b8;font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;'>/" + e(a.get('slug') or '') + "</small>"
+                + today_badge + "</div></td>"
+                + "<td>" + _excel_input("articles", a['id'], "category", a.get('category') or 'Logistics', "Category", extra_class="excel-pill-input") + "</td>"
                 + author_cell
                 + status_cell
-                + "<td style='white-space:nowrap;text-align:right;min-width:90px;'>"
-                + "<span style='font-weight:700;color:#0f172a;font-size:13px;'>" + views_str + "</span>"
-                + "<div style='font-size:11px;color:#94a3b8;margin-top:2px;'>" + e(a.get('published') or '') + "</div>"
+                + "<td style='white-space:nowrap;color:#64748b;font-size:12px;'>"
+                + "<div style='font-weight:600;color:#334155;'>" + e(a.get('published') or '') + "</div>"
+                + "<div style='font-size:11px;color:#94a3b8;margin-top:2px;'>" + read_t + "</div>"
                 + "</td>"
                 + "<td><div class='action-btns'>"
-                + "<button type='button' class='btn-action-round btn-action-edit' title='Full Edit' "
+                + "<a href='/articles/" + e(a.get('slug') or '') + "' target='_blank' class='btn-action-round' title='View Live'><i class='fa-regular fa-eye'></i></a>"
+                + "<button type='button' class='btn-action-round btn-action-edit' title='Edit Article' "
                 + "data-id='" + str(a['id']) + "' data-tab='articles' data-slug='" + e(a.get('slug') or '') + "' "
                 + "data-title='" + e(a['title']) + "' data-category='" + e(a.get('category') or '') + "' "
                 + "data-author='" + e(a.get('author') or '') + "' data-tag='" + e(a.get('tag') or '') + "' "
@@ -1507,23 +1502,21 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
                 + "data-status='" + e(a.get('status') or 'published') + "' data-published='" + e(a.get('published') or '') + "' "
                 + "data-seo-title='" + e(a.get('seo_title') or '') + "' data-seo-description='" + e(a.get('seo_description') or '') + "' "
                 + "data-featured='" + str(a.get('featured') or 0) + "' data-allow-comments='" + str(a.get('allow_comments', 1)) + "' "
-                + "onclick='openArticleEditModal(this)'><i class='fa-solid fa-wrench'></i></button>"
-                + "<a href='/articles/" + e(a.get('slug') or '') + "' target='_blank' class='btn-action-round'>"
-                + "<i class='fa-solid fa-arrow-up-right-from-square'></i></a>"
+                + "onclick='openArticleEditModal(this)'><i class='fa-solid fa-pen'></i></button>"
                 + "<form method='post' action='/admin/articles/duplicate' style='display:inline;'>"
                 + f"{_csrf_field()}"
                 + "<input type='hidden' name='id' value='" + str(a['id']) + "'>"
                 + "<input type='hidden' name='tab' value='articles'>"
-                + "<button type='submit' class='btn-action-round' title='Duplicate'><i class='fa-regular fa-copy'></i></button>"
+                + "<button type='submit' class='btn-action-round btn-action-copy' title='Duplicate'><i class='fa-regular fa-copy'></i></button>"
                 + "</form>"
-                + "<form method='post' action='/admin/articles/delete' onsubmit=\"return confirm('Delete?');\" style='display:inline;'>"
+                + "<form method='post' action='/admin/articles/delete' onsubmit=\"return confirm('Delete this article?');\" style='display:inline;'>"
                 + f"{_csrf_field()}"
                 + "<input type='hidden' name='id' value='" + str(a['id']) + "'>"
                 + "<input type='hidden' name='tab' value='articles'>"
-                + "<button type='submit' class='btn-action-delete'><i class='fa-solid fa-trash-can'></i></button>"
+                + "<button type='submit' class='btn-action-delete' title='Delete'><i class='fa-regular fa-trash-can'></i></button>"
                 + "</form></div></td></tr>"
             )
-        articles_rows = "".join([article_row(a) for a in all_articles]) or _empty_row(7, "No articles found.")
+        articles_rows = "".join([article_row(a) for a in all_articles]) or _empty_row(8, "No articles found.")
         art_cats = "".join(
             f"<option value='{e(c)}'{' selected' if f_cat == c else ''}>{e(c)}</option>"
             for c in ["Maritime & Supply Chain", "Logistics Tech", "Port Infrastructure", "Freight Rates", "Technology", "Career & Talent", "Drivers & Workforce", "Logistics & Brokerage", "Legal Issues"]
@@ -1532,7 +1525,7 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
             "<form method='get' action='/admin' class='admin-filter-bar'>"
             "<input type='hidden' name='tab' value='articles'>"
             "<div class='admin-filter-search'><i class='fa-solid fa-magnifying-glass'></i>"
-            f"<input type='text' name='q' value='{e(q)}' placeholder='Search articles by title, category, or author...'></div>"
+            f"<input type='text' name='q' value='{e(q)}' placeholder='Search articles by title, category or author...'></div>"
             f"<select name='category' class='admin-filter-select' onchange='this.form.submit()'><option value=''>All Categories</option>{art_cats}</select>"
             "<a href='/admin?tab=articles' class='admin-filter-reset'><i class='fa-solid fa-rotate-left'></i> Reset</a>"
             "</form>"
@@ -1549,13 +1542,14 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
             "</div></div>"
             "<table class='clean-table'>"
             "<thead><tr>"
-            "<th style='width:68px;'>Cover</th>"
-            "<th>Title &amp; Slug</th>"
-            "<th>Category / Tag</th>"
+            "<th style='width:38px;text-align:center;'><input type='checkbox' class='admin-check' onchange='toggleAllRows(this)'></th>"
+            "<th style='width:76px;'>Thumbnail</th>"
+            "<th>Title</th>"
+            "<th>Category</th>"
             "<th>Author</th>"
             "<th>Status</th>"
-            "<th style='text-align:right;'>Views / Date</th>"
-            "<th>Action</th>"
+            "<th>Published Date</th>"
+            "<th>Actions</th>"
             "</tr></thead>"
             "<tbody>" + articles_rows + "</tbody>"
             "</table>" + _render_pagination("articles", page, tab_total if tab_total is not None else counts["articles"], per_page, q, {"category": f_cat}) + "</div>"
@@ -1636,13 +1630,16 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
                 "<td style='min-width:210px;'><div style='display:flex;align-items:center;gap:10px;'>"
                 + avatar_html +
                 "<div style='flex:1;min-width:0;'>"
-                + _excel_input("companies", c['id'], "name", c.get('name') or '', "Company Name", extra_style="font-weight:700;color:#0f172a;")
-                + "<small style='color:#64748b;padding-left:6px;display:block;'>" + e(c.get('slug') or '') + "</small></div>"
+                + _excel_input("companies", c['id'], "name", c.get('name') or '', "Company Name", extra_style="font-weight:600;color:#0f172a;font-size:13.5px;")
+                + "<small style='color:#94a3b8;font-size:11.5px;display:block;'>" + e(c.get('slug') or '') + "</small></div>"
                 "</div></td>"
-                "<td style='min-width:150px;'>" + _excel_input("companies", c['id'], "industries", c.get('industries') or 'Logistics', "Industry") + "</td>"
-                "<td style='min-width:150px;'>" + _excel_input("companies", c['id'], "location", c.get('location') or 'Global', "Headquarters") + "</td>"
-                "<td style='width:110px;'>" + _excel_input("companies", c['id'], "employees", str(c.get('employees') or 0), "Team Size", input_type="number") +
-                "<div style='font-size:11px;color:#10b981;padding-left:6px;'>" + str(open_jobs) + " jobs</div></td>"
+                "<td style='min-width:130px;'>" + _excel_input("companies", c['id'], "industries", c.get('industries') or 'Logistics', "Industry", extra_class="excel-pill-input") + "</td>"
+                "<td style='min-width:155px;'><div style='display:flex;align-items:center;gap:6px;'>"
+                "<i class='fa-solid fa-location-dot' style='color:#94a3b8;font-size:11.5px;flex-shrink:0;'></i>"
+                "<div style='flex:1;min-width:0;'>" + _excel_input("companies", c['id'], "location", c.get('location') or 'Global', "Headquarters", extra_style="color:#475569;") + "</div>"
+                "</div></td>"
+                "<td style='width:110px;'>" + _excel_input("companies", c['id'], "employees", str(c.get('employees') or 0), "Team Size", input_type="number", extra_style="font-weight:600;color:#0f172a;") +
+                "<div style='font-size:11px;color:#059669;font-weight:600;margin-top:2px;'>" + str(open_jobs) + " jobs</div></td>"
                 "<td><select class='status-select-pill " + ver_cls + "' onchange=\"saveInlineStatus(this, 'companies', " + str(c['id']) + ", 'verified')\">"
                 "<option value='1'" + (" selected" if is_ver else "") + ">&#10003; Verified</option>"
                 "<option value='0'" + (" selected" if not is_ver else "") + ">&bull; Unverified</option>"
@@ -1655,7 +1652,8 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
                 "</select></td>"
                 "<td style='color:#64748b;font-size:12px;white-space:nowrap;'>" + e(str(founded)) + "</td>"
                 "<td><div class='action-btns'>"
-                "<button type='button' class='btn-action-round btn-action-edit' title='Manage Full Details (Wrench)' "
+                "<a href='/company/" + e(c.get('slug') or '') + "' target='_blank' class='btn-action-round' title='View Live'><i class='fa-regular fa-eye'></i></a>"
+                "<button type='button' class='btn-action-round btn-action-edit' title='Edit Company' "
                 "data-id='" + str(c.get('id') or '') + "' data-tab='companies' data-slug='" + e(c.get('slug') or '') + "' "
                 "data-name='" + e(c.get('name') or '') + "' data-tagline='" + e(c.get('tagline') or '') + "' "
                 "data-industries='" + e(c.get('industries') or '') + "' data-location='" + e(c.get('location') or '') + "' "
@@ -1665,13 +1663,12 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
                 "data-benefits='" + e(c.get('benefits') or '') + "' data-offices='" + e(c.get('offices') or '') + "' "
                 "data-social-links='" + e(c.get('social_links') or '') + "' data-status='" + e(c.get('status') or 'active') + "' "
                 "data-verified='" + str(c.get('verified', 1)) + "' data-featured='" + str(c.get('featured') or 0) + "' "
-                "onclick='openCompanyEditModal(this)'><i class='fa-solid fa-wrench'></i></button>"
-                "<a href='/company/" + e(c.get('slug') or '') + "' target='_blank' class='btn-action-round' title='View Live'><i class='fa-regular fa-eye'></i></a>"
+                "onclick='openCompanyEditModal(this)'><i class='fa-solid fa-pen'></i></button>"
                 "<form method='post' action='/admin/companies/delete' onsubmit=\"return confirm('Delete company and all jobs?');\" style='display:inline;'>"
                 f"{_csrf_field()}"
                 "<input type='hidden' name='id' value='" + str(c.get('id') or '') + "'>"
                 "<input type='hidden' name='tab' value='companies'>"
-                "<button type='submit' class='btn-action-delete' title='Delete'><i class='fa-solid fa-trash-can'></i></button>"
+                "<button type='submit' class='btn-action-delete' title='Delete'><i class='fa-regular fa-trash-can'></i></button>"
                 "</form></div></td></tr>"
             )
         co_filter_bar = (
@@ -2141,8 +2138,11 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
         "<meta name='viewport' content='width=device-width, initial-scale=1'>\n"
         "<title>Admin Dashboard | Logistic Waves</title>\n"
         "<link rel='icon' type='image/png' href='/static/favicon.png'>\n"
+        "<link rel='preconnect' href='https://fonts.googleapis.com'>\n"
+        "<link rel='preconnect' href='https://fonts.gstatic.com' crossorigin>\n"
+        "<link href='https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap' rel='stylesheet'>\n"
         "<link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css' crossorigin='anonymous' referrerpolicy='no-referrer'>\n"
-        "<link rel='stylesheet' href='/static/admin.css?v=20261128_v2'>\n"
+        "<link rel='stylesheet' href='/static/admin.css?v=20261128_v3'>\n"
         "<link rel='stylesheet' href='/static/cms-editor.css?v=20261128_v2'>\n"
         "<script src='https://cdnjs.cloudflare.com/ajax/libs/tinymce/6.8.3/tinymce.min.js' referrerpolicy='origin'></script>\n"
         "<script src='/static/cms-editor.js?v=20261128_v2' defer></script>\n"
@@ -2271,10 +2271,10 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
         "\n" + render_create_modals(all_companies) +
         "\n" + render_edit_modals(all_companies) +
         "\n<style>"
-        ".excel-cell{width:100%;border:1px solid transparent;background:transparent;padding:5px 7px;border-radius:6px;font-size:13px;color:#1e293b;font-family:inherit;transition:border-color .15s,background .15s;box-sizing:border-box;}"
+        ".excel-cell{width:100%;border:1px solid transparent;background:transparent;padding:3px 6px;margin:-3px -6px;border-radius:6px;font-size:13px;line-height:1.4;color:#0f172a;font-family:inherit;transition:border-color .15s,background .15s,box-shadow .15s;box-sizing:border-box;text-overflow:ellipsis;}"
         ".excel-cell:hover{border-color:#cbd5e1;background:#f8fafc;}"
-        ".excel-cell:focus{outline:none;border-color:#3874ff;background:#ffffff;box-shadow:0 0 0 3px rgba(56,116,255,0.12);}"
-        ".excel-cell.is-saved{border-color:#10b981;background:#ecfdf5;}"
+        ".excel-cell:focus{outline:none;border-color:#2563eb;background:#ffffff;box-shadow:0 0 0 3px rgba(37,99,235,0.12);}"
+        ".excel-cell.is-saved{border-color:#10b981 !important;background:#ecfdf5 !important;}"
         ".excel-select{cursor:pointer;min-width:110px;}"
         ".tox-tinymce{border-radius:10px !important;border:1px solid #cbd5e1 !important;box-shadow:0 1px 3px rgba(0,0,0,0.04) !important;}"
         ".tox-tinymce-aux, .tox-silver-sink{z-index:10005 !important;}"

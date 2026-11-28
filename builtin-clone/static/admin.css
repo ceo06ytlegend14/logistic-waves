@@ -11,13 +11,20 @@
 body.admin-body {
   margin: 0;
   padding: 0;
-  font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, sans-serif;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: #f0f4f9;
-  color: #202224;
+  background: #f4f7fb;
+  color: #0f172a;
   min-height: 100vh;
   display: flex;
+}
+
+body.admin-body input,
+body.admin-body select,
+body.admin-body textarea,
+body.admin-body button {
+  font-family: inherit;
 }
 
 /* ---------------- LAYOUT WRAPPER ---------------- */
@@ -693,19 +700,19 @@ body.admin-body {
 }
 
 .clean-table th {
-  padding: 10px 12px;
+  padding: 12px 14px;
   background: #f8fafc;
   color: #64748b;
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  border-bottom: 1px solid #eaedf3;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0.01em;
+  border-bottom: 1px solid #e2e8f0;
   white-space: nowrap;
 }
 
 .clean-table td {
-  padding: 11px 12px;
+  padding: 13px 14px;
   border-bottom: 1px solid #f1f5f9;
   font-size: 13px;
   color: #334155;
@@ -750,49 +757,60 @@ body.admin-body {
 .action-btns {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .btn-action-round {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
-  color: #64748b;
+  border: 1px solid transparent;
+  background: #eff6ff;
+  color: #2563eb;
   cursor: pointer;
   text-decoration: none;
-  font-size: 13px;
-  transition: all 0.2s ease;
+  font-size: 12.5px;
+  transition: all 0.15s ease;
 }
 
 .btn-action-round:hover {
-  background: #f0f5ff;
-  color: #3874ff;
-  border-color: #3874ff;
+  background: #dbeafe;
+  color: #1d4ed8;
+  transform: translateY(-1px);
+}
+
+.btn-action-copy {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.btn-action-copy:hover {
+  background: #e2e8f0;
+  color: #0f172a;
 }
 
 .btn-action-delete {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid #fecaca;
-  background: #ffffff;
+  border: 1px solid transparent;
+  background: #fef2f2;
   color: #ef4444;
   cursor: pointer;
-  font-size: 13px;
-  transition: all 0.2s ease;
+  font-size: 12.5px;
+  transition: all 0.15s ease;
 }
 
 .btn-action-delete:hover {
   background: #fee2e2;
-  border-color: #ef4444;
+  color: #dc2626;
+  transform: translateY(-1px);
 }
 
 /* ---------------- FORMS & MODALS / DRAWERS ---------------- */
@@ -1218,10 +1236,16 @@ body.admin-body {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath fill='%23475569' d='M3 4.5l3 3 3-3'/%3E%3C/svg%3E");
 }
 .status-select-pill.st-active,
+.status-select-pill.st-published,
 .status-select-pill.st-verified {
   background-color: #ecfdf5;
   color: #059669;
   border-color: #a7f3d0;
+}
+.status-select-pill.st-scheduled {
+  background-color: #eff6ff;
+  color: #2563eb;
+  border-color: #bfdbfe;
 }
 .status-select-pill.st-pending,
 .status-select-pill.st-unverified {
@@ -1238,6 +1262,31 @@ body.admin-body {
   background-color: #f1f5f9;
   color: #475569;
   border-color: #cbd5e1;
+}
+
+.excel-pill-input {
+  display: inline-block;
+  width: auto !important;
+  max-width: 145px;
+  padding: 4px 11px !important;
+  margin: 0 !important;
+  border-radius: 999px !important;
+  background: #eff6ff !important;
+  color: #2563eb !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  border: 1px solid transparent !important;
+  text-align: center;
+}
+.excel-pill-input:hover {
+  border-color: #93c5fd !important;
+  background: #dbeafe !important;
+}
+.excel-pill-input:focus {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #2563eb !important;
+  text-align: left;
 }
 
 .pg-bar {
