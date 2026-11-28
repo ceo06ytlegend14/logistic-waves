@@ -527,120 +527,123 @@ def layout(title, body, user=None, active="", description="", page_class="", ext
 </html>'''
 
 
-def _cms_image_uploader(input_id, preview_id, name, label, current_val=""):
-    val = e(current_val or "")
-    preview_src = val if val else "/static/images/fw_today_1.jpg"
-    return f'''
-    <div class="cms-form-group">
-      <label class="cms-form-label">
-        <span><i class="fa-solid fa-image" style="color:#3874ff;"></i> {e(label)}</span>
-        <span style="font-size:11px;font-weight:600;color:#64748b;">PNG, JPG, WEBP, SVG</span>
-      </label>
-      <div class="cms-uploader-card">
-        <div class="cms-uploader-thumb-box">
-          <img id="{e(preview_id)}" src="{preview_src}" alt="Preview" decoding="async" onerror="this.onerror=null;this.src='/static/images/fw_today_1.jpg'">
-        </div>
-        <div class="cms-uploader-controls">
-          <div class="cms-uploader-actions">
-            <label class="cms-upload-device-label" title="Choose from Computer">
-              <i class="fa-solid fa-cloud-arrow-up"></i> Upload from Device
-              <input type="file" accept="image/*" style="display:none;" onchange="handleCmsImageUpload(this, '{e(input_id)}', '{e(preview_id)}')">
-            </label>
-            <button type="button" class="cms-upload-clear-btn" onclick="clearCmsImageUpload('{e(input_id)}', '{e(preview_id)}')" title="Remove Image">
-              <i class="fa-solid fa-trash-can"></i> Clear
-            </button>
-          </div>
-          <div class="cms-uploader-url-row">
-            <input class="cms-form-control" id="{e(input_id)}" name="{e(name)}" value="{val}" placeholder="Or paste web image URL (https://...)" style="font-size:12px;padding:6px 10px;" oninput="updateCmsImagePreview(this.value, '{e(preview_id)}')">
-            <button type="button" class="cms-fetch-btn" onclick="updateCmsImagePreview(document.getElementById('{e(input_id)}').value, '{e(preview_id)}')">
-              <i class="fa-solid fa-magnifying-glass"></i> Fetch
-            </button>
-          </div>
-          <div class="cms-presets-row">
-            <span>Presets:</span>
-            <button type="button" class="cms-preset-chip" onclick="setCmsPresetImage('{e(input_id)}', '{e(preview_id)}', '/static/images/fw_today_1.jpg')">Port &amp; Ships</button>
-            <button type="button" class="cms-preset-chip" onclick="setCmsPresetImage('{e(input_id)}', '{e(preview_id)}', '/static/images/fw_today_2.svg')">Aviation</button>
-            <button type="button" class="cms-preset-chip" onclick="setCmsPresetImage('{e(input_id)}', '{e(preview_id)}', '/static/images/fw_today_3.jpg')">Container</button>
-            <button type="button" class="cms-preset-chip" onclick="setCmsPresetImage('{e(input_id)}', '{e(preview_id)}', '/static/images/fw_today_4.jpg')">Electric</button>
-          </div>
-        </div>
-      </div>
-    </div>'''
-
-
 def render_cms_article_modal(article):
     aid = article.get("id") or ""
     slug = article.get("slug") or "article"
     status = (article.get("status") or "published").lower()
     if status not in ("published", "draft", "archived"):
         status = "published"
+    cover_src = e(article.get("thumb") or "/static/images/fw_today_1.jpg")
+    raw_tags = [t.strip() for t in (article.get("tag") or "").split(",") if t.strip()]
+    tag_chips = "".join(
+        f'<span class="cms-chip-pill" data-val="{e(t)}">{e(t)} <button type="button" class="cms-chip-remove" onclick="removeCmsChip(this, \'cms-art-tags-wrap\', \'cms-art-tag-hidden\')">&times;</button></span>'
+        for t in raw_tags
+    )
+    featured_checked = "checked" if article.get("featured") else ""
+    comments_checked = "checked" if article.get("allow_comments", 1) else ""
+    seo_title = article.get("seo_title") or article.get("title") or ""
+    seo_desc = article.get("seo_description") or article.get("excerpt") or ""
     return f'''
     <div class="cms-modal-backdrop" id="cms-article-modal">
       <div class="cms-modal-dialog">
         <div class="cms-modal-header">
-          <h3 class="cms-modal-title"><i class="fa-solid fa-pen-to-square" style="color:#3874ff;"></i> Edit Article / Video</h3>
-          <button type="button" class="cms-modal-close" onclick="closeCmsModal('cms-article-modal')" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+          <h3 class="cms-modal-title"><i class="fa-solid fa-pen-to-square" style="color:#2563eb;"></i> Edit Article / Video</h3>
+          <div class="cms-header-actions">
+            <button type="button" class="cms-header-preview-btn" onclick="previewCmsItem('/articles/{e(slug)}')"><i class="fa-regular fa-eye"></i> Preview</button>
+            <button type="button" class="cms-modal-close" onclick="closeCmsModal('cms-article-modal')" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+          </div>
         </div>
         <form method="post" action="/cms/article/update" id="cms-article-form" class="cms-modal-body">
           <input type="hidden" name="id" value="{e(aid)}">
           <input type="hidden" name="redirect_to" value="/articles/{e(slug)}">
-          <input type="hidden" name="status" value="{e(status)}">
+          <input type="hidden" name="tag" id="cms-art-tag-hidden" value="{e(article.get('tag', ''))}">
           {csrf_input()}
 
-          <div class="cms-status-bar">
-            <span class="cms-status-label"><i class="fa-solid fa-signal"></i> Publishing Status</span>
-            <div class="cms-status-badges">
-              <label><input type="radio" class="cms-status-radio" name="status_choice" value="published" {'checked' if status=='published' else ''} onchange="this.form.status.value=this.value"><span class="cms-status-pill pill-pub">Published</span></label>
-              <label><input type="radio" class="cms-status-radio" name="status_choice" value="draft" {'checked' if status=='draft' else ''} onchange="this.form.status.value=this.value"><span class="cms-status-pill pill-draft">Draft</span></label>
-              <label><input type="radio" class="cms-status-radio" name="status_choice" value="archived" {'checked' if status=='archived' else ''} onchange="this.form.status.value=this.value"><span class="cms-status-pill pill-arch">Archived</span></label>
-            </div>
-          </div>
-
-          <div class="cms-form-group">
-            <label class="cms-form-label">Title *</label>
-            <input class="cms-form-control" name="title" value="{e(article.get('title', ''))}" required>
-          </div>
-          <div class="cms-grid-2">
-            <div class="cms-form-group"><label class="cms-form-label">Category</label><input class="cms-form-control" name="category" value="{e(article.get('category', ''))}"></div>
-            <div class="cms-form-group"><label class="cms-form-label">Tag / Theme</label><input class="cms-form-control" name="tag" value="{e(article.get('tag', ''))}"></div>
-          </div>
-          <div class="cms-grid-3">
-            <div class="cms-form-group"><label class="cms-form-label">Author</label><input class="cms-form-control" name="author" value="{e(article.get('author', ''))}"></div>
-            <div class="cms-form-group"><label class="cms-form-label">Guest (Video)</label><input class="cms-form-control" name="guest" value="{e(article.get('guest', ''))}"></div>
-            <div class="cms-form-group"><label class="cms-form-label">Read Time</label><input class="cms-form-control" name="read_time" value="{e(article.get('read_time', ''))}"></div>
-          </div>
-          <div class="cms-form-group">
-            <label class="cms-form-label">Duration (Video only)</label>
-            <input class="cms-form-control" name="duration" value="{e(article.get('duration', ''))}" placeholder="e.g. 15:00 min">
-          </div>
-
-          {_cms_image_uploader('cms-art-thumb', 'cms-art-thumb-prev', 'thumb', 'Featured Article / Video Cover Image', article.get('thumb', ''))}
-
-          <div class="cms-form-group">
-            <label class="cms-form-label">Excerpt / Summary</label>
-            <textarea class="cms-form-control" name="excerpt" rows="2">{e(article.get('excerpt', ''))}</textarea>
-          </div>
-
-          <div class="cms-form-group">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;flex-wrap:wrap;gap:8px;">
-              <label class="cms-form-label" style="margin:0;"><i class="fa-solid fa-pen-nib" style="color:#3874ff;"></i> Article Content (WYSIWYG: Highlight, Drag &amp; Resize Images)</label>
-              <div style="display:flex;gap:6px;flex-wrap:wrap;">
-                <label style="border:1px solid #bbf7d0;background:#f0fdf4;color:#15803d;font-size:11.5px;font-weight:700;cursor:pointer;padding:4px 9px;border-radius:6px;display:flex;align-items:center;gap:5px;">
-                  <i class="fa-solid fa-cloud-arrow-up"></i> Upload Device Photo
+          <div class="cms-layout-3col">
+            <!-- Left Column: Cover Image & Gallery -->
+            <div class="cms-col-left">
+              <div class="cms-cover-card">
+                <img id="cms-art-thumb-prev" src="{cover_src}" alt="Article Cover" onerror="this.onerror=null;this.src='/static/images/fw_today_1.jpg'">
+                <label class="cms-cover-overlay-btn">
+                  <i class="fa-solid fa-camera"></i> Change Image
+                  <input type="file" accept="image/*" style="display:none;" onchange="handleCmsImageUpload(this, 'cms-art-thumb', 'cms-art-thumb-prev')">
+                </label>
+              </div>
+              <div class="cms-url-inline-row">
+                <input class="cms-form-control" id="cms-art-thumb" name="thumb" value="{e(article.get('thumb', ''))}" placeholder="Image URL..." style="font-size:12px;padding:6px 9px;" oninput="updateCmsImagePreview(this.value, 'cms-art-thumb-prev')">
+              </div>
+              <div class="cms-gallery-strip">
+                <div class="cms-gallery-thumb" onclick="updateCmsImagePreview('/static/images/fw_today_1.jpg', 'cms-art-thumb-prev');document.getElementById('cms-art-thumb').value='/static/images/fw_today_1.jpg'"><img src="/static/images/fw_today_1.jpg" alt="Preset 1"></div>
+                <div class="cms-gallery-thumb" onclick="updateCmsImagePreview('/static/images/fw_today_3.jpg', 'cms-art-thumb-prev');document.getElementById('cms-art-thumb').value='/static/images/fw_today_3.jpg'"><img src="/static/images/fw_today_3.jpg" alt="Preset 2"></div>
+                <div class="cms-gallery-thumb" onclick="updateCmsImagePreview('/static/images/fw_today_4.jpg', 'cms-art-thumb-prev');document.getElementById('cms-art-thumb').value='/static/images/fw_today_4.jpg'"><img src="/static/images/fw_today_4.jpg" alt="Preset 3"></div>
+                <label class="cms-gallery-add" title="Insert Photo into Article">
+                  +
                   <input type="file" accept="image/*" style="display:none;" onchange="insertCmsDevicePhoto(this, 'cms-article-body')">
                 </label>
-                <button type="button" onclick="insertCmsGallery('cms-article-body', 'single')" style="border:1px solid #cbd5e1;background:#fff;color:#3874ff;font-size:11.5px;font-weight:700;cursor:pointer;padding:4px 9px;border-radius:6px;">
-                  <i class="fa-solid fa-globe"></i> Insert Web Image
-                </button>
-                <button type="button" onclick="insertCmsGallery('cms-article-body', 'gallery2')" style="border:1px solid #cbd5e1;background:#fff;color:#0284c7;font-size:11.5px;font-weight:700;cursor:pointer;padding:4px 9px;border-radius:6px;">
-                  <i class="fa-solid fa-table-columns"></i> + 2-Photo Gallery
-                </button>
-                <button type="button" onclick="insertCmsGallery('cms-article-body', 'gallery3')" style="border:1px solid #cbd5e1;background:#fff;color:#8b5cf6;font-size:11.5px;font-weight:700;cursor:pointer;padding:4px 9px;border-radius:6px;">
-                  <i class="fa-solid fa-table-cells"></i> + 3-Photo Grid
-                </button>
               </div>
             </div>
-            <textarea class="cms-rich-editor cms-form-control" name="body" id="cms-article-body" rows="12">{e(article.get('body', ''))}</textarea>
+
+            <!-- Center Column: Content & Metadata -->
+            <div class="cms-col-center">
+              <div class="cms-grid-2">
+                <div class="cms-form-group"><label class="cms-form-label">Title *</label><input class="cms-form-control" name="title" value="{e(article.get('title', ''))}" required></div>
+                <div class="cms-form-group"><label class="cms-form-label">Category</label><input class="cms-form-control" name="category" value="{e(article.get('category', ''))}"></div>
+              </div>
+              <div class="cms-grid-4">
+                <div class="cms-form-group"><label class="cms-form-label">Author</label><div class="cms-input-icon-wrap"><i class="fa-regular fa-user"></i><input class="cms-form-control" name="author" value="{e(article.get('author', ''))}"></div></div>
+                <div class="cms-form-group"><label class="cms-form-label">Guest / Presenter</label><div class="cms-input-icon-wrap"><i class="fa-solid fa-microphone"></i><input class="cms-form-control" name="guest" value="{e(article.get('guest', ''))}"></div></div>
+                <div class="cms-form-group"><label class="cms-form-label">Reading Time</label><div class="cms-input-icon-wrap"><i class="fa-regular fa-clock"></i><input class="cms-form-control" name="read_time" value="{e(article.get('read_time', ''))}"></div></div>
+                <div class="cms-form-group"><label class="cms-form-label">Video Duration</label><div class="cms-input-icon-wrap"><i class="fa-regular fa-circle-play"></i><input class="cms-form-control" name="duration" value="{e(article.get('duration', ''))}" placeholder="12:30"></div></div>
+              </div>
+              <div class="cms-form-group">
+                <label class="cms-form-label">Tags</label>
+                <div class="cms-chips-wrap" id="cms-art-tags-wrap">
+                  {tag_chips}
+                  <button type="button" class="cms-chip-add-btn" onclick="addCmsChip('cms-art-tags-wrap', 'cms-art-tag-hidden', 'tag')">+ Add Tag</button>
+                </div>
+              </div>
+              <div class="cms-form-group">
+                <label class="cms-form-label">Summary</label>
+                <textarea class="cms-form-control" name="excerpt" rows="2">{e(article.get('excerpt', ''))}</textarea>
+              </div>
+              <div class="cms-form-group">
+                <label class="cms-form-label">Article Content</label>
+                <textarea class="cms-rich-editor cms-form-control" name="body" id="cms-article-body" rows="8">{e(article.get('body', ''))}</textarea>
+              </div>
+            </div>
+
+            <!-- Right Column: Publishing Options & SEO Settings -->
+            <div class="cms-col-right">
+              <div class="cms-side-box">
+                <h4 class="cms-side-box-title">Publishing Options</h4>
+                <div class="cms-form-group">
+                  <select class="cms-form-control" name="status">
+                    <option value="published" {'selected' if status=='published' else ''}>Published</option>
+                    <option value="draft" {'selected' if status=='draft' else ''}>Draft</option>
+                    <option value="archived" {'selected' if status=='archived' else ''}>Archived</option>
+                  </select>
+                </div>
+                <div class="cms-form-group">
+                  <label class="cms-form-label">Publish Date</label>
+                  <input class="cms-form-control" name="published" value="{e(article.get('published', ''))}" placeholder="Nov 20, 2026">
+                </div>
+                <label class="cms-toggle-row">
+                  <span>Featured Article</span>
+                  <span class="cms-switch"><input type="checkbox" name="featured" value="1" {featured_checked}><span class="cms-switch-slider"></span></span>
+                </label>
+                <label class="cms-toggle-row">
+                  <span>Allow Comments</span>
+                  <span class="cms-switch"><input type="checkbox" name="allow_comments" value="1" {comments_checked}><span class="cms-switch-slider"></span></span>
+                </label>
+              </div>
+
+              <div class="cms-side-box">
+                <h4 class="cms-side-box-title">SEO Settings</h4>
+                <div class="cms-form-group"><label class="cms-form-label">SEO Title</label><input class="cms-form-control" name="seo_title" value="{e(seo_title)}"></div>
+                <div class="cms-form-group"><label class="cms-form-label">Meta Description</label><textarea class="cms-form-control" name="seo_description" rows="2">{e(seo_desc)}</textarea></div>
+                <div class="cms-form-group"><label class="cms-form-label">URL Slug</label><input class="cms-form-control" name="slug" value="{e(slug)}" readonly style="background:#f1f5f9;color:#64748b;"></div>
+              </div>
+            </div>
           </div>
         </form>
         <div class="cms-modal-footer">
@@ -649,9 +652,8 @@ def render_cms_article_modal(article):
             <button type="button" class="cms-btn cms-btn-archive" onclick="submitCmsPublish('cms-article-form', 'archived')"><i class="fa-solid fa-box-archive"></i> Archive</button>
           </div>
           <div class="cms-footer-right">
-            <button type="button" class="cms-btn cms-btn-preview" onclick="previewCmsItem('/articles/{e(slug)}')"><i class="fa-regular fa-eye"></i> Preview</button>
             <button type="button" class="cms-btn cms-btn-draft" onclick="submitCmsPublish('cms-article-form', 'draft')"><i class="fa-regular fa-floppy-disk"></i> Save Draft</button>
-            <button type="button" class="cms-btn cms-btn-save" onclick="submitCmsPublish('cms-article-form', 'published')"><i class="fa-solid fa-check"></i> Save Changes &amp; Publish</button>
+            <button type="button" class="cms-btn cms-btn-save" onclick="submitCmsPublish('cms-article-form', 'published')"><i class="fa-solid fa-paper-plane"></i> Publish Update</button>
           </div>
         </div>
       </div>
@@ -664,60 +666,118 @@ def render_cms_company_modal(company):
     status = (company.get("status") or "published").lower()
     if status not in ("published", "draft", "archived"):
         status = "published"
+    logo_src = e(company.get("logo_url") or "/static/images/logo_emblem.png")
+    banner_src = e(company.get("banner_url") or "/static/images/fw_today_1.jpg")
+    verified_checked = "checked" if company.get("verified", 1) else ""
+    featured_checked = "checked" if company.get("featured") else ""
+    active_checked = "checked" if status == "published" else ""
+    socials = [s.strip() for s in (company.get("social_links") or "").split(",") if s.strip()]
+    li_url = socials[0] if len(socials) > 0 else ""
+    yt_url = socials[1] if len(socials) > 1 else ""
+    fb_url = socials[2] if len(socials) > 2 else ""
     return f'''
     <div class="cms-modal-backdrop" id="cms-company-modal">
       <div class="cms-modal-dialog">
         <div class="cms-modal-header">
-          <h3 class="cms-modal-title"><i class="fa-solid fa-building" style="color:#8b5cf6;"></i> Edit Company</h3>
-          <button type="button" class="cms-modal-close" onclick="closeCmsModal('cms-company-modal')" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+          <h3 class="cms-modal-title"><i class="fa-solid fa-building" style="color:#2563eb;"></i> Edit Company</h3>
+          <div class="cms-header-actions">
+            <button type="button" class="cms-header-preview-btn" onclick="previewCmsItem('/company/{e(slug)}')"><i class="fa-regular fa-eye"></i> Preview</button>
+            <button type="button" class="cms-modal-close" onclick="closeCmsModal('cms-company-modal')" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+          </div>
         </div>
         <form method="post" action="/cms/company/update" id="cms-company-form" class="cms-modal-body">
           <input type="hidden" name="id" value="{e(cid)}">
           <input type="hidden" name="redirect_to" value="/company/{e(slug)}">
           <input type="hidden" name="status" value="{e(status)}">
+          <input type="hidden" name="social_links" value="{e(company.get('social_links', ''))}">
           {csrf_input()}
 
-          <div class="cms-status-bar">
-            <span class="cms-status-label"><i class="fa-solid fa-signal"></i> Profile Status</span>
-            <div class="cms-status-badges">
-              <label><input type="radio" class="cms-status-radio" name="status_choice" value="published" {'checked' if status=='published' else ''} onchange="this.form.status.value=this.value"><span class="cms-status-pill pill-pub">Published</span></label>
-              <label><input type="radio" class="cms-status-radio" name="status_choice" value="draft" {'checked' if status=='draft' else ''} onchange="this.form.status.value=this.value"><span class="cms-status-pill pill-draft">Draft</span></label>
-              <label><input type="radio" class="cms-status-radio" name="status_choice" value="archived" {'checked' if status=='archived' else ''} onchange="this.form.status.value=this.value"><span class="cms-status-pill pill-arch">Archived</span></label>
+          <div class="cms-layout-3col">
+            <!-- Left Column: Logo, Banner & Nav -->
+            <div class="cms-col-left">
+              <div class="cms-logo-box">
+                <img id="cms-comp-logo-prev" src="{logo_src}" alt="Company Logo" onerror="this.onerror=null;this.src='/static/images/logo_emblem.png'">
+                <label class="cms-btn-sm-outline">
+                  <i class="fa-solid fa-camera"></i> Change Logo
+                  <input type="file" accept="image/*" style="display:none;" onchange="handleCmsImageUpload(this, 'cms-comp-logo', 'cms-comp-logo-prev')">
+                </label>
+                <input class="cms-form-control" id="cms-comp-logo" name="logo_url" value="{e(company.get('logo_url', ''))}" placeholder="Logo URL..." style="font-size:11.5px;padding:5px 8px;" oninput="updateCmsImagePreview(this.value, 'cms-comp-logo-prev')">
+              </div>
+
+              <div class="cms-cover-card">
+                <img id="cms-comp-banner-prev" src="{banner_src}" alt="Banner" onerror="this.onerror=null;this.src='/static/images/fw_today_1.jpg'">
+                <label class="cms-cover-overlay-btn">
+                  <i class="fa-solid fa-camera"></i> Change Banner
+                  <input type="file" accept="image/*" style="display:none;" onchange="handleCmsImageUpload(this, 'cms-comp-banner', 'cms-comp-banner-prev')">
+                </label>
+              </div>
+              <input class="cms-form-control" id="cms-comp-banner" name="banner_url" value="{e(company.get('banner_url', ''))}" placeholder="Banner URL..." style="font-size:11.5px;padding:5px 8px;" oninput="updateCmsImagePreview(this.value, 'cms-comp-banner-prev')">
+
+              <nav class="cms-side-nav">
+                <button type="button" class="cms-side-nav-btn active" onclick="switchCmsTab(this, 'cms-comp-tab-overview')"><i class="fa-solid fa-house"></i> Overview</button>
+                <button type="button" class="cms-side-nav-btn" onclick="switchCmsTab(this, 'cms-comp-tab-benefits')"><i class="fa-solid fa-gift"></i> Benefits &amp; Offices</button>
+              </nav>
             </div>
-          </div>
 
-          <div class="cms-form-group">
-            <label class="cms-form-label">Company Name *</label>
-            <input class="cms-form-control" name="name" value="{e(company.get('name', ''))}" required>
-          </div>
-          <div class="cms-form-group">
-            <label class="cms-form-label">Tagline</label>
-            <input class="cms-form-control" name="tagline" value="{e(company.get('tagline', ''))}">
-          </div>
-          <div class="cms-grid-2">
-            <div class="cms-form-group"><label class="cms-form-label">Industries</label><input class="cms-form-control" name="industries" value="{e(company.get('industries', ''))}"></div>
-            <div class="cms-form-group"><label class="cms-form-label">Location</label><input class="cms-form-control" name="location" value="{e(company.get('location', ''))}"></div>
-          </div>
-          <div class="cms-grid-3">
-            <div class="cms-form-group"><label class="cms-form-label">Employees</label><input type="number" class="cms-form-control" name="employees" value="{e(company.get('employees', 1000))}"></div>
-            <div class="cms-form-group"><label class="cms-form-label">Brand Color</label><input class="cms-form-control" name="color" value="{e(company.get('color', '#034f9a'))}"></div>
-            <div class="cms-form-group"><label class="cms-form-label">Website</label><input class="cms-form-control" name="website" value="{e(company.get('website', ''))}" placeholder="https://..."></div>
-          </div>
-          <div class="cms-grid-2">
-            <div class="cms-form-group"><label class="cms-form-label">Benefits (Count or Highlights)</label><input class="cms-form-control" name="benefits" value="{e(company.get('benefits', ''))}" placeholder="e.g. 92"></div>
-            <div class="cms-form-group"><label class="cms-form-label">Offices (Count or Cities)</label><input class="cms-form-control" name="offices" value="{e(company.get('offices', ''))}" placeholder="e.g. 5"></div>
-          </div>
-          <div class="cms-form-group">
-            <label class="cms-form-label">Social Links (LinkedIn, X, GitHub)</label>
-            <input class="cms-form-control" name="social_links" value="{e(company.get('social_links', ''))}" placeholder="https://linkedin.com/company/..., https://x.com/...">
-          </div>
+            <!-- Center Column: Tab Panes -->
+            <div class="cms-col-center">
+              <div class="cms-tab-pane active" id="cms-comp-tab-overview">
+                <div class="cms-grid-2">
+                  <div class="cms-form-group"><label class="cms-form-label">Company Name *</label><input class="cms-form-control" name="name" value="{e(company.get('name', ''))}" required></div>
+                  <div class="cms-form-group"><label class="cms-form-label">Tagline</label><input class="cms-form-control" name="tagline" value="{e(company.get('tagline', ''))}"></div>
+                </div>
+                <div class="cms-grid-2">
+                  <div class="cms-form-group"><label class="cms-form-label">Industries</label><input class="cms-form-control" name="industries" value="{e(company.get('industries', ''))}"></div>
+                  <div class="cms-form-group"><label class="cms-form-label">Location</label><div class="cms-input-icon-wrap"><i class="fa-solid fa-location-dot"></i><input class="cms-form-control" name="location" value="{e(company.get('location', ''))}"></div></div>
+                </div>
+                <div class="cms-grid-2">
+                  <div class="cms-form-group"><label class="cms-form-label">Employees</label><div class="cms-input-icon-wrap"><i class="fa-solid fa-users"></i><input type="number" class="cms-form-control" name="employees" value="{e(company.get('employees', 1000))}"></div></div>
+                  <div class="cms-form-group"><label class="cms-form-label">Website</label><div class="cms-input-icon-wrap"><i class="fa-solid fa-globe"></i><input class="cms-form-control" name="website" value="{e(company.get('website', ''))}" placeholder="https://..."></div></div>
+                </div>
+                <div class="cms-form-group">
+                  <label class="cms-form-label">About the Company</label>
+                  <textarea class="cms-form-control" name="description" rows="6">{e(company.get('description', ''))}</textarea>
+                </div>
+              </div>
 
-          {_cms_image_uploader('cms-comp-logo', 'cms-comp-logo-prev', 'logo_url', 'Company Logo Image', company.get('logo_url', ''))}
-          {_cms_image_uploader('cms-comp-banner', 'cms-comp-banner-prev', 'banner_url', 'Company Banner Cover Image', company.get('banner_url', ''))}
+              <div class="cms-tab-pane" id="cms-comp-tab-benefits">
+                <div class="cms-form-group"><label class="cms-form-label">Benefits (Count or Highlights)</label><input class="cms-form-control" name="benefits" value="{e(company.get('benefits', ''))}" placeholder="e.g. 92"></div>
+                <div class="cms-form-group"><label class="cms-form-label">Offices (Count or Cities)</label><input class="cms-form-control" name="offices" value="{e(company.get('offices', ''))}" placeholder="e.g. 5"></div>
+              </div>
+            </div>
 
-          <div class="cms-form-group">
-            <label class="cms-form-label">Description</label>
-            <textarea class="cms-form-control" name="description" rows="4">{e(company.get('description', ''))}</textarea>
+            <!-- Right Column: Company Settings & Social Links -->
+            <div class="cms-col-right">
+              <div class="cms-side-box">
+                <h4 class="cms-side-box-title">Company Settings</h4>
+                <label class="cms-toggle-row">
+                  <span><i class="fa-solid fa-circle-check" style="color:#2563eb;"></i> Verified Company</span>
+                  <span class="cms-switch"><input type="checkbox" name="verified" value="1" {verified_checked}><span class="cms-switch-slider"></span></span>
+                </label>
+                <label class="cms-toggle-row">
+                  <span>Featured Company</span>
+                  <span class="cms-switch"><input type="checkbox" name="featured" value="1" {featured_checked}><span class="cms-switch-slider"></span></span>
+                </label>
+                <label class="cms-toggle-row">
+                  <span>Active Status</span>
+                  <span class="cms-switch"><input type="checkbox" {active_checked} onchange="this.form.status.value=this.checked?'published':'draft'"><span class="cms-switch-slider"></span></span>
+                </label>
+                <div class="cms-form-group">
+                  <label class="cms-form-label">Brand Color</label>
+                  <div class="cms-color-row">
+                    <input type="color" class="cms-color-swatch" value="{e(company.get('color', '#2563eb'))}" oninput="document.getElementById('cms-comp-color-hex').value=this.value">
+                    <input class="cms-form-control" id="cms-comp-color-hex" name="color" value="{e(company.get('color', '#2563eb'))}">
+                  </div>
+                </div>
+              </div>
+
+              <div class="cms-side-box">
+                <h4 class="cms-side-box-title">Social Links</h4>
+                <div class="cms-social-row"><span class="cms-social-icon"><i class="fa-brands fa-linkedin" style="color:#0a66c2;"></i></span><input class="cms-form-control cms-social-linkedin" value="{e(li_url)}" placeholder="LinkedIn URL"></div>
+                <div class="cms-social-row"><span class="cms-social-icon"><i class="fa-brands fa-youtube" style="color:#dc2626;"></i></span><input class="cms-form-control cms-social-youtube" value="{e(yt_url)}" placeholder="YouTube / X URL"></div>
+                <div class="cms-social-row"><span class="cms-social-icon"><i class="fa-brands fa-facebook" style="color:#1877f2;"></i></span><input class="cms-form-control cms-social-facebook" value="{e(fb_url)}" placeholder="Facebook URL"></div>
+              </div>
+            </div>
           </div>
         </form>
         <div class="cms-modal-footer">
@@ -726,9 +786,8 @@ def render_cms_company_modal(company):
             <button type="button" class="cms-btn cms-btn-archive" onclick="submitCmsPublish('cms-company-form', 'archived')"><i class="fa-solid fa-box-archive"></i> Archive</button>
           </div>
           <div class="cms-footer-right">
-            <button type="button" class="cms-btn cms-btn-preview" onclick="previewCmsItem('/company/{e(slug)}')"><i class="fa-regular fa-eye"></i> Preview</button>
             <button type="button" class="cms-btn cms-btn-draft" onclick="submitCmsPublish('cms-company-form', 'draft')"><i class="fa-regular fa-floppy-disk"></i> Save Draft</button>
-            <button type="button" class="cms-btn cms-btn-save btn-purple" onclick="submitCmsPublish('cms-company-form', 'published')"><i class="fa-solid fa-check"></i> Save Changes</button>
+            <button type="button" class="cms-btn cms-btn-save" onclick="submitCmsPublish('cms-company-form', 'published')"><i class="fa-solid fa-check"></i> Save Changes</button>
           </div>
         </div>
       </div>
@@ -750,59 +809,100 @@ def render_cms_job_modal(job, all_companies):
     wp = job.get("workplace") or "Hybrid"
     wp_opts = "".join(
         f'<option value="{e(opt)}"{" selected" if wp == opt else ""}>{e(opt)}</option>'
-        for opt in ("Hybrid", "Fully Remote", "On Site")
+        for opt in ("On Site", "Hybrid", "Fully Remote")
     )
+    raw_skills = [s.strip() for s in (job.get("skills") or "").split(",") if s.strip()]
+    skill_chips = "".join(
+        f'<span class="cms-chip-pill" data-val="{e(s)}">{e(s)} <button type="button" class="cms-chip-remove" onclick="removeCmsChip(this, \'cms-job-skills-wrap\', \'cms-job-skills-hidden\')">&times;</button></span>'
+        for s in raw_skills
+    )
+    featured_checked = "checked" if job.get("featured") else ""
     return f'''
     <div class="cms-modal-backdrop" id="cms-job-modal">
       <div class="cms-modal-dialog">
         <div class="cms-modal-header">
-          <h3 class="cms-modal-title"><i class="fa-solid fa-briefcase" style="color:#10b981;"></i> Edit Job Listing</h3>
-          <button type="button" class="cms-modal-close" onclick="closeCmsModal('cms-job-modal')" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+          <h3 class="cms-modal-title"><i class="fa-solid fa-briefcase" style="color:#2563eb;"></i> Edit Job Listing</h3>
+          <div class="cms-header-actions">
+            <button type="button" class="cms-header-preview-btn" onclick="previewCmsItem('/job/{e(slug)}/{e(jid)}')"><i class="fa-regular fa-eye"></i> Preview</button>
+            <button type="button" class="cms-modal-close" onclick="closeCmsModal('cms-job-modal')" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+          </div>
         </div>
         <form method="post" action="/cms/job/update" id="cms-job-form" class="cms-modal-body">
           <input type="hidden" name="id" value="{e(jid)}">
           <input type="hidden" name="redirect_to" value="/job/{e(slug)}/{e(jid)}">
-          <input type="hidden" name="status" value="{e(status)}">
+          <input type="hidden" name="skills" id="cms-job-skills-hidden" value="{e(job.get('skills', ''))}">
           {csrf_input()}
 
-          <div class="cms-status-bar">
-            <span class="cms-status-label"><i class="fa-solid fa-signal"></i> Listing Status</span>
-            <div class="cms-status-badges">
-              <label><input type="radio" class="cms-status-radio" name="status_choice" value="active" {'checked' if status=='active' else ''} onchange="this.form.status.value=this.value"><span class="cms-status-pill pill-pub">Published</span></label>
-              <label><input type="radio" class="cms-status-radio" name="status_choice" value="draft" {'checked' if status=='draft' else ''} onchange="this.form.status.value=this.value"><span class="cms-status-pill pill-draft">Draft</span></label>
-              <label><input type="radio" class="cms-status-radio" name="status_choice" value="archived" {'checked' if status=='archived' else ''} onchange="this.form.status.value=this.value"><span class="cms-status-pill pill-arch">Archived</span></label>
+          <div class="cms-layout-2col">
+            <!-- Left Column: Visual & Navigation -->
+            <div class="cms-col-left">
+              <div class="cms-cover-card">
+                <img src="/static/images/fw_today_1.jpg" alt="Job Listing Cover">
+              </div>
+              <nav class="cms-side-nav">
+                <button type="button" class="cms-side-nav-btn active" onclick="switchCmsTab(this, 'cms-job-tab-basic')"><i class="fa-solid fa-briefcase"></i> Basic Info</button>
+                <button type="button" class="cms-side-nav-btn" onclick="switchCmsTab(this, 'cms-job-tab-req')"><i class="fa-solid fa-list-check"></i> Requirements</button>
+                <button type="button" class="cms-side-nav-btn" onclick="switchCmsTab(this, 'cms-job-tab-apply')"><i class="fa-solid fa-paper-plane"></i> Application</button>
+                <button type="button" class="cms-side-nav-btn" onclick="switchCmsTab(this, 'cms-job-tab-settings')"><i class="fa-solid fa-gear"></i> Settings</button>
+              </nav>
             </div>
-          </div>
 
-          <div class="cms-form-group">
-            <label class="cms-form-label">Job Title *</label>
-            <input class="cms-form-control" name="title" value="{e(job.get('title', ''))}" required>
-          </div>
-          <div class="cms-grid-2">
-            <div class="cms-form-group"><label class="cms-form-label">Company *</label><select class="cms-form-control" name="company_slug">{comp_opts}</select></div>
-            <div class="cms-form-group"><label class="cms-form-label">Category</label><input class="cms-form-control" name="category" value="{e(job.get('category', ''))}"></div>
-          </div>
-          <div class="cms-grid-3">
-            <div class="cms-form-group"><label class="cms-form-label">Workplace</label><select class="cms-form-control" name="workplace">{wp_opts}</select></div>
-            <div class="cms-form-group"><label class="cms-form-label">Level</label><input class="cms-form-control" name="level" value="{e(job.get('level', ''))}" placeholder="e.g. Mid-Senior"></div>
-            <div class="cms-form-group"><label class="cms-form-label">Location</label><input class="cms-form-control" name="location" value="{e(job.get('location', ''))}"></div>
-          </div>
-          <div class="cms-grid-3">
-            <div class="cms-form-group"><label class="cms-form-label">Salary Min ($)</label><input type="number" class="cms-form-control" name="salary_min" value="{e(job.get('salary_min', 50000))}"></div>
-            <div class="cms-form-group"><label class="cms-form-label">Salary Max ($)</label><input type="number" class="cms-form-control" name="salary_max" value="{e(job.get('salary_max', 85000))}"></div>
-            <div class="cms-form-group"><label class="cms-form-label">Display (e.g. $50k-$80k)</label><input class="cms-form-control" name="salary_display" value="{e(job.get('salary_display', ''))}"></div>
-          </div>
-          <div class="cms-form-group">
-            <label class="cms-form-label">Skills &amp; Stack</label>
-            <input class="cms-form-control" name="skills" value="{e(job.get('skills', ''))}" placeholder="Comma separated tags">
-          </div>
-          <div class="cms-grid-2">
-            <div class="cms-form-group"><label class="cms-form-label">Application URL (External ATS)</label><input class="cms-form-control" name="apply_url" value="{e(job.get('apply_url', ''))}" placeholder="https://company.com/careers/apply"></div>
-            <div class="cms-form-group"><label class="cms-form-label">Application Email</label><input class="cms-form-control" name="apply_email" value="{e(job.get('apply_email', ''))}" placeholder="careers@company.com"></div>
-          </div>
-          <div class="cms-form-group">
-            <label class="cms-form-label">Job Description</label>
-            <textarea class="cms-form-control" name="description" rows="4">{e(job.get('description', ''))}</textarea>
+            <!-- Right Column: Tabbed Fields -->
+            <div class="cms-col-center">
+              <div class="cms-tab-pane active" id="cms-job-tab-basic">
+                <div class="cms-grid-2">
+                  <div class="cms-form-group"><label class="cms-form-label">Job Title *</label><input class="cms-form-control" name="title" value="{e(job.get('title', ''))}" required></div>
+                  <div class="cms-form-group"><label class="cms-form-label">Company *</label><select class="cms-form-control" name="company_slug">{comp_opts}</select></div>
+                </div>
+                <div class="cms-grid-2">
+                  <div class="cms-form-group"><label class="cms-form-label">Category</label><input class="cms-form-control" name="category" value="{e(job.get('category', ''))}"></div>
+                  <div class="cms-form-group"><label class="cms-form-label">Workplace</label><select class="cms-form-control" name="workplace">{wp_opts}</select></div>
+                </div>
+                <div class="cms-grid-2">
+                  <div class="cms-form-group"><label class="cms-form-label">Location</label><div class="cms-input-icon-wrap"><i class="fa-solid fa-location-dot"></i><input class="cms-form-control" name="location" value="{e(job.get('location', ''))}"></div></div>
+                  <div class="cms-form-group"><label class="cms-form-label">Salary Range (USD)</label><input class="cms-form-control" name="salary_display" value="{e(job.get('salary_display', ''))}" placeholder="$3,000 - $5,000 / month"></div>
+                </div>
+                <div class="cms-form-group">
+                  <label class="cms-form-label">Skills</label>
+                  <div class="cms-chips-wrap" id="cms-job-skills-wrap">
+                    {skill_chips}
+                    <button type="button" class="cms-chip-add-btn" onclick="addCmsChip('cms-job-skills-wrap', 'cms-job-skills-hidden', 'skill')">+ Add</button>
+                  </div>
+                </div>
+                <div class="cms-form-group">
+                  <label class="cms-form-label">Job Description</label>
+                  <textarea class="cms-form-control" name="description" rows="5">{e(job.get('description', ''))}</textarea>
+                </div>
+              </div>
+
+              <div class="cms-tab-pane" id="cms-job-tab-req">
+                <div class="cms-form-group"><label class="cms-form-label">Employment Level</label><input class="cms-form-control" name="level" value="{e(job.get('level', ''))}" placeholder="e.g. Mid-Senior"></div>
+                <div class="cms-grid-2">
+                  <div class="cms-form-group"><label class="cms-form-label">Salary Min ($)</label><input type="number" class="cms-form-control" name="salary_min" value="{e(job.get('salary_min', 50000))}"></div>
+                  <div class="cms-form-group"><label class="cms-form-label">Salary Max ($)</label><input type="number" class="cms-form-control" name="salary_max" value="{e(job.get('salary_max', 85000))}"></div>
+                </div>
+              </div>
+
+              <div class="cms-tab-pane" id="cms-job-tab-apply">
+                <div class="cms-form-group"><label class="cms-form-label">Application URL (External ATS)</label><input class="cms-form-control" name="apply_url" value="{e(job.get('apply_url', ''))}" placeholder="https://company.com/careers/apply"></div>
+                <div class="cms-form-group"><label class="cms-form-label">Application Email</label><input class="cms-form-control" name="apply_email" value="{e(job.get('apply_email', ''))}" placeholder="careers@company.com"></div>
+              </div>
+
+              <div class="cms-tab-pane" id="cms-job-tab-settings">
+                <div class="cms-form-group">
+                  <label class="cms-form-label">Listing Status</label>
+                  <select class="cms-form-control" name="status">
+                    <option value="active" {'selected' if status=='active' else ''}>Published (Active)</option>
+                    <option value="draft" {'selected' if status=='draft' else ''}>Draft</option>
+                    <option value="archived" {'selected' if status=='archived' else ''}>Archived</option>
+                  </select>
+                </div>
+                <label class="cms-toggle-row">
+                  <span>Featured Job Listing</span>
+                  <span class="cms-switch"><input type="checkbox" name="featured" value="1" {featured_checked}><span class="cms-switch-slider"></span></span>
+                </label>
+              </div>
+            </div>
           </div>
         </form>
         <div class="cms-modal-footer">
@@ -811,9 +911,8 @@ def render_cms_job_modal(job, all_companies):
             <button type="button" class="cms-btn cms-btn-archive" onclick="submitCmsPublish('cms-job-form', 'archived')"><i class="fa-solid fa-box-archive"></i> Archive</button>
           </div>
           <div class="cms-footer-right">
-            <button type="button" class="cms-btn cms-btn-preview" onclick="previewCmsItem('/job/{e(slug)}/{e(jid)}')"><i class="fa-regular fa-eye"></i> Preview</button>
             <button type="button" class="cms-btn cms-btn-draft" onclick="submitCmsPublish('cms-job-form', 'draft')"><i class="fa-regular fa-floppy-disk"></i> Save Draft</button>
-            <button type="button" class="cms-btn cms-btn-save btn-green" onclick="submitCmsPublish('cms-job-form', 'active')"><i class="fa-solid fa-check"></i> Save Changes</button>
+            <button type="button" class="cms-btn cms-btn-save" onclick="submitCmsPublish('cms-job-form', 'active')"><i class="fa-solid fa-paper-plane"></i> Publish Job</button>
           </div>
         </div>
       </div>

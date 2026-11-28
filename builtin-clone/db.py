@@ -842,7 +842,25 @@ def _ensure_hr_schema_pg(conn):
           target_table TEXT, target_id INTEGER, detail TEXT, created_at TEXT
         )""",
         "ALTER TABLE companies ADD COLUMN IF NOT EXISTS verified INTEGER DEFAULT 1",
+        "ALTER TABLE companies ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'published'",
+        "ALTER TABLE companies ADD COLUMN IF NOT EXISTS manager_id INTEGER DEFAULT NULL",
+        "ALTER TABLE companies ADD COLUMN IF NOT EXISTS social_links TEXT DEFAULT ''",
+        "ALTER TABLE companies ADD COLUMN IF NOT EXISTS banner_url TEXT DEFAULT ''",
+        "ALTER TABLE companies ADD COLUMN IF NOT EXISTS logo_url TEXT DEFAULT ''",
+        "ALTER TABLE companies ADD COLUMN IF NOT EXISTS featured INTEGER DEFAULT 0",
         "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS featured INTEGER DEFAULT 0",
+        "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS apply_url TEXT DEFAULT ''",
+        "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS apply_email TEXT DEFAULT ''",
+        "ALTER TABLE articles ADD COLUMN IF NOT EXISTS thumb TEXT",
+        "ALTER TABLE articles ADD COLUMN IF NOT EXISTS is_today INTEGER DEFAULT 0",
+        "ALTER TABLE articles ADD COLUMN IF NOT EXISTS duration TEXT",
+        "ALTER TABLE articles ADD COLUMN IF NOT EXISTS guest TEXT",
+        "ALTER TABLE articles ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'published'",
+        "ALTER TABLE articles ADD COLUMN IF NOT EXISTS seo_title TEXT DEFAULT ''",
+        "ALTER TABLE articles ADD COLUMN IF NOT EXISTS seo_description TEXT DEFAULT ''",
+        "ALTER TABLE articles ADD COLUMN IF NOT EXISTS featured INTEGER DEFAULT 0",
+        "ALTER TABLE articles ADD COLUMN IF NOT EXISTS allow_comments INTEGER DEFAULT 1",
+        "ALTER TABLE articles ADD COLUMN IF NOT EXISTS gallery_images TEXT DEFAULT ''",
     ]
     for s in stmts:
         conn.execute(s)
@@ -900,6 +918,11 @@ def init_db():
         ("duration", "TEXT"),
         ("guest", "TEXT"),
         ("status", "TEXT DEFAULT 'published'"),
+        ("seo_title", "TEXT DEFAULT ''"),
+        ("seo_description", "TEXT DEFAULT ''"),
+        ("featured", "INTEGER DEFAULT 0"),
+        ("allow_comments", "INTEGER DEFAULT 1"),
+        ("gallery_images", "TEXT DEFAULT ''"),
     ):
         if column not in article_columns:
             # Allowlist guard: only known safe column names allowed
@@ -908,6 +931,7 @@ def init_db():
                 "image_url", "subtitle", "summary", "category",
                 "featured", "views", "author_id", "series",
                 "thumb", "is_today", "guest", "status",
+                "seo_title", "seo_description", "allow_comments", "gallery_images",
             }
             if column not in _SAFE_ARTICLE_COLS:
                 raise ValueError(f"Disallowed column name: {column!r}")
@@ -925,6 +949,8 @@ def init_db():
         conn.execute("ALTER TABLE companies ADD COLUMN banner_url TEXT DEFAULT ''")
     if "logo_url" not in comp_cols:
         conn.execute("ALTER TABLE companies ADD COLUMN logo_url TEXT DEFAULT ''")
+    if "featured" not in comp_cols:
+        conn.execute("ALTER TABLE companies ADD COLUMN featured INTEGER DEFAULT 0")
     job_cols = {row["name"] for row in conn.execute("PRAGMA table_info(jobs)").fetchall()}
     if "featured" not in job_cols:
         conn.execute("ALTER TABLE jobs ADD COLUMN featured INTEGER DEFAULT 0")

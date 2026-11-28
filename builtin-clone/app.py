@@ -643,12 +643,19 @@ def route(conn, method, path, query, payload, user, token, host, client_ip="", c
         thumb = _safe_media_url(payload.get("thumb", ""), art_dict.get("thumb") or "")
         excerpt = _clip(payload.get("excerpt", ""), 1000)
         body = _clip(payload.get("body", ""), 200000)
+        published_dt = _clip(payload.get("published", art_dict.get("published") or ""), 80)
+        seo_title = _clip(payload.get("seo_title", ""), 300)
+        seo_description = _clip(payload.get("seo_description", ""), 500)
+        featured = 1 if payload.get("featured") in ("1", "true", "on", True) else 0
+        allow_comments = 1 if payload.get("allow_comments") in ("1", "true", "on", True) else 0
         status = (payload.get("status") or art_dict.get("status") or "published").strip().lower()
         if status not in ("published", "draft", "archived"):
             status = "published"
         conn.execute(
-            """UPDATE articles SET title=?, category=?, author=?, tag=?, read_time=?, guest=?, duration=?, thumb=?, excerpt=?, body=?, status=? WHERE id=?""",
-            (title, category, author, tag, read_time, guest, duration, thumb, excerpt, body, status, art_id)
+            """UPDATE articles SET title=?, category=?, author=?, tag=?, read_time=?, guest=?, duration=?, thumb=?, excerpt=?, body=?,
+               published=?, seo_title=?, seo_description=?, featured=?, allow_comments=?, status=? WHERE id=?""",
+            (title, category, author, tag, read_time, guest, duration, thumb, excerpt, body,
+             published_dt, seo_title, seo_description, featured, allow_comments, status, art_id)
         )
         conn.commit()
         status_label = {"published": "published", "draft": "saved as draft", "archived": "archived"}.get(status, "updated")
@@ -682,13 +689,15 @@ def route(conn, method, path, query, payload, user, token, host, client_ip="", c
         benefits = _clip(payload.get("benefits", str(comp_dict.get("benefits") or "")), 2000)
         offices = _clip(payload.get("offices", str(comp_dict.get("offices") or "")), 2000)
         social_links = _clip(payload.get("social_links", ""), 2000)
+        verified = 1 if payload.get("verified") in ("1", "true", "on", True) else 0
+        featured = 1 if payload.get("featured") in ("1", "true", "on", True) else 0
         status = (payload.get("status") or comp_dict.get("status") or "published").strip().lower()
         if status not in ("published", "draft", "archived"):
             status = "published"
         initials = "".join(w[0] for w in name.split()[:2]).upper() or "CO"
         conn.execute(
-            """UPDATE companies SET name=?, initials=?, tagline=?, industries=?, location=?, employees=?, color=?, website=?, description=?, logo_url=?, banner_url=?, benefits=?, offices=?, social_links=?, status=? WHERE id=?""",
-            (name, initials, tagline, industries, location, employees, color, website, description, logo_url, banner_url, benefits, offices, social_links, status, comp_id)
+            """UPDATE companies SET name=?, initials=?, tagline=?, industries=?, location=?, employees=?, color=?, website=?, description=?, logo_url=?, banner_url=?, benefits=?, offices=?, social_links=?, verified=?, featured=?, status=? WHERE id=?""",
+            (name, initials, tagline, industries, location, employees, color, website, description, logo_url, banner_url, benefits, offices, social_links, verified, featured, status, comp_id)
         )
         conn.execute(
             """UPDATE jobs SET company_name=?, company_initials=?, company_color=?, accent=? WHERE company_id=?""",
@@ -731,6 +740,7 @@ def route(conn, method, path, query, payload, user, token, host, client_ip="", c
         description = _clip(payload.get("description", ""), 20000)
         apply_url = _safe_http_url(payload.get("apply_url", ""))
         apply_email = _clip(payload.get("apply_email", ""), 160)
+        featured = 1 if payload.get("featured") in ("1", "true", "on", True) else 0
         raw_status = (payload.get("status") or job_dict.get("status") or "active").strip().lower()
         if raw_status == "published":
             raw_status = "active"
@@ -743,10 +753,10 @@ def route(conn, method, path, query, payload, user, token, host, client_ip="", c
             conn.execute(
                 """UPDATE jobs SET title=?, company_id=?, company_slug=?, company_name=?, company_initials=?, company_color=?,
                    category=?, level=?, workplace=?, location=?, salary_min=?, salary_max=?, salary_display=?, skills=?, description=?,
-                   apply_url=?, apply_email=?, is_remote=?, accent=?, status=? WHERE id=?""",
+                   apply_url=?, apply_email=?, featured=?, is_remote=?, accent=?, status=? WHERE id=?""",
                 (title, cid, comp_slug, cname, cinit, ccolor, category, level, workplace, location,
                  salary_min, salary_max, salary_display, skills, description,
-                 apply_url, apply_email, 1 if "Remote" in workplace else 0, ccolor, raw_status, job_id)
+                 apply_url, apply_email, featured, 1 if "Remote" in workplace else 0, ccolor, raw_status, job_id)
             )
             conn.commit()
             db.sync_company_open_jobs(conn, cid)
@@ -755,10 +765,10 @@ def route(conn, method, path, query, payload, user, token, host, client_ip="", c
         else:
             conn.execute(
                 """UPDATE jobs SET title=?, category=?, level=?, workplace=?, location=?, salary_min=?, salary_max=?, salary_display=?,
-                   skills=?, description=?, apply_url=?, apply_email=?, is_remote=?, status=? WHERE id=?""",
+                   skills=?, description=?, apply_url=?, apply_email=?, featured=?, is_remote=?, status=? WHERE id=?""",
                 (title, category, level, workplace, location,
                  salary_min, salary_max, salary_display, skills, description,
-                 apply_url, apply_email, 1 if "Remote" in workplace else 0, raw_status, job_id)
+                 apply_url, apply_email, featured, 1 if "Remote" in workplace else 0, raw_status, job_id)
             )
             conn.commit()
         status_label = {"active": "published", "draft": "saved as draft", "archived": "archived"}.get(raw_status, "updated")
