@@ -1608,3 +1608,41 @@ body.admin-body button {
   justify-content: space-between;
   gap: 10px;
 }
+
+/* ==================== Floating SaaS Toast Notifications ==================== */
+.admin-toast-stack {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 10050;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+.admin-toast {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffffff;
+  background: #0f172a;
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.22);
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  pointer-events: auto;
+}
+.admin-toast.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+.admin-toast.is-ok {
+  background: #059669;
+}
+.admin-toast.is-err {
+  background: #dc2626;
+}
