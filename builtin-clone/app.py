@@ -964,6 +964,10 @@ def route(conn, method, path, query, payload, user, token, host, client_ip="", c
         salary_max = get_int(payload.get("salary_max", "85000"), 85000, low=0, high=10000000)
         if salary_min > salary_max:
             salary_min, salary_max = salary_max, salary_min
+        salary_display = _clip(payload.get("salary_display", ""), 80) or f"${salary_min:,} - ${salary_max:,}"
+        level = _clip(payload.get("level", "Mid-Senior"), 60) or "Mid-Senior"
+        apply_url = _safe_http_url(payload.get("apply_url", ""))
+        apply_email = _clip(payload.get("apply_email", ""), 160)
         skills = _clip(payload.get("skills", ""), 500)
         description = _clip(payload.get("description", ""), 20000)
         slug = views.slugify(title) or "job"
@@ -975,11 +979,11 @@ def route(conn, method, path, query, payload, user, token, host, client_ip="", c
             conn.execute(
                 """INSERT INTO jobs (slug, title, company_id, company_slug, company_name, company_initials, company_color,
                    category, level, workplace, location, salary_min, salary_max, salary_display, industries, skills, description,
-                   posted_at, posted_label, is_remote, accent, status)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                (slug, title, cid, comp_slug, cname, cinit, ccolor, category, "Mid-Senior", workplace, location,
-                 salary_min, salary_max, f"${salary_min:,} - ${salary_max:,}", "Logistics & Technology", skills, description,
-                 now_date, "Just now", 1 if "Remote" in workplace else 0, ccolor, "active")
+                   apply_url, apply_email, posted_at, posted_label, is_remote, accent, status)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (slug, title, cid, comp_slug, cname, cinit, ccolor, category, level, workplace, location,
+                 salary_min, salary_max, salary_display, "Logistics & Technology", skills, description,
+                 apply_url, apply_email, now_date, "Just now", 1 if "Remote" in workplace else 0, ccolor, "active")
             )
             db.sync_company_open_jobs(conn, cid)
             return redirect("/admin?tab=jobs&msg=" + urllib.parse.quote(f"Job listing '{title}' published!"))
@@ -1065,20 +1069,28 @@ def route(conn, method, path, query, payload, user, token, host, client_ip="", c
         color = raw_color if re.match(r"^#[0-9A-Fa-f]{3,8}$", raw_color) else "#034f9a"
         website = _safe_http_url(payload.get("website", ""))
         description = _clip(payload.get("description", ""), 10000)
+        logo_url = _safe_media_url(payload.get("logo_url", ""), "")
+        banner_url = _safe_media_url(payload.get("banner_url", ""), "")
+        social_links = _clip(payload.get("social_links", ""), 2000)
+        verified = 1 if payload.get("verified") in ("1", "true", "on", True) else 0
+        featured = 1 if payload.get("featured") in ("1", "true", "on", True) else 0
         initials = "".join(w[0] for w in name.split()[:2]).upper() or "CO"
         slug = views.slugify(name) or "company"
         
         ex = conn.execute("SELECT id FROM companies WHERE slug=?", (slug,)).fetchone()
         if ex:
             conn.execute(
-                """UPDATE companies SET name=?, tagline=?, industries=?, location=?, employees=?, color=?, website=?, description=? WHERE id=?""",
-                (name, tagline, industries, location, employees, color, website, description, ex[0])
+                """UPDATE companies SET name=?, tagline=?, industries=?, location=?, employees=?, color=?, website=?, description=?,
+                   logo_url=COALESCE(NULLIF(?, ''), logo_url), banner_url=COALESCE(NULLIF(?, ''), banner_url),
+                   social_links=COALESCE(NULLIF(?, ''), social_links), verified=?, featured=? WHERE id=?""",
+                (name, tagline, industries, location, employees, color, website, description,
+                 logo_url, banner_url, social_links, verified, featured, ex[0])
             )
         else:
             conn.execute(
-                """INSERT INTO companies (slug, name, initials, color, tagline, industries, description, location, employees, website, open_jobs, hiring_now)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,0,1)""",
-                (slug, name, initials, color, tagline, industries, description, location, employees, website)
+                """INSERT INTO companies (slug, name, initials, color, tagline, industries, description, location, employees, website, logo_url, banner_url, social_links, verified, featured, open_jobs, hiring_now)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,1)""",
+                (slug, name, initials, color, tagline, industries, description, location, employees, website, logo_url, banner_url, social_links, verified, featured)
             )
         conn.commit()
         return redirect("/admin?tab=companies&msg=" + urllib.parse.quote(f"Company '{name}' registered successfully!"))

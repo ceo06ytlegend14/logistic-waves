@@ -834,10 +834,14 @@ def render_cms_job_modal(job, all_companies):
           {csrf_input()}
 
           <div class="cms-layout-2col">
-            <!-- Left Column: Visual & Navigation -->
+            <!-- Left Column: Company Brand Card & Navigation -->
             <div class="cms-col-left">
-              <div class="cms-cover-card">
-                <img src="/static/images/fw_today_1.jpg" alt="Job Listing Cover">
+              <div class="cms-job-company-card">
+                <div class="cms-job-company-avatar" style="background:{e(job.get('company_color') or '#2563eb')};">
+                  {e(job.get('company_initials') or 'CO')}
+                </div>
+                <div class="cms-job-company-name">{e(job.get('company_name') or 'Company')}</div>
+                <div class="cms-job-company-loc"><i class="fa-solid fa-location-dot"></i> {e(job.get('location') or 'Remote')}</div>
               </div>
               <nav class="cms-side-nav">
                 <button type="button" class="cms-side-nav-btn active" onclick="switchCmsTab(this, 'cms-job-tab-basic')"><i class="fa-solid fa-briefcase"></i> Basic Info</button>
@@ -943,7 +947,7 @@ def job_card(job, compact=False):
       <div class="job-card-primary">
         {company_logo(company, 84)}
         <div class="job-card-title">
-          <a class="job-company" href="/company/{e(job.get('company_slug'))}">{e(job.get('company_name'))}</a>
+          <span class="job-company">{e(job.get('company_name'))}</span>
           <h3><a href="{job_url}">{e(job.get('title'))}</a>{featured_badge}</h3>
           {applied_badge}
         </div>
