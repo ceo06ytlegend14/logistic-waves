@@ -3062,6 +3062,7 @@ def articles_page(conn, user, q="", category="", tag="", featured=None):
     latest_editorial = conn.execute(
         """SELECT id, slug, title, category, tag, thumb, accent FROM articles
            WHERE COALESCE(is_today, 0) = 0
+             AND COALESCE(status, 'published') = 'published'
            ORDER BY id DESC LIMIT 4"""
     ).fetchall()
     if latest_editorial and '<div class="nav-cards">' in hub_content:
@@ -3087,9 +3088,10 @@ def articles_page(conn, user, q="", category="", tag="", featured=None):
 
     today_articles = conn.execute(
         """SELECT id, slug, title, excerpt, author, published, category, tag, read_time, accent, thumb, is_today, duration, guest FROM articles 
-           WHERE is_today = 1
+           WHERE (is_today = 1
               OR tag IN ('Logistic Waves Today', 'Logistic Wave Today')
-              OR category IN ('Logistic Waves Today', 'Logistic Wave Today')
+              OR category IN ('Logistic Waves Today', 'Logistic Wave Today'))
+             AND COALESCE(status, 'published') = 'published'
            ORDER BY id DESC LIMIT 12"""
     ).fetchall()
 

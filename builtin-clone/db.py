@@ -473,12 +473,9 @@ def can_edit_company(user, company_data=None):
         return True
     if role in ("company_manager", "employer"):
         if not company_data:
-            return True
+            return role == "company_manager"
         manager_id = company_data.get("manager_id")
-        if manager_id and manager_id == user.get("id"):
-            return True
-        # If company manager owns this company by slug or employer created jobs under this company
-        return True
+        return bool(manager_id and manager_id == user.get("id"))
     return False
 
 
@@ -492,10 +489,7 @@ def can_edit_job(user, job_data=None):
         if not job_data:
             return True
         created_by = job_data.get("created_by")
-        if created_by and created_by == user.get("id"):
-            return True
-        # If employer role, allow managing jobs
-        return True
+        return bool(created_by and created_by == user.get("id"))
     return False
 
 
@@ -1246,7 +1240,7 @@ def list_jobs(conn, f=None, limit=12, offset=0, user_id=None):
 
 def list_companies(conn, f=None, limit=8, offset=0, user_id=None):
     f = f or {}
-    parts, args = ["1=1"], []
+    parts, args = ["COALESCE(c.status, 'published') = 'published'"], []
     q = (f.get("q") or "").strip()
     if q:
         like = f"%{_escape_like(q)}%"
@@ -1286,7 +1280,7 @@ def list_companies(conn, f=None, limit=8, offset=0, user_id=None):
 
 
 def list_articles(conn, q="", category="", tag="", limit=20):
-    parts, args = ["1=1"], []
+    parts, args = ["COALESCE(status, 'published') = 'published'"], []
     if q:
         like = f"%{_escape_like(q)}%"
         parts.append("(LOWER(title) LIKE LOWER(?) ESCAPE '\\' OR LOWER(excerpt) LIKE LOWER(?) ESCAPE '\\')")
@@ -1297,7 +1291,7 @@ def list_articles(conn, q="", category="", tag="", limit=20):
         parts.append("LOWER(tag) = LOWER(?)"); args.append(tag)
     where, args = _where(parts, args)
     rows = conn.execute(
-        "SELECT id, slug, title, excerpt, author, published, category, tag, read_time, accent, thumb, is_today, duration, guest"
+        "SELECT id, slug, title, excerpt, author, published, category, tag, read_time, accent, thumb, is_today, duration, guest, status"
         " FROM articles" + where + " ORDER BY id ASC LIMIT ?",
         args + [limit]
     ).fetchall()
@@ -1309,13 +1303,13 @@ def list_popular_articles(conn, exclude_id=None, limit=8):
     if exclude_id:
         rows = conn.execute(
             "SELECT id, slug, title, thumb, category, tag, published, read_time "
-            "FROM articles WHERE id != ? ORDER BY id DESC LIMIT ?",
+            "FROM articles WHERE id != ? AND COALESCE(status, 'published') = 'published' ORDER BY id DESC LIMIT ?",
             (exclude_id, limit)
         ).fetchall()
     else:
         rows = conn.execute(
             "SELECT id, slug, title, thumb, category, tag, published, read_time "
-            "FROM articles ORDER BY id DESC LIMIT ?",
+            "FROM articles WHERE COALESCE(status, 'published') = 'published' ORDER BY id DESC LIMIT ?",
             (limit,)
         ).fetchall()
     return [dict(r) for r in rows]
