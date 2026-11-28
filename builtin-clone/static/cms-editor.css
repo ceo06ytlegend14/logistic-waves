@@ -159,6 +159,10 @@
   min-width: 0;
 }
 
+.cms-col-center {
+  min-height: 410px;
+}
+
 .cms-cover-card {
   position: relative;
   border-radius: 12px;
@@ -343,9 +347,13 @@
   background: #f1f5f9;
   color: #0f172a;
 }
+.cms-side-nav-btn:focus {
+  outline: none;
+}
 .cms-side-nav-btn.active {
   background: #eff6ff;
   color: #2563eb;
+  font-weight: 700;
 }
 
 .cms-tab-pane {
