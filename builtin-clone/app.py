@@ -714,6 +714,10 @@ def route(conn, method, path, query, payload, user, token, host, client_ip="", c
         if not title or len(title) > 300:
             return redirect(redir + ("&" if "?" in redir else "?") + "err=" + urllib.parse.quote("Job title is required (max 300 characters)."))
         comp_slug = _clip(payload.get("company_slug", job_dict.get("company_slug") or ""), 120)
+        if (user.get("role") or "").lower() != "admin" and comp_slug != (job_dict.get("company_slug") or ""):
+            target_comp = conn.execute("SELECT manager_id FROM companies WHERE slug=?", (comp_slug,)).fetchone()
+            if not target_comp or target_comp["manager_id"] != user.get("id"):
+                comp_slug = job_dict.get("company_slug") or comp_slug
         category = _clip(payload.get("category", "Engineering & Architecture"), 120) or "Engineering & Architecture"
         workplace = _clip(payload.get("workplace", "Hybrid"), 60) or "Hybrid"
         level = _clip(payload.get("level", "Mid-Senior"), 60) or "Mid-Senior"
