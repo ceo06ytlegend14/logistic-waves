@@ -72,6 +72,43 @@ def status_pill(status):
     cls, ico = colors.get(status, ("pill-blue", "fa-circle"))
     return '<span class="pill-badge ' + cls + '"><i class="fa-solid ' + ico + '"></i> ' + e(status) + '</span>'
 
+def _relative_time_label(created_at_str="", published_str=""):
+    """Return human relative upload time: 'a few ago' (<1h), 'Xh ago' (<24h), '1 day ago' (24-48h), 'X days ago' (48h+)."""
+    from datetime import datetime, timezone
+    dt = None
+    raw = (created_at_str or "").strip()
+    if raw:
+        clean_raw = raw.rstrip("Z")[:19]
+        for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+            try:
+                dt = datetime.strptime(clean_raw, fmt).replace(tzinfo=timezone.utc)
+                break
+            except Exception:
+                pass
+    if dt is None and published_str:
+        pub = published_str.strip()
+        for fmt in ("%b %d, %Y", "%B %d, %Y", "%Y-%m-%d"):
+            try:
+                dt = datetime.strptime(pub, fmt).replace(tzinfo=timezone.utc)
+                break
+            except Exception:
+                pass
+    if dt is None:
+        return (published_str or "—", False)
+    diff = (datetime.now(timezone.utc) - dt).total_seconds()
+    if diff < 0:
+        return ("scheduled", False)
+    if diff < 3600:
+        return ("a few ago", True)
+    if diff < 86400:
+        hrs = int(diff // 3600)
+        return (f"{hrs}h ago", True)
+    if diff < 172800:
+        return ("1 day ago", False)
+    days = int(diff // 86400)
+    return (f"{days} days ago", False)
+
+
 def render_image_uploader_field(target_id, preview_id, label="Article Image / Cover", current_val=""):
     val = e(current_val or "/static/images/fw_today_1.jpg")
     return (
@@ -128,15 +165,21 @@ def render_create_modals(all_companies):
         "<input type='hidden' name='tab' value='articles'>\n"
         "<div class='form-group'><label class='form-label'>Article Title *</label><input class='form-control' name='title' placeholder='e.g. 2027 Maritime Freight Trends' required></div>\n"
         "<div style='display:grid;grid-template-columns:1fr 1fr;gap:12px;'>\n"
-        "<div class='form-group'><label class='form-label'>Category</label>\n"
-        "<select class='form-control' name='category'>\n"
-        "<option value='Maritime &amp; Supply Chain'>Maritime &amp; Supply Chain</option>\n"
-        "<option value='Logistics Tech'>Logistics Tech</option>\n"
-        "<option value='Port Infrastructure'>Port Infrastructure</option>\n"
-        "<option value='Freight Rates'>Freight Rates</option>\n"
-        "<option value='Technology'>Technology</option>\n"
-        "<option value='Career &amp; Talent'>Career &amp; Talent</option>\n"
-        "</select></div>\n"
+        "<div class='form-group'><label class='form-label'>Category Section</label>\n"
+        "<input class='form-control' id='art-create-cat' name='category' list='art-cat-datalist' value='Maritime &amp; Supply Chain' placeholder='Select or type category...'>\n"
+        "<datalist id='art-cat-datalist'>\n"
+        "<option value='Maritime &amp; Supply Chain'>\n"
+        "<option value='Artificial Intelligence'>\n"
+        "<option value='Logistics Tech'>\n"
+        "<option value='Port Infrastructure'>\n"
+        "<option value='Freight Rates'>\n"
+        "<option value='Drivers &amp; Workforce'>\n"
+        "<option value='Logistics &amp; Brokerage'>\n"
+        "<option value='Legal Issues'>\n"
+        "<option value='Careers'>\n"
+        "<option value='Cybersecurity'>\n"
+        "<option value='Technology'>\n"
+        "</datalist></div>\n"
         "<div class='form-group'><label class='form-label'>Tag / Theme</label><input class='form-control' name='tag' value='Maritime Insights'></div>\n"
         "</div>\n"
         "<div style='display:grid;grid-template-columns:1fr 1fr;gap:12px;'>\n"
@@ -1060,6 +1103,8 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
     f_status = (filters.get("status") or "").strip()
     f_verified = (filters.get("verified") or "").strip()
     f_industry = (filters.get("industry") or "").strip()
+    f_sort = (filters.get("sort") or "newest").strip().lower()
+    f_view = (filters.get("view") or "all").strip().lower()
     per_page = 20
     offset = (page - 1) * per_page
 
@@ -1116,7 +1161,24 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
                 (v_limit,)
             ).fetchall()]
 
+    art_cat_counts = []
+    web_stats = {"published": 0, "featured": 0, "today": 0}
     if tab == "articles":
+        art_cat_counts = [
+            (r[0], r[1]) for r in conn.execute(
+                "SELECT COALESCE(NULLIF(category, ''), 'General') AS cat, COUNT(*) AS cnt "
+                "FROM articles GROUP BY cat ORDER BY cnt DESC, cat ASC"
+            ).fetchall()
+        ]
+        _ws = conn.execute(
+            "SELECT "
+            "SUM(CASE WHEN COALESCE(status, 'published')='published' AND COALESCE(is_today,0)=0 THEN 1 ELSE 0 END), "
+            "SUM(CASE WHEN COALESCE(featured, 0)=1 THEN 1 ELSE 0 END), "
+            "SUM(CASE WHEN COALESCE(is_today, 0)=1 THEN 1 ELSE 0 END) "
+            "FROM articles"
+        ).fetchone()
+        if _ws:
+            web_stats = {"published": _ws[0] or 0, "featured": _ws[1] or 0, "today": _ws[2] or 0}
         art_where = []
         art_args = []
         if like:
@@ -1125,13 +1187,23 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
         if f_cat:
             art_where.append("category = ?")
             art_args.append(f_cat)
+        if f_status:
+            art_where.append("COALESCE(status, 'published') = ?")
+            art_args.append(f_status)
+        if f_view == "web":
+            art_where.append("(COALESCE(featured, 0) = 1 OR COALESCE(is_today, 0) = 1 OR COALESCE(status, 'published') = 'published')")
         aw_sql = (" WHERE " + " AND ".join(art_where)) if art_where else ""
+        art_order = {
+            "oldest": "id ASC",
+            "title": "title ASC, id DESC",
+            "featured": "COALESCE(featured, 0) DESC, id DESC",
+        }.get(f_sort, "COALESCE(NULLIF(created_at, ''), '1970-01-01') DESC, id DESC")
         tab_total = conn.execute(f"SELECT COUNT(*) FROM articles{aw_sql}", art_args).fetchone()[0]
         all_articles = [dict(r) for r in conn.execute(
             f"SELECT id, slug, title, category, tag, author, published, is_today, read_time, duration, guest, thumb, excerpt, body, "
             f"COALESCE(status, 'published') AS status, COALESCE(seo_title, '') AS seo_title, COALESCE(seo_description, '') AS seo_description, "
-            f"COALESCE(featured, 0) AS featured, COALESCE(allow_comments, 1) AS allow_comments "
-            f"FROM articles{aw_sql} ORDER BY id DESC LIMIT ? OFFSET ?",
+            f"COALESCE(featured, 0) AS featured, COALESCE(allow_comments, 1) AS allow_comments, COALESCE(created_at, '') AS created_at "
+            f"FROM articles{aw_sql} ORDER BY {art_order} LIMIT ? OFFSET ?",
             art_args + [per_page, offset]
         ).fetchall()]
 
@@ -1435,8 +1507,35 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
         )
 
     elif tab == "articles":
+        import urllib.parse as _up_art
+        def _art_url(view_v=None, cat_v=None, status_v=None, sort_v=None, q_v=None):
+            vv = f_view if view_v is None else view_v
+            cv = f_cat if cat_v is None else cat_v
+            sv = f_status if status_v is None else status_v
+            srv = f_sort if sort_v is None else sort_v
+            qv = q if q_v is None else q_v
+            ps = ["tab=articles"]
+            if vv and vv != "all":
+                ps.append("view=" + _up_art.quote(vv))
+            if cv:
+                ps.append("category=" + _up_art.quote(cv))
+            if sv:
+                ps.append("status=" + _up_art.quote(sv))
+            if srv and srv != "newest":
+                ps.append("sort=" + _up_art.quote(srv))
+            if qv:
+                ps.append("q=" + _up_art.quote(qv))
+            return "/admin?" + "&amp;".join(ps)
+
         def article_row(a):
             today_badge = "<span class='pill-badge pill-blue' style='margin-left:6px;font-size:10.5px;padding:2px 7px;'>Today</span>" if a['is_today'] else ""
+            is_feat = bool(a.get('featured'))
+            feat_btn = (
+                f"<button type='button' class='btn-feat-star{' is-featured' if is_feat else ''}' "
+                f"title='{'Featured on Web (click to unpin)' if is_feat else 'Pin as Featured on Web'}' "
+                f"onclick=\"toggleArticleFeatured(this, {a['id']}, {1 if is_feat else 0})\">"
+                f"<i class='fa-{'solid' if is_feat else 'regular'} fa-star'></i></button>"
+            )
             thumb_url = a.get('thumb') or ''
             thumb_cell = (
                 "<td style='width:76px;'>"
@@ -1464,7 +1563,7 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
                 "<option value='archived'" + (" selected" if st == 'archived' else "") + ">&bull; Archived</option>"
                 "</select></td>"
             )
-            read_t = e(a.get('read_time') or '4 min read')
+            rel_label, is_fresh = _relative_time_label(a.get('created_at'), a.get('published'))
             author_name = a.get('author') or 'Editorial'
             author_cell = (
                 "<td><div style='display:flex;align-items:center;gap:8px;min-width:130px;'>"
@@ -1477,6 +1576,7 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
             return (
                 "<tr>"
                 f"<td style='width:38px;text-align:center;'><input type='checkbox' class='admin-check row-check' value='{a['id']}' onchange='updateBulkBar()'></td>"
+                f"<td style='width:36px;text-align:center;'>{feat_btn}</td>"
                 + thumb_cell
                 + "<td style='min-width:230px;max-width:340px;'>"
                 + _excel_input("articles", a['id'], "title", a['title'], "Article Title", extra_style="font-weight:600;color:#0f172a;font-size:13.5px;")
@@ -1487,8 +1587,8 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
                 + author_cell
                 + status_cell
                 + "<td style='white-space:nowrap;color:#64748b;font-size:12px;'>"
-                + "<div style='font-weight:600;color:#334155;'>" + e(a.get('published') or '') + "</div>"
-                + "<div style='font-size:11px;color:#94a3b8;margin-top:2px;'>" + read_t + "</div>"
+                + f"<span class='time-ago-badge{' is-fresh' if is_fresh else ''}'>{e(rel_label)}</span>"
+                + "<div style='font-size:11px;color:#94a3b8;margin-top:3px;'>" + e(a.get('published') or '') + "</div>"
                 + "</td>"
                 + "<td><div class='action-btns'>"
                 + "<a href='/articles/" + e(a.get('slug') or '') + "' target='_blank' class='btn-action-round' title='View Live'><i class='fa-regular fa-eye'></i></a>"
@@ -1516,43 +1616,95 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
                 + "<button type='submit' class='btn-action-delete' title='Delete'><i class='fa-regular fa-trash-can'></i></button>"
                 + "</form></div></td></tr>"
             )
-        articles_rows = "".join([article_row(a) for a in all_articles]) or _empty_row(8, "No articles found.")
-        art_cats = "".join(
-            f"<option value='{e(c)}'{' selected' if f_cat == c else ''}>{e(c)}</option>"
-            for c in ["Maritime & Supply Chain", "Logistics Tech", "Port Infrastructure", "Freight Rates", "Technology", "Career & Talent", "Drivers & Workforce", "Logistics & Brokerage", "Legal Issues"]
+        articles_rows = "".join([article_row(a) for a in all_articles]) or _empty_row(9, "No articles found in this section.")
+
+        # 2-Mode Switcher: Inventory Control vs Web Sections Manager
+        add_btn_label = f"Add to {e(f_cat)}" if f_cat else "Add New Article"
+        add_cat_js = e(f_cat or "Maritime & Supply Chain").replace("'", "\\'")
+        mode_bar = (
+            "<div class='art-mode-bar'>"
+            "<div class='art-mode-tabs'>"
+            f"<a href='{_art_url(view_v='all')}' class='art-mode-tab{' active' if f_view != 'web' else ''}'><i class='fa-solid fa-layer-group'></i> All Articles Inventory ({counts['articles']})</a>"
+            f"<a href='{_art_url(view_v='web', sort_v='featured')}' class='art-mode-tab{' active' if f_view == 'web' else ''}'><i class='fa-solid fa-globe'></i> Manage Web Sections</a>"
+            "</div>"
+            f"<button type='button' class='btn-add-new btn-add-solid' style='background:#2563eb;' onclick=\"openArticleCreateWithCat('{add_cat_js}')\"><i class='fa-solid fa-plus'></i> {add_btn_label}</button>"
+            "</div>"
+        )
+
+        # Horizontal Category Section Nav Bar (like reference image)
+        cat_tabs_html = [
+            f"<a href='{_art_url(cat_v='')}' class='cat-nav-tab{' active' if not f_cat else ''}'>Discover <span class='cat-nav-count'>{counts['articles']}</span></a>"
+        ]
+        for cname, ccnt in art_cat_counts:
+            cat_tabs_html.append(
+                f"<a href='{_art_url(cat_v=cname)}' class='cat-nav-tab{' active' if f_cat == cname else ''}'>{e(cname)} <span class='cat-nav-count'>{ccnt}</span></a>"
+            )
+        cat_nav_bar = "<nav class='cat-nav-bar' aria-label='Article Category Sections'>" + "".join(cat_tabs_html) + "</nav>"
+
+        web_strip = ""
+        if f_view == "web":
+            web_strip = (
+                "<div class='web-sections-strip'>"
+                "<div class='web-section-card'><div><div style='font-size:12px;color:#64748b;font-weight:600;'>Live Editorial Hub (/article-blogs)</div>"
+                f"<div style='font-size:20px;font-weight:800;color:#0f172a;margin-top:2px;'>{web_stats['published']} Published</div></div>"
+                "<span class='pill-badge pill-green'>Active on Web</span></div>"
+                "<div class='web-section-card'><div><div style='font-size:12px;color:#64748b;font-weight:600;'>Featured Pinned (&#9733;)</div>"
+                f"<div style='font-size:20px;font-weight:800;color:#0f172a;margin-top:2px;'>{web_stats['featured']} Pinned</div></div>"
+                "<span class='pill-badge pill-amber'>Top Priority</span></div>"
+                "<div class='web-section-card'><div><div style='font-size:12px;color:#64748b;font-weight:600;'>Logistic Waves Today</div>"
+                f"<div style='font-size:20px;font-weight:800;color:#0f172a;margin-top:2px;'>{web_stats['today']} Episodes</div></div>"
+                "<a href='/admin?tab=videos' class='pill-badge pill-blue' style='text-decoration:none;'>Manage &rarr;</a></div>"
+                "</div>"
+            )
+
+        art_status_opts = "".join(
+            f"<option value='{sv}'{' selected' if f_status == sv else ''}>{sl}</option>"
+            for sv, sl in [("published", "Published"), ("draft", "Draft"), ("scheduled", "Scheduled"), ("archived", "Archived")]
+        )
+        art_sort_opts = "".join(
+            f"<option value='{sv}'{' selected' if f_sort == sv else ''}>{sl}</option>"
+            for sv, sl in [("newest", "Sort: Newest Uploaded"), ("oldest", "Sort: Oldest First"), ("featured", "Sort: Featured First"), ("title", "Sort: Title A-Z")]
         )
         art_filter_bar = (
             "<form method='get' action='/admin' class='admin-filter-bar'>"
             "<input type='hidden' name='tab' value='articles'>"
+            f"<input type='hidden' name='view' value='{e(f_view)}'>"
+            f"<input type='hidden' name='category' value='{e(f_cat)}'>"
             "<div class='admin-filter-search'><i class='fa-solid fa-magnifying-glass'></i>"
             f"<input type='text' name='q' value='{e(q)}' placeholder='Search articles by title, category or author...'></div>"
-            f"<select name='category' class='admin-filter-select' onchange='this.form.submit()'><option value=''>All Categories</option>{art_cats}</select>"
+            f"<select name='status' class='admin-filter-select' onchange='this.form.submit()'><option value=''>All Status</option>{art_status_opts}</select>"
+            f"<select name='sort' class='admin-filter-select' onchange='this.form.submit()'>{art_sort_opts}</select>"
             "<a href='/admin?tab=articles' class='admin-filter-reset'><i class='fa-solid fa-rotate-left'></i> Reset</a>"
             "</form>"
         )
+        section_heading = f"{e(f_cat)} ({tab_total})" if f_cat else f"All Articles &amp; Reports ({tab_total if tab_total is not None else counts['articles']})"
         active_content = (
+            mode_bar +
+            cat_nav_bar +
+            web_strip +
             art_filter_bar +
             "<div class='table-card' style='width:100%;'>"
             "<div class='table-header-bar'>"
-            "<div><h3 class='table-title'><i class='fa-solid fa-file-lines' style='color:#2563eb;margin-right:8px;'></i> All Articles &amp; Reports (" + str(tab_total if tab_total is not None else counts['articles']) + ")</h3></div>"
+            f"<div><h3 class='table-title'><i class='fa-solid fa-file-lines' style='color:#2563eb;margin-right:8px;'></i> {section_heading}</h3></div>"
             "<div style='display:flex;gap:8px;align-items:center;'>"
             "<span id='excelSaveStatus' style='font-size:12px;font-weight:700;color:#10b981;display:none;'>Saved &#10003;</span>"
             "<button type='button' class='btn-ctrl btn-ctrl-light' onclick=\"exportAdminTableCSV(this,'articles.csv')\" style='padding:7px 12px;font-size:12.5px;'><i class='fa-solid fa-file-excel' style='color:#10b981;'></i> Export Excel</button>"
-            "<button type='button' class='btn-add-new btn-add-solid' style='background:#2563eb;' onclick=\"openCreateModal('create-article-modal')\"><i class='fa-solid fa-plus'></i> Add New Article</button>"
+            f"<button type='button' class='btn-add-new btn-add-solid' style='background:#2563eb;' onclick=\"openArticleCreateWithCat('{add_cat_js}')\"><i class='fa-solid fa-plus'></i> {add_btn_label}</button>"
             "</div></div>"
             "<table class='clean-table'>"
             "<thead><tr>"
             "<th style='width:38px;text-align:center;'><input type='checkbox' class='admin-check' onchange='toggleAllRows(this)'></th>"
+            "<th style='width:36px;text-align:center;' title='Featured on Web'>&#9733;</th>"
             "<th style='width:76px;'>Thumbnail</th>"
             "<th>Title</th>"
             "<th>Category</th>"
             "<th>Author</th>"
             "<th>Status</th>"
-            "<th>Published Date</th>"
+            "<th>Uploaded</th>"
             "<th>Actions</th>"
             "</tr></thead>"
             "<tbody>" + articles_rows + "</tbody>"
-            "</table>" + _render_pagination("articles", page, tab_total if tab_total is not None else counts["articles"], per_page, q, {"category": f_cat}) + "</div>"
+            "</table>" + _render_pagination("articles", page, tab_total if tab_total is not None else counts["articles"], per_page, q, {"category": f_cat, "status": f_status, "sort": f_sort, "view": f_view}) + "</div>"
         )
 
     elif tab == "jobs":
@@ -1609,6 +1761,53 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
         )
 
     elif tab == "companies":
+        _std_industries = [
+            "Maritime Logistics", "Supply Chain", "Freight & Trucking", "Warehousing", "3PL",
+            "Port Operations", "Software", "AI & Data", "Fintech", "Cloud", "SaaS",
+            "Enterprise", "E-commerce", "Cybersecurity", "Robotics", "Gaming",
+            "Healthtech", "Marketing Tech", "Digital Media", "Travel", "Marketplace",
+            "Information Technology", "Legal Tech", "Productivity", "Logistics"
+        ]
+        _db_inds = sorted({
+            x.strip()
+            for r in conn.execute("SELECT industries FROM companies").fetchall()
+            for x in (r["industries"] or "").split(",") if x.strip()
+        })
+        _all_ind_opts = sorted(set(_std_industries) | set(_db_inds))
+        _db_locs = sorted({
+            (r["location"] or "").strip()
+            for r in conn.execute("SELECT DISTINCT location FROM companies WHERE location IS NOT NULL AND location != ''").fetchall()
+            if (r["location"] or "").strip()
+        })
+
+        def _industry_picker_cell(cid, ind_csv):
+            items = [x.strip() for x in (ind_csv or "Logistics").split(",") if x.strip()]
+            first = items[0] if items else "Logistics"
+            more = len(items) - 1
+            more_html = f"<span class='ind-more'>+{more}</span>" if more > 0 else ""
+            sel_pills = "".join(
+                f"<span class='ind-pill' data-val='{e(it)}'>{e(it)} <button type='button' class='ind-pill-x' onclick=\"removeIndPill(this)\">&times;</button></span>"
+                for it in items
+            )
+            chk_opts = "".join(
+                f"<label class='ind-picker-opt' data-ind='{e(opt.lower())}'><input type='checkbox' value='{e(opt)}'{' checked' if opt in items else ''} onchange=\"toggleIndOpt(this)\"> <span>{e(opt)}</span></label>"
+                for opt in _all_ind_opts
+            )
+            return (
+                f"<div class='ind-picker-wrap' data-id='{int(cid)}' data-val='{e(','.join(items))}'>"
+                f"<button type='button' class='ind-picker-btn' title='{e(', '.join(items))}' onclick='toggleIndPop(this, event)'>"
+                f"<span class='ind-pill ind-first-pill'>{e(first)}</span>{more_html}"
+                "<i class='fa-solid fa-chevron-down' style='font-size:10px;color:#94a3b8;margin-left:2px;'></i>"
+                "</button>"
+                "<div class='ind-picker-pop' onclick='event.stopPropagation()'>"
+                f"<div class='ind-selected-pills'>{sel_pills}</div>"
+                "<input type='text' class='ind-picker-search' placeholder='Search or press Enter to add...' oninput='filterIndOpts(this)' onkeydown=\"addCustomInd(event, this)\">"
+                f"<div class='ind-picker-list'>{chk_opts}</div>"
+                "<div class='ind-picker-foot'>"
+                "<button type='button' class='btn-ctrl btn-ctrl-primary' style='padding:4px 12px;font-size:11.5px;' onclick='doneIndPop(this)'>Done</button>"
+                "</div></div></div>"
+            )
+
         def company_row(c):
             clr = e(c.get('color') or '#2563eb')
             is_ver = bool(c.get('verified', 1))
@@ -1633,7 +1832,7 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
                 + _excel_input("companies", c['id'], "name", c.get('name') or '', "Company Name", extra_style="font-weight:600;color:#0f172a;font-size:13.5px;")
                 + "<small style='color:#94a3b8;font-size:11.5px;display:block;'>" + e(c.get('slug') or '') + "</small></div>"
                 "</div></td>"
-                "<td style='min-width:130px;'>" + _excel_input("companies", c['id'], "industries", c.get('industries') or 'Logistics', "Industry", extra_class="excel-pill-input") + "</td>"
+                "<td style='min-width:170px;'>" + _industry_picker_cell(c['id'], c.get('industries') or 'Logistics') + "</td>"
                 "<td style='min-width:155px;'><div style='display:flex;align-items:center;gap:6px;'>"
                 "<i class='fa-solid fa-location-dot' style='color:#94a3b8;font-size:11.5px;flex-shrink:0;'></i>"
                 "<div style='flex:1;min-width:0;'>" + _excel_input("companies", c['id'], "location", c.get('location') or 'Global', "Headquarters", extra_style="color:#475569;") + "</div>"
@@ -1671,13 +1870,21 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
                 "<button type='submit' class='btn-action-delete' title='Delete'><i class='fa-regular fa-trash-can'></i></button>"
                 "</form></div></td></tr>"
             )
+        ind_filter_opts = "".join(
+            f"<option value='{e(opt)}'{' selected' if f_industry == opt else ''}>{e(opt)}</option>"
+            for opt in _all_ind_opts
+        )
+        loc_filter_opts = "".join(
+            f"<option value='{e(loc)}'{' selected' if f_loc == loc else ''}>{e(loc)}</option>"
+            for loc in _db_locs
+        )
         co_filter_bar = (
             "<form method='get' action='/admin' class='admin-filter-bar'>"
             "<input type='hidden' name='tab' value='companies'>"
             "<div class='admin-filter-search'><i class='fa-solid fa-magnifying-glass'></i>"
             f"<input type='text' name='q' value='{e(q)}' placeholder='Search companies, industry, or headquarters...'></div>"
-            f"<input type='text' name='industry' value='{e(f_industry)}' class='admin-filter-select' style='width:150px;' placeholder='All Industries'>"
-            f"<input type='text' name='location' value='{e(f_loc)}' class='admin-filter-select' style='width:150px;' placeholder='All Locations'>"
+            f"<select name='industry' class='admin-filter-select' onchange='this.form.submit()'><option value=''>All Industries</option>{ind_filter_opts}</select>"
+            f"<select name='location' class='admin-filter-select' onchange='this.form.submit()'><option value=''>All Locations</option>{loc_filter_opts}</select>"
             "<select name='verified' class='admin-filter-select' onchange='this.form.submit()'>"
             "<option value=''>All Verification</option>"
             f"<option value='1'{' selected' if f_verified == '1' else ''}>Verified Only</option>"
@@ -2142,7 +2349,7 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
         "<link rel='preconnect' href='https://fonts.gstatic.com' crossorigin>\n"
         "<link href='https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap' rel='stylesheet'>\n"
         "<link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css' crossorigin='anonymous' referrerpolicy='no-referrer'>\n"
-        "<link rel='stylesheet' href='/static/admin.css?v=20261128_v3'>\n"
+        "<link rel='stylesheet' href='/static/admin.css?v=20261128_v4'>\n"
         "<link rel='stylesheet' href='/static/cms-editor.css?v=20261128_v2'>\n"
         "<script src='https://cdnjs.cloudflare.com/ajax/libs/tinymce/6.8.3/tinymce.min.js' referrerpolicy='origin'></script>\n"
         "<script src='/static/cms-editor.js?v=20261128_v2' defer></script>\n"
@@ -2281,6 +2488,29 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
         ".tox .tox-toolbar, .tox .tox-toolbar__overflow, .tox .tox-toolbar__primary{background:#f8fafc !important;border-bottom:1px solid #e2e8f0 !important;}"
         "</style>"
         "<script>"
+        "function openArticleCreateWithCat(cat){"
+        "  var inp=document.getElementById('art-create-cat');"
+        "  if(inp && cat) inp.value=cat;"
+        "  openCreateModal('create-article-modal');"
+        "}"
+        "async function toggleArticleFeatured(btn, id, cur){"
+        "  var next = cur ? 0 : 1;"
+        "  var csrfEl = document.querySelector('input[name=_csrf]');"
+        "  var csrf = csrfEl ? csrfEl.value : '';"
+        "  try{"
+        "    var res = await fetch('/admin/api/inline-update', {"
+        "      method:'POST',"
+        "      headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},"
+        "      body:JSON.stringify({table:'articles',id:id,field:'featured',value:String(next),_csrf:csrf})"
+        "    });"
+        "    var d = await res.json();"
+        "    if(d && d.ok){"
+        "      btn.classList.toggle('is-featured', !!next);"
+        "      btn.innerHTML = next ? \"<i class='fa-solid fa-star'></i>\" : \"<i class='fa-regular fa-star'></i>\";"
+        "      btn.setAttribute('onclick', 'toggleArticleFeatured(this,'+id+','+next+')');"
+        "    }"
+        "  }catch(e){}"
+        "}"
         "function initRichEditors(){"
         "  if(typeof tinymce === 'undefined') return;"
         "  tinymce.init({"
@@ -2393,8 +2623,9 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
         "    var cells = tr.querySelectorAll('th, td');"
         "    for(var i=0; i<cells.length-1; i++){"
         "      if(cells[i].querySelector('.admin-check')) continue;"
+        "      var indWrap = cells[i].querySelector('.ind-picker-wrap');"
         "      var inp = cells[i].querySelector('input, select');"
-        "      var txt = inp ? inp.value : cells[i].innerText;"
+        "      var txt = indWrap ? (indWrap.dataset.val || '') : (inp ? inp.value : cells[i].innerText);"
         "      txt = String(txt || '').replace(/\\s+/g,' ').trim().replace(/\"/g,'\"\"');"
         "      row.push('\"' + txt + '\"');"
         "    }"
@@ -2406,6 +2637,80 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
         "  a.download = filename || 'export.csv';"
         "  a.click();"
         "}"
+        "function toggleIndPop(btn, ev){"
+        "  if(ev) ev.stopPropagation();"
+        "  var wrap = btn.closest('.ind-picker-wrap');"
+        "  var pop = wrap.querySelector('.ind-picker-pop');"
+        "  var wasOpen = pop.classList.contains('open');"
+        "  document.querySelectorAll('.ind-picker-pop.open').forEach(function(p){ p.classList.remove('open'); });"
+        "  if(!wasOpen){"
+        "    pop.classList.add('open');"
+        "    var inp = pop.querySelector('.ind-picker-search');"
+        "    if(inp){ inp.value=''; filterIndOpts(inp); setTimeout(function(){ inp.focus(); }, 20); }"
+        "  }"
+        "}"
+        "function filterIndOpts(inp){"
+        "  var q = (inp.value || '').trim().toLowerCase();"
+        "  var wrap = inp.closest('.ind-picker-wrap');"
+        "  wrap.querySelectorAll('.ind-picker-opt').forEach(function(lbl){"
+        "    lbl.style.display = (!q || lbl.dataset.ind.indexOf(q) !== -1) ? 'flex' : 'none';"
+        "  });"
+        "}"
+        "function _getIndItems(wrap){"
+        "  return (wrap.dataset.val || '').split(',').map(function(s){ return s.trim(); }).filter(Boolean);"
+        "}"
+        "function _syncIndWrap(wrap, items, saveNow){"
+        "  if(!items.length) items = ['Logistics'];"
+        "  var csv = items.join(',');"
+        "  wrap.dataset.val = csv;"
+        "  var btn = wrap.querySelector('.ind-picker-btn');"
+        "  btn.title = items.join(', ');"
+        "  btn.innerHTML = \"<span class='ind-pill ind-first-pill'>\" + items[0].replace(/</g,'&lt;') + \"</span>\" + (items.length > 1 ? \"<span class='ind-more'>+\" + (items.length - 1) + \"</span>\" : '') + \"<i class='fa-solid fa-chevron-down' style='font-size:10px;color:#94a3b8;margin-left:2px;'></i>\";"
+        "  var pillsBox = wrap.querySelector('.ind-selected-pills');"
+        "  pillsBox.innerHTML = items.map(function(it){ return \"<span class='ind-pill' data-val='\" + it.replace(/'/g,'&#39;') + \"'>\" + it.replace(/</g,'&lt;') + \" <button type='button' class='ind-pill-x' onclick='removeIndPill(this)'>&times;</button></span>\"; }).join('');"
+        "  wrap.querySelectorAll('.ind-picker-opt input').forEach(function(cb){ cb.checked = items.indexOf(cb.value) !== -1; });"
+        "  if(saveNow){"
+        "    var fakeEl = { value: csv, classList: btn.classList };"
+        "    saveInlineCell(fakeEl, 'companies', parseInt(wrap.dataset.id, 10), 'industries');"
+        "  }"
+        "}"
+        "function toggleIndOpt(cb){"
+        "  var wrap = cb.closest('.ind-picker-wrap');"
+        "  var items = _getIndItems(wrap);"
+        "  var v = cb.value;"
+        "  if(cb.checked){ if(items.indexOf(v) === -1) items.push(v); }"
+        "  else { items = items.filter(function(x){ return x !== v; }); }"
+        "  _syncIndWrap(wrap, items, false);"
+        "}"
+        "function removeIndPill(btn){"
+        "  var wrap = btn.closest('.ind-picker-wrap');"
+        "  var v = btn.closest('.ind-pill').dataset.val;"
+        "  var items = _getIndItems(wrap).filter(function(x){ return x !== v; });"
+        "  _syncIndWrap(wrap, items, false);"
+        "}"
+        "function addCustomInd(ev, inp){"
+        "  if(ev.key !== 'Enter') return;"
+        "  ev.preventDefault();"
+        "  var v = (inp.value || '').trim();"
+        "  if(!v) return;"
+        "  var wrap = inp.closest('.ind-picker-wrap');"
+        "  var items = _getIndItems(wrap);"
+        "  if(items.indexOf(v) === -1) items.push(v);"
+        "  _syncIndWrap(wrap, items, false);"
+        "  inp.value = ''; filterIndOpts(inp);"
+        "}"
+        "function doneIndPop(btn){"
+        "  var wrap = btn.closest('.ind-picker-wrap');"
+        "  wrap.querySelector('.ind-picker-pop').classList.remove('open');"
+        "  _syncIndWrap(wrap, _getIndItems(wrap), true);"
+        "}"
+        "document.addEventListener('click', function(){"
+        "  document.querySelectorAll('.ind-picker-pop.open').forEach(function(p){"
+        "    p.classList.remove('open');"
+        "    var w = p.closest('.ind-picker-wrap');"
+        "    if(w) _syncIndWrap(w, _getIndItems(w), true);"
+        "  });"
+        "});"
         "</script>"
         "\n</div></main></div></body></html>"
     )

@@ -951,30 +951,31 @@ def route(conn, method, path, query, payload, user, token, host, client_ip="", c
         excerpt = _clip(payload.get("excerpt", ""), 1000)
         body = _clip(payload.get("body", ""), 200000)
         status = (payload.get("status") or "published").strip().lower()
-        if status not in ("published", "draft", "archived"):
+        if status not in ("published", "draft", "scheduled", "archived"):
             status = "published"
         seo_title = _clip(payload.get("seo_title", ""), 300)
         seo_description = _clip(payload.get("seo_description", ""), 500)
         slug = views.slugify(title) or "article"
         now_str = datetime.utcnow().strftime("%b %d, %Y")
+        created_at_iso = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
         ex = conn.execute("SELECT id FROM articles WHERE slug=?", (slug,)).fetchone()
         if ex:
             conn.execute(
                 """UPDATE articles SET title=?, category=?, author=?, tag=?, read_time=?, thumb=?, excerpt=?, body=?,
-                   status=?, seo_title=?, seo_description=? WHERE id=?""",
-                (title, category, author, tag, read_time, thumb, excerpt, body, status, seo_title, seo_description, ex[0])
+                   status=?, seo_title=?, seo_description=?, created_at=? WHERE id=?""",
+                (title, category, author, tag, read_time, thumb, excerpt, body, status, seo_title, seo_description, created_at_iso, ex[0])
             )
         else:
             conn.execute(
                 """INSERT INTO articles (slug, title, excerpt, body, author, published, category, tag, read_time, accent, thumb, is_today,
-                   status, seo_title, seo_description) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                   status, seo_title, seo_description, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (slug, title, excerpt, body, author, now_str, category, tag, read_time, "#034f9a", thumb, 0,
-                 status, seo_title, seo_description)
+                 status, seo_title, seo_description, created_at_iso)
             )
         conn.commit()
         db.invalidate_cache()
         status_label = "saved as draft" if status == "draft" else ("archived" if status == "archived" else "published")
-        return redirect("/admin?tab=articles&msg=" + urllib.parse.quote(f"Article '{title}' {status_label} successfully!"))
+        return redirect("/admin?tab=articles&category=" + urllib.parse.quote(category) + "&msg=" + urllib.parse.quote(f"Article '{title}' {status_label} successfully!"))
 
     if path == "/admin/articles/delete" and method == "POST":
         art_id = get_int(payload.get("id", "0"), 0, low=0)
@@ -1340,8 +1341,8 @@ def route(conn, method, path, query, payload, user, token, host, client_ip="", c
             new_title = f"{d['title']} (Copy)"
             new_slug = f"{(views.slugify(d['title']) or 'article')[:50]}-copy-{secrets.token_hex(2)}"
             conn.execute(
-                """INSERT INTO articles (slug, title, excerpt, body, author, published, category, tag, read_time, accent, thumb, is_today, duration, guest)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                """INSERT INTO articles (slug, title, excerpt, body, author, published, category, tag, read_time, accent, thumb, is_today, duration, guest, created_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     new_slug, new_title, d.get("excerpt") or "", d.get("body") or "",
                     d.get("author") or "Editorial Staff", datetime.utcnow().strftime("%b %d, %Y"),
@@ -1349,6 +1350,7 @@ def route(conn, method, path, query, payload, user, token, host, client_ip="", c
                     d.get("read_time") or "6 min read", d.get("accent") or "#034f9a",
                     d.get("thumb") or "/static/images/fw_today_1.jpg",
                     d.get("is_today") or 0, d.get("duration") or "", d.get("guest") or "",
+                    datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
                 ),
             )
             conn.commit()

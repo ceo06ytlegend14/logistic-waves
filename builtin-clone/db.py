@@ -71,7 +71,9 @@ CREATE TABLE IF NOT EXISTS jobs (
   is_remote INTEGER DEFAULT 0,
   accent TEXT,
   status TEXT DEFAULT 'active',
-  created_by INTEGER
+  created_by INTEGER,
+  FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
 );
 CREATE TABLE IF NOT EXISTS articles (
   id INTEGER PRIMARY KEY,
@@ -114,19 +116,24 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS sessions (
   token TEXT PRIMARY KEY,
   user_id INTEGER NOT NULL,
-  expires_at TEXT NOT NULL
+  expires_at TEXT NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS saved_jobs (
   user_id INTEGER NOT NULL,
   job_id INTEGER NOT NULL,
   created_at TEXT,
-  PRIMARY KEY (user_id, job_id)
+  PRIMARY KEY (user_id, job_id),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS follows (
   user_id INTEGER NOT NULL,
   company_id INTEGER NOT NULL,
   created_at TEXT,
-  PRIMARY KEY (user_id, company_id)
+  PRIMARY KEY (user_id, company_id),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS applications (
   id INTEGER PRIMARY KEY,
@@ -135,7 +142,9 @@ CREATE TABLE IF NOT EXISTS applications (
   status TEXT DEFAULT 'Applied',
   note TEXT,
   created_at TEXT,
-  UNIQUE (user_id, job_id)
+  UNIQUE (user_id, job_id),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS alerts (
   id INTEGER PRIMARY KEY,
@@ -143,7 +152,8 @@ CREATE TABLE IF NOT EXISTS alerts (
   query TEXT,
   filters TEXT,
   frequency TEXT DEFAULT 'Daily',
-  created_at TEXT
+  created_at TEXT,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS subscribers (
   id INTEGER PRIMARY KEY,
@@ -406,6 +416,19 @@ _PG_RAW_CONN = None
 _TTL_CACHE = {}
 
 
+def is_production_environment():
+    """True for a deployed runtime where an ephemeral SQLite fallback is unsafe."""
+    return bool(os.environ.get("VERCEL")) or os.environ.get("APP_ENV", "").lower() == "production"
+
+
+def validate_production_environment():
+    """Fail closed when a production deployment lacks its persistent database."""
+    if not is_production_environment():
+        return
+    if not (os.environ.get("DATABASE_URL") or os.environ.get("POSTGRES_URL")):
+        raise RuntimeError("Production requires DATABASE_URL or POSTGRES_URL; SQLite is development-only.")
+
+
 def cached_query(key, ttl_seconds, fn):
     """Lightweight in-process TTL cache for read-heavy public catalog queries."""
     import time
@@ -439,7 +462,11 @@ def connect():
             return PgConn(_PG_RAW_CONN, pooled=True)
         except Exception as e:
             _PG_RAW_CONN = None
+            if is_production_environment():
+                raise RuntimeError("PostgreSQL connection failed in production; refusing SQLite fallback.") from e
             print(f"[db] Warning: Could not connect to PostgreSQL ({e}), falling back to SQLite.")
+
+    validate_production_environment()
 
     if not os.environ.get("VERCEL"):
         DB_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -824,6 +851,15 @@ def _ensure_hr_schema_pg(conn):
         """CREATE TABLE IF NOT EXISTS subscribers (
           id SERIAL PRIMARY KEY, email TEXT UNIQUE, created_at TEXT
         )""",
+        """CREATE TABLE IF NOT EXISTS site_settings (
+          key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT
+        )""",
+        """CREATE TABLE IF NOT EXISTS courses (
+          id SERIAL PRIMARY KEY, slug TEXT UNIQUE NOT NULL, title TEXT NOT NULL,
+          channel TEXT, instructor TEXT, duration TEXT, published_date TEXT,
+          thumb TEXT, description TEXT, chapters_json TEXT,
+          status TEXT DEFAULT 'active', created_at TEXT
+        )""",
         """CREATE TABLE IF NOT EXISTS demo_seed_state (
           key TEXT PRIMARY KEY, created_at TEXT NOT NULL
         )""",
@@ -861,9 +897,64 @@ def _ensure_hr_schema_pg(conn):
         "ALTER TABLE articles ADD COLUMN IF NOT EXISTS featured INTEGER DEFAULT 0",
         "ALTER TABLE articles ADD COLUMN IF NOT EXISTS allow_comments INTEGER DEFAULT 1",
         "ALTER TABLE articles ADD COLUMN IF NOT EXISTS gallery_images TEXT DEFAULT ''",
+        "ALTER TABLE articles ADD COLUMN IF NOT EXISTS created_at TEXT DEFAULT ''",
     ]
     for s in stmts:
         conn.execute(s)
+    conn.commit()
+
+
+def _ensure_foreign_keys_pg(conn):
+    """Install named FK constraints after verifying legacy data has no orphans.
+
+    PostgreSQL does not support ``ADD CONSTRAINT IF NOT EXISTS``; the DO block
+    makes this migration idempotent while keeping failures visible to startup.
+    """
+    checks = (
+        ("jobs.company_id", "SELECT COUNT(*) FROM jobs j LEFT JOIN companies c ON c.id=j.company_id WHERE j.company_id IS NOT NULL AND c.id IS NULL"),
+        ("sessions.user_id", "SELECT COUNT(*) FROM sessions s LEFT JOIN users u ON u.id=s.user_id WHERE u.id IS NULL"),
+        ("saved_jobs.user_id", "SELECT COUNT(*) FROM saved_jobs s LEFT JOIN users u ON u.id=s.user_id WHERE u.id IS NULL"),
+        ("saved_jobs.job_id", "SELECT COUNT(*) FROM saved_jobs s LEFT JOIN jobs j ON j.id=s.job_id WHERE j.id IS NULL"),
+        ("follows.user_id", "SELECT COUNT(*) FROM follows f LEFT JOIN users u ON u.id=f.user_id WHERE u.id IS NULL"),
+        ("follows.company_id", "SELECT COUNT(*) FROM follows f LEFT JOIN companies c ON c.id=f.company_id WHERE c.id IS NULL"),
+        ("applications.user_id", "SELECT COUNT(*) FROM applications a LEFT JOIN users u ON u.id=a.user_id WHERE u.id IS NULL"),
+        ("applications.job_id", "SELECT COUNT(*) FROM applications a LEFT JOIN jobs j ON j.id=a.job_id WHERE j.id IS NULL"),
+        ("alerts.user_id", "SELECT COUNT(*) FROM alerts a LEFT JOIN users u ON u.id=a.user_id WHERE u.id IS NULL"),
+    )
+    for label, sql in checks:
+        if conn.execute(sql).fetchone()[0]:
+            raise RuntimeError(f"Cannot add foreign key: orphaned {label} rows exist.")
+    conn.execute("""
+        DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='fk_jobs_company') THEN
+            ALTER TABLE jobs ADD CONSTRAINT fk_jobs_company FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE;
+          END IF;
+          IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='fk_sessions_user') THEN
+            ALTER TABLE sessions ADD CONSTRAINT fk_sessions_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+          END IF;
+          IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='fk_saved_jobs_user') THEN
+            ALTER TABLE saved_jobs ADD CONSTRAINT fk_saved_jobs_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+          END IF;
+          IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='fk_saved_jobs_job') THEN
+            ALTER TABLE saved_jobs ADD CONSTRAINT fk_saved_jobs_job FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE;
+          END IF;
+          IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='fk_follows_user') THEN
+            ALTER TABLE follows ADD CONSTRAINT fk_follows_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+          END IF;
+          IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='fk_follows_company') THEN
+            ALTER TABLE follows ADD CONSTRAINT fk_follows_company FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE;
+          END IF;
+          IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='fk_applications_user') THEN
+            ALTER TABLE applications ADD CONSTRAINT fk_applications_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+          END IF;
+          IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='fk_applications_job') THEN
+            ALTER TABLE applications ADD CONSTRAINT fk_applications_job FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE;
+          END IF;
+          IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='fk_alerts_user') THEN
+            ALTER TABLE alerts ADD CONSTRAINT fk_alerts_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+          END IF;
+        END $$;
+    """)
     conn.commit()
 
 
@@ -880,12 +971,14 @@ def _sync_pg_sequences(conn):
 
 
 def init_db():
+    validate_production_environment()
     conn = connect()
     if isinstance(conn, PgConn):
         try:
             conn.execute("CREATE TABLE IF NOT EXISTS rate_limits (rl_key TEXT NOT NULL, ts BIGINT NOT NULL)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_rate_limits_key_ts ON rate_limits(rl_key, ts)")
             _ensure_hr_schema_pg(conn)
+            _ensure_ops_schema_pg(conn)
             if conn.execute("SELECT COUNT(*) FROM companies").fetchone()[0] == 0:
                 _seed(conn)
             _sync_pg_sequences(conn)
@@ -903,6 +996,7 @@ def init_db():
             _sanitize_legacy_placeholders(conn)
             _ensure_today_episodes(conn)
             sync_company_open_jobs(conn)
+            _ensure_foreign_keys_pg(conn)
         except Exception as ex:
             print(f"[db] Pg init warning: {ex}")
         finally:
@@ -923,6 +1017,7 @@ def init_db():
         ("featured", "INTEGER DEFAULT 0"),
         ("allow_comments", "INTEGER DEFAULT 1"),
         ("gallery_images", "TEXT DEFAULT ''"),
+        ("created_at", "TEXT DEFAULT ''"),
     ):
         if column not in article_columns:
             # Allowlist guard: only known safe column names allowed
@@ -931,7 +1026,7 @@ def init_db():
                 "image_url", "subtitle", "summary", "category",
                 "featured", "views", "author_id", "series",
                 "thumb", "is_today", "guest", "status",
-                "seo_title", "seo_description", "allow_comments", "gallery_images",
+                "seo_title", "seo_description", "allow_comments", "gallery_images", "created_at",
             }
             if column not in _SAFE_ARTICLE_COLS:
                 raise ValueError(f"Disallowed column name: {column!r}")
@@ -1162,22 +1257,35 @@ def as_dict(row):
     return dict(row) if row else None
 
 
-def get_company(conn, slug):
-    return as_dict(conn.execute("SELECT * FROM companies WHERE slug=?", (slug,)).fetchone())
+def get_company(conn, slug, include_unpublished=False):
+    """Load a company by slug.
+
+    Public callers must never resolve draft or archived company profiles.  The
+    optional flag is deliberately reserved for authenticated CMS workflows.
+    """
+    sql = "SELECT * FROM companies WHERE slug=?"
+    if not include_unpublished:
+        sql += " AND COALESCE(status, 'published')='published'"
+    return as_dict(conn.execute(sql, (slug,)).fetchone())
 
 
 def get_job(conn, job_id):
     return as_dict(conn.execute("SELECT * FROM jobs WHERE id=? AND status='active'", (job_id,)).fetchone())
 
 
-def get_article(conn, slug):
-    return as_dict(conn.execute("SELECT * FROM articles WHERE slug=?", (slug,)).fetchone())
+def get_article(conn, slug, include_unpublished=False):
+    """Load an article by slug without exposing drafts on the public site."""
+    sql = "SELECT * FROM articles WHERE slug=?"
+    if not include_unpublished:
+        sql += " AND COALESCE(status, 'published')='published'"
+    return as_dict(conn.execute(sql, (slug,)).fetchone())
 
 
 def get_today_articles(conn, limit=10):
     rows = conn.execute(
         """SELECT * FROM articles
-           WHERE is_today=1 OR tag='Logistic Waves Today' OR category='Logistic Waves Today'
+           WHERE COALESCE(status, 'published')='published'
+             AND (is_today=1 OR tag='Logistic Waves Today' OR category='Logistic Waves Today')
            ORDER BY id ASC LIMIT ?""",
         (limit,)
     ).fetchall()
@@ -1798,11 +1906,15 @@ def global_search(conn, q, limit=5):
         (like, like, limit),
     ).fetchall()]
     companies = [dict(r) for r in conn.execute(
-        "SELECT slug,name,location,color,initials FROM companies WHERE name LIKE ? ESCAPE '\\' OR industries LIKE ? ESCAPE '\\' LIMIT ?",
+        "SELECT slug,name,location,color,initials FROM companies "
+        "WHERE COALESCE(status, 'published')='published' "
+        "AND (name LIKE ? ESCAPE '\\' OR industries LIKE ? ESCAPE '\\') LIMIT ?",
         (like, like, limit),
     ).fetchall()]
     articles = [dict(r) for r in conn.execute(
-        "SELECT slug,title,category FROM articles WHERE title LIKE ? ESCAPE '\\' OR excerpt LIKE ? ESCAPE '\\' LIMIT ?",
+        "SELECT slug,title,category FROM articles "
+        "WHERE COALESCE(status, 'published')='published' "
+        "AND (title LIKE ? ESCAPE '\\' OR excerpt LIKE ? ESCAPE '\\') LIMIT ?",
         (like, like, limit),
     ).fetchall()]
     return {"jobs": jobs, "companies": companies, "articles": articles}
