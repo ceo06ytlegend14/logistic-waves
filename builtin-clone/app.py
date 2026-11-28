@@ -145,6 +145,7 @@ POST_PAGE_PATHS = {
     "/admin/salaries/create", "/admin/salaries/update", "/admin/salaries/delete",
     "/admin/api/inline-update", "/admin/inbox/action",
     "/admin/settings/save", "/admin/courses/create", "/admin/courses/update", "/admin/courses/delete", "/admin/courses/duplicate",
+    "/cms/article/update", "/cms/company/update", "/cms/job/update",
     "/api/newsletter", "/apply", "/saved/toggle", "/follow/toggle",
 }
 
@@ -617,6 +618,148 @@ def route(conn, method, path, query, payload, user, token, host, client_ip="", c
             return redirect("/employers?" + urllib.parse.urlencode({"error": "Job not found."}))
         return redirect("/employers?" + urllib.parse.urlencode({"message": "Job archived."}))
 
+    # ---------- frontend CMS inline-modal updates (role-based permissions) ----------
+    if path == "/cms/article/update" and method == "POST":
+        if not user:
+            return Response("Authentication required.", status=403)
+        art_id = get_int(payload.get("id", "0"), 0, low=0)
+        art_row = conn.execute("SELECT * FROM articles WHERE id=?", (art_id,)).fetchone()
+        if not art_row:
+            return Response("Article not found.", status=404)
+        art_dict = db.as_dict(art_row)
+        if not db.can_edit_article(user, art_dict):
+            return Response("Forbidden: You do not have permission to edit articles.", status=403)
+        slug = art_dict.get("slug") or "article"
+        redir = safe_next(payload.get("redirect_to", "")) or f"/articles/{slug}"
+        title = (payload.get("title") or "").strip()
+        if not title or len(title) > 300:
+            return redirect(redir + ("&" if "?" in redir else "?") + "err=" + urllib.parse.quote("Article title is required (max 300 characters)."))
+        category = _clip(payload.get("category", "Maritime & Supply Chain"), 120) or "Maritime & Supply Chain"
+        author = _clip(payload.get("author", "Editorial Staff"), 120) or "Editorial Staff"
+        tag = _clip(payload.get("tag", "Maritime Insights"), 120) or "Maritime Insights"
+        read_time = _clip(payload.get("read_time", "6 min read"), 40) or "6 min read"
+        guest = _clip(payload.get("guest", ""), 120)
+        duration = _clip(payload.get("duration", ""), 40)
+        thumb = _safe_media_url(payload.get("thumb", ""), art_dict.get("thumb") or "")
+        excerpt = _clip(payload.get("excerpt", ""), 1000)
+        body = _clip(payload.get("body", ""), 200000)
+        status = (payload.get("status") or art_dict.get("status") or "published").strip().lower()
+        if status not in ("published", "draft", "archived"):
+            status = "published"
+        conn.execute(
+            """UPDATE articles SET title=?, category=?, author=?, tag=?, read_time=?, guest=?, duration=?, thumb=?, excerpt=?, body=?, status=? WHERE id=?""",
+            (title, category, author, tag, read_time, guest, duration, thumb, excerpt, body, status, art_id)
+        )
+        conn.commit()
+        status_label = {"published": "published", "draft": "saved as draft", "archived": "archived"}.get(status, "updated")
+        return redirect(redir + ("&" if "?" in redir else "?") + "msg=" + urllib.parse.quote(f"Article '{title}' {status_label}!"))
+
+    if path == "/cms/company/update" and method == "POST":
+        if not user:
+            return Response("Authentication required.", status=403)
+        comp_id = get_int(payload.get("id", "0"), 0, low=0)
+        comp_row = conn.execute("SELECT * FROM companies WHERE id=?", (comp_id,)).fetchone()
+        if not comp_row:
+            return Response("Company not found.", status=404)
+        comp_dict = db.as_dict(comp_row)
+        if not db.can_edit_company(user, comp_dict):
+            return Response("Forbidden: You do not have permission to edit this company.", status=403)
+        slug = comp_dict.get("slug") or "company"
+        redir = safe_next(payload.get("redirect_to", "")) or f"/company/{slug}"
+        name = _clip(payload.get("name", ""), 160)
+        if not name:
+            return redirect(redir + ("&" if "?" in redir else "?") + "err=" + urllib.parse.quote("Company name is required."))
+        tagline = _clip(payload.get("tagline", ""), 240)
+        industries = _clip(payload.get("industries", "Logistics & Maritime"), 200) or "Logistics & Maritime"
+        location = _clip(payload.get("location", "Vietnam"), 160) or "Vietnam"
+        employees = get_int(payload.get("employees", "1000"), 1000, low=1, high=5000000)
+        raw_color = _clip(payload.get("color", "#034f9a"), 20)
+        color = raw_color if re.match(r"^#[0-9A-Fa-f]{3,8}$", raw_color) else "#034f9a"
+        website = _safe_http_url(payload.get("website", ""))
+        description = _clip(payload.get("description", ""), 10000)
+        logo_url = _safe_media_url(payload.get("logo_url", ""), "")
+        banner_url = _safe_media_url(payload.get("banner_url", ""), "")
+        benefits = _clip(payload.get("benefits", str(comp_dict.get("benefits") or "")), 2000)
+        offices = _clip(payload.get("offices", str(comp_dict.get("offices") or "")), 2000)
+        social_links = _clip(payload.get("social_links", ""), 2000)
+        status = (payload.get("status") or comp_dict.get("status") or "published").strip().lower()
+        if status not in ("published", "draft", "archived"):
+            status = "published"
+        initials = "".join(w[0] for w in name.split()[:2]).upper() or "CO"
+        conn.execute(
+            """UPDATE companies SET name=?, initials=?, tagline=?, industries=?, location=?, employees=?, color=?, website=?, description=?, logo_url=?, banner_url=?, benefits=?, offices=?, social_links=?, status=? WHERE id=?""",
+            (name, initials, tagline, industries, location, employees, color, website, description, logo_url, banner_url, benefits, offices, social_links, status, comp_id)
+        )
+        conn.execute(
+            """UPDATE jobs SET company_name=?, company_initials=?, company_color=?, accent=? WHERE company_id=?""",
+            (name, initials, color, color, comp_id)
+        )
+        conn.commit()
+        status_label = {"published": "published", "draft": "saved as draft", "archived": "archived"}.get(status, "updated")
+        return redirect(redir + ("&" if "?" in redir else "?") + "msg=" + urllib.parse.quote(f"Company '{name}' {status_label}!"))
+
+    if path == "/cms/job/update" and method == "POST":
+        if not user:
+            return Response("Authentication required.", status=403)
+        job_id = get_int(payload.get("id", "0"), 0, low=0)
+        job_row = conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+        if not job_row:
+            return Response("Job listing not found.", status=404)
+        job_dict = db.as_dict(job_row)
+        if not db.can_edit_job(user, job_dict):
+            return Response("Forbidden: You do not have permission to edit this job listing.", status=403)
+        slug = job_dict.get("slug") or "job"
+        redir = safe_next(payload.get("redirect_to", "")) or f"/job/{slug}/{job_id}"
+        title = (payload.get("title") or "").strip()
+        if not title or len(title) > 300:
+            return redirect(redir + ("&" if "?" in redir else "?") + "err=" + urllib.parse.quote("Job title is required (max 300 characters)."))
+        comp_slug = _clip(payload.get("company_slug", job_dict.get("company_slug") or ""), 120)
+        category = _clip(payload.get("category", "Engineering & Architecture"), 120) or "Engineering & Architecture"
+        workplace = _clip(payload.get("workplace", "Hybrid"), 60) or "Hybrid"
+        level = _clip(payload.get("level", "Mid-Senior"), 60) or "Mid-Senior"
+        location = _clip(payload.get("location", "Vietnam"), 160) or "Vietnam"
+        salary_min = get_int(payload.get("salary_min", "50000"), 50000, low=0, high=10000000)
+        salary_max = get_int(payload.get("salary_max", "85000"), 85000, low=0, high=10000000)
+        if salary_min > salary_max:
+            salary_min, salary_max = salary_max, salary_min
+        salary_display = _clip(payload.get("salary_display", ""), 80) or f"${salary_min:,} - ${salary_max:,}"
+        skills = _clip(payload.get("skills", ""), 500)
+        description = _clip(payload.get("description", ""), 20000)
+        apply_url = _safe_http_url(payload.get("apply_url", ""))
+        apply_email = _clip(payload.get("apply_email", ""), 160)
+        raw_status = (payload.get("status") or job_dict.get("status") or "active").strip().lower()
+        if raw_status == "published":
+            raw_status = "active"
+        if raw_status not in ("active", "draft", "archived"):
+            raw_status = "active"
+        old_cid = job_dict.get("company_id")
+        comp = conn.execute("SELECT id, name, initials, color FROM companies WHERE slug=?", (comp_slug,)).fetchone()
+        if comp:
+            cid, cname, cinit, ccolor = comp
+            conn.execute(
+                """UPDATE jobs SET title=?, company_id=?, company_slug=?, company_name=?, company_initials=?, company_color=?,
+                   category=?, level=?, workplace=?, location=?, salary_min=?, salary_max=?, salary_display=?, skills=?, description=?,
+                   apply_url=?, apply_email=?, is_remote=?, accent=?, status=? WHERE id=?""",
+                (title, cid, comp_slug, cname, cinit, ccolor, category, level, workplace, location,
+                 salary_min, salary_max, salary_display, skills, description,
+                 apply_url, apply_email, 1 if "Remote" in workplace else 0, ccolor, raw_status, job_id)
+            )
+            conn.commit()
+            db.sync_company_open_jobs(conn, cid)
+            if old_cid and old_cid != cid:
+                db.sync_company_open_jobs(conn, old_cid)
+        else:
+            conn.execute(
+                """UPDATE jobs SET title=?, category=?, level=?, workplace=?, location=?, salary_min=?, salary_max=?, salary_display=?,
+                   skills=?, description=?, apply_url=?, apply_email=?, is_remote=?, status=? WHERE id=?""",
+                (title, category, level, workplace, location,
+                 salary_min, salary_max, salary_display, skills, description,
+                 apply_url, apply_email, 1 if "Remote" in workplace else 0, raw_status, job_id)
+            )
+            conn.commit()
+        status_label = {"active": "published", "draft": "saved as draft", "archived": "archived"}.get(raw_status, "updated")
+        return redirect(redir + ("&" if "?" in redir else "?") + "msg=" + urllib.parse.quote(f"Job '{title}' {status_label}!"))
+
     # ---------- admin dashboard & data seeder ----------
     # SECURITY: All /admin routes require a logged-in admin user (admin role only)
     if path.startswith("/admin"):
@@ -783,10 +926,13 @@ def route(conn, method, path, query, payload, user, token, host, client_ip="", c
         thumb = _safe_media_url(payload.get("thumb", ""), "")
         excerpt = _clip(payload.get("excerpt", ""), 1000)
         body = _clip(payload.get("body", ""), 200000)
+        status = (payload.get("status") or "published").strip().lower()
+        if status not in ("published", "draft", "archived"):
+            status = "published"
         if art_id:
             conn.execute(
-                """UPDATE articles SET title=?, category=?, author=?, tag=?, read_time=?, guest=?, duration=?, thumb=?, excerpt=?, body=? WHERE id=?""",
-                (title, category, author, tag, read_time, guest, duration, thumb, excerpt, body, art_id)
+                """UPDATE articles SET title=?, category=?, author=?, tag=?, read_time=?, guest=?, duration=?, thumb=?, excerpt=?, body=?, status=? WHERE id=?""",
+                (title, category, author, tag, read_time, guest, duration, thumb, excerpt, body, status, art_id)
             )
             conn.commit()
             return redirect(f"/admin?tab={tab}&msg=" + urllib.parse.quote(f"Article '{title}' updated successfully!"))
@@ -856,6 +1002,13 @@ def route(conn, method, path, query, payload, user, token, host, client_ip="", c
         skills = _clip(payload.get("skills", ""), 500)
         description = _clip(payload.get("description", ""), 20000)
         level = _clip(payload.get("level", "Mid-Senior"), 60) or "Mid-Senior"
+        apply_url = _safe_http_url(payload.get("apply_url", ""))
+        apply_email = _clip(payload.get("apply_email", ""), 160)
+        raw_status = (payload.get("status") or "active").strip().lower()
+        if raw_status == "published":
+            raw_status = "active"
+        if raw_status not in ("active", "draft", "archived"):
+            raw_status = "active"
         
         old_row = conn.execute("SELECT company_id FROM jobs WHERE id=?", (job_id,)).fetchone()
         comp = conn.execute("SELECT id, name, initials, color FROM companies WHERE slug=?", (comp_slug,)).fetchone()
@@ -864,10 +1017,10 @@ def route(conn, method, path, query, payload, user, token, host, client_ip="", c
             conn.execute(
                 """UPDATE jobs SET title=?, company_id=?, company_slug=?, company_name=?, company_initials=?, company_color=?,
                    category=?, level=?, workplace=?, location=?, salary_min=?, salary_max=?, salary_display=?, skills=?, description=?,
-                   is_remote=?, accent=? WHERE id=?""",
+                   apply_url=?, apply_email=?, is_remote=?, accent=?, status=? WHERE id=?""",
                 (title, cid, comp_slug, cname, cinit, ccolor, category, level, workplace, location,
                  salary_min, salary_max, salary_display, skills, description,
-                 1 if "Remote" in workplace else 0, ccolor, job_id)
+                 apply_url, apply_email, 1 if "Remote" in workplace else 0, ccolor, raw_status, job_id)
             )
             conn.commit()
             db.sync_company_open_jobs(conn, cid)
@@ -877,10 +1030,10 @@ def route(conn, method, path, query, payload, user, token, host, client_ip="", c
         elif job_id:
             conn.execute(
                 """UPDATE jobs SET title=?, category=?, level=?, workplace=?, location=?, salary_min=?, salary_max=?, salary_display=?, skills=?, description=?,
-                   is_remote=? WHERE id=?""",
+                   apply_url=?, apply_email=?, is_remote=?, status=? WHERE id=?""",
                 (title, category, level, workplace, location,
                  salary_min, salary_max, salary_display, skills, description,
-                 1 if "Remote" in workplace else 0, job_id)
+                 apply_url, apply_email, 1 if "Remote" in workplace else 0, raw_status, job_id)
             )
             conn.commit()
             return redirect(f"/admin?tab={tab}&msg=" + urllib.parse.quote(f"Job '{title}' updated successfully!"))
@@ -934,12 +1087,24 @@ def route(conn, method, path, query, payload, user, token, host, client_ip="", c
         color = raw_color if re.match(r"^#[0-9A-Fa-f]{3,8}$", raw_color) else "#034f9a"
         website = _safe_http_url(payload.get("website", ""))
         description = _clip(payload.get("description", ""), 10000)
+        logo_url = _safe_media_url(payload.get("logo_url", ""), "")
+        banner_url = _safe_media_url(payload.get("banner_url", ""), "")
+        benefits = _clip(payload.get("benefits", ""), 2000)
+        offices = _clip(payload.get("offices", ""), 2000)
+        social_links = _clip(payload.get("social_links", ""), 2000)
+        status = (payload.get("status") or "published").strip().lower()
+        if status not in ("published", "draft", "archived"):
+            status = "published"
         initials = "".join(w[0] for w in name.split()[:2]).upper() or "CO"
         
         if comp_id and name:
             conn.execute(
-                """UPDATE companies SET name=?, initials=?, tagline=?, industries=?, location=?, employees=?, color=?, website=?, description=? WHERE id=?""",
-                (name, initials, tagline, industries, location, employees, color, website, description, comp_id)
+                """UPDATE companies SET name=?, initials=?, tagline=?, industries=?, location=?, employees=?, color=?, website=?, description=?,
+                   logo_url=COALESCE(NULLIF(?, ''), logo_url), banner_url=COALESCE(NULLIF(?, ''), banner_url),
+                   benefits=COALESCE(NULLIF(?, ''), benefits), offices=COALESCE(NULLIF(?, ''), offices),
+                   social_links=COALESCE(NULLIF(?, ''), social_links), status=? WHERE id=?""",
+                (name, initials, tagline, industries, location, employees, color, website, description,
+                 logo_url, banner_url, benefits, offices, social_links, status, comp_id)
             )
             conn.execute(
                 """UPDATE jobs SET company_name=?, company_initials=?, company_color=?, accent=? WHERE company_id=?""",

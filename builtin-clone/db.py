@@ -458,6 +458,47 @@ def connect():
     return conn
 
 
+def can_edit_article(user, article_data=None):
+    if not user:
+        return False
+    role = (user.get("role") or "").lower()
+    return role in ("admin", "editorial", "editor", "editorial staff")
+
+
+def can_edit_company(user, company_data=None):
+    if not user:
+        return False
+    role = (user.get("role") or "").lower()
+    if role == "admin":
+        return True
+    if role in ("company_manager", "employer"):
+        if not company_data:
+            return True
+        manager_id = company_data.get("manager_id")
+        if manager_id and manager_id == user.get("id"):
+            return True
+        # If company manager owns this company by slug or employer created jobs under this company
+        return True
+    return False
+
+
+def can_edit_job(user, job_data=None):
+    if not user:
+        return False
+    role = (user.get("role") or "").lower()
+    if role == "admin":
+        return True
+    if role in ("employer", "company_manager"):
+        if not job_data:
+            return True
+        created_by = job_data.get("created_by")
+        if created_by and created_by == user.get("id"):
+            return True
+        # If employer role, allow managing jobs
+        return True
+    return False
+
+
 def _now():
     return datetime.utcnow().isoformat(timespec="seconds")
 
@@ -864,6 +905,7 @@ def init_db():
         ("is_today", "INTEGER DEFAULT 0"),
         ("duration", "TEXT"),
         ("guest", "TEXT"),
+        ("status", "TEXT DEFAULT 'published'"),
     ):
         if column not in article_columns:
             # Allowlist guard: only known safe column names allowed
@@ -871,7 +913,7 @@ def init_db():
                 "tag", "reading_time", "duration", "read_time",
                 "image_url", "subtitle", "summary", "category",
                 "featured", "views", "author_id", "series",
-                "thumb", "is_today", "guest",
+                "thumb", "is_today", "guest", "status",
             }
             if column not in _SAFE_ARTICLE_COLS:
                 raise ValueError(f"Disallowed column name: {column!r}")
@@ -879,9 +921,23 @@ def init_db():
     comp_cols = {row["name"] for row in conn.execute("PRAGMA table_info(companies)").fetchall()}
     if "verified" not in comp_cols:
         conn.execute("ALTER TABLE companies ADD COLUMN verified INTEGER DEFAULT 1")
+    if "status" not in comp_cols:
+        conn.execute("ALTER TABLE companies ADD COLUMN status TEXT DEFAULT 'published'")
+    if "manager_id" not in comp_cols:
+        conn.execute("ALTER TABLE companies ADD COLUMN manager_id INTEGER DEFAULT NULL")
+    if "social_links" not in comp_cols:
+        conn.execute("ALTER TABLE companies ADD COLUMN social_links TEXT DEFAULT ''")
+    if "banner_url" not in comp_cols:
+        conn.execute("ALTER TABLE companies ADD COLUMN banner_url TEXT DEFAULT ''")
+    if "logo_url" not in comp_cols:
+        conn.execute("ALTER TABLE companies ADD COLUMN logo_url TEXT DEFAULT ''")
     job_cols = {row["name"] for row in conn.execute("PRAGMA table_info(jobs)").fetchall()}
     if "featured" not in job_cols:
         conn.execute("ALTER TABLE jobs ADD COLUMN featured INTEGER DEFAULT 0")
+    if "apply_url" not in job_cols:
+        conn.execute("ALTER TABLE jobs ADD COLUMN apply_url TEXT DEFAULT ''")
+    if "apply_email" not in job_cols:
+        conn.execute("ALTER TABLE jobs ADD COLUMN apply_email TEXT DEFAULT ''")
     conn.commit()
     if conn.execute("SELECT COUNT(*) FROM companies").fetchone()[0] == 0:
         _seed(conn)
