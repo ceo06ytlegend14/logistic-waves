@@ -554,6 +554,7 @@ def render_edit_modals(all_companies):
         "    </div>\n"
         "    <nav class='cms-side-nav'>\n"
         "      <button type='button' class='cms-side-nav-btn active' onclick=\"switchCmsTab(this,'admin-job-tab-basic')\"><i class='fa-solid fa-briefcase'></i> Basic Info</button>\n"
+        "      <button type='button' class='cms-side-nav-btn' onclick=\"switchCmsTab(this,'admin-job-tab-media')\"><i class='fa-solid fa-images'></i> Media &amp; Gallery</button>\n"
         "      <button type='button' class='cms-side-nav-btn' onclick=\"switchCmsTab(this,'admin-job-tab-req')\"><i class='fa-solid fa-list-check'></i> Requirements</button>\n"
         "      <button type='button' class='cms-side-nav-btn' onclick=\"switchCmsTab(this,'admin-job-tab-apply')\"><i class='fa-solid fa-paper-plane'></i> Application</button>\n"
         "      <button type='button' class='cms-side-nav-btn' onclick=\"switchCmsTab(this,'admin-job-tab-settings')\"><i class='fa-solid fa-gear'></i> Settings</button>\n"
@@ -575,6 +576,45 @@ def render_edit_modals(all_companies):
         "      </div>\n"
         "      <div class='cms-form-group'><label class='cms-form-label'>Skills</label><div class='cms-chips-wrap' id='edit-job-skills-wrap'><button type='button' class='cms-chip-add-btn' onclick=\"addCmsChip('edit-job-skills-wrap','edit-job-skills','skill')\">+ Add</button></div></div>\n"
         "      <div class='cms-form-group'><label class='cms-form-label'>Job Description</label><textarea class='cms-form-control' name='description' id='edit-job-description' rows='5'></textarea></div>\n"
+        "    </div>\n"
+        "    <div class='cms-tab-pane' id='admin-job-tab-media'>\n"
+        "      <div class='cms-media-cover-box'>\n"
+        "        <div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;'>\n"
+        "          <label class='cms-form-label' style='margin:0;font-size:13px;'><i class='fa-solid fa-image' style='color:#2563eb;'></i> Featured Job Cover / Banner</label>\n"
+        "          <span style='font-size:11px;color:#64748b;'>Hero Header &amp; Social Card</span>\n"
+        "        </div>\n"
+        "        <div class='cms-cover-preview-wrap'>\n"
+        "          <img id='edit-job-image-preview' src='/static/images/hero_transport_clean.jpg' alt='Job Cover Preview' onerror=\"this.onerror=null;this.src='/static/images/hero_transport_clean.jpg'\">\n"
+        "        </div>\n"
+        "        <div style='display:flex;gap:8px;align-items:center;'>\n"
+        "          <label class='cms-btn-sm-outline' style='cursor:pointer;'><i class='fa-solid fa-cloud-arrow-up'></i> Upload Device Image<input type='file' accept='image/*' style='display:none;' onchange=\"handleCmsImageUpload(this, 'edit-job-image-url', 'edit-job-image-preview')\"></label>\n"
+        "          <input class='cms-form-control' name='image_url' id='edit-job-image-url' placeholder='Cover image URL (e.g. /static/images/... or https://...)' style='font-size:12px;' oninput=\"updateCmsImagePreview(this.value, 'edit-job-image-preview')\">\n"
+        "        </div>\n"
+        "        <div class='cms-preset-row'>\n"
+        "          <span style='font-size:11px;font-weight:700;color:#64748b;margin-right:2px;'>Quick Presets:</span>\n"
+        "          <button type='button' class='cms-preset-pill' onclick=\"setJobCoverPreset('edit-job', '/static/images/port_logistics_1.jpg')\"><i class='fa-solid fa-anchor'></i> Port Terminal</button>\n"
+        "          <button type='button' class='cms-preset-pill' onclick=\"setJobCoverPreset('edit-job', '/static/images/cargo_ship_hero.jpg')\"><i class='fa-solid fa-ship'></i> Container Vessel</button>\n"
+        "          <button type='button' class='cms-preset-pill' onclick=\"setJobCoverPreset('edit-job', '/static/images/hero_transport_clean.jpg')\"><i class='fa-solid fa-truck-moving'></i> Multimodal Cargo</button>\n"
+        "          <button type='button' class='cms-preset-pill' onclick=\"setJobCoverPreset('edit-job', '/static/images/shipping_modern_tower.jpg')\"><i class='fa-solid fa-building'></i> Logistics HQ</button>\n"
+        "          <button type='button' class='cms-preset-pill' onclick=\"setJobCoverPreset('edit-job', '/static/images/fw_today_3.jpg')\"><i class='fa-solid fa-plane-departure'></i> Air Cargo</button>\n"
+        "        </div>\n"
+        "      </div>\n"
+        "      <div class='cms-form-group' style='margin-bottom:6px;'>\n"
+        "        <div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px;'>\n"
+        "          <div>\n"
+        "            <label class='cms-form-label' style='margin:0;font-size:13px;'><i class='fa-solid fa-images' style='color:#2563eb;'></i> Workplace &amp; Facility Photo Gallery</label>\n"
+        "            <div style='font-size:11.5px;color:#64748b;margin-top:2px;'>Photos displayed in the Job Listing Dossier (terminals, fleet, control room, culture)</div>\n"
+        "          </div>\n"
+        "          <div style='display:flex;gap:6px;flex-wrap:wrap;'>\n"
+        "            <button type='button' class='cms-btn-sm-outline' style='color:#2563eb;background:#eff6ff;border-color:#bfdbfe;' onclick=\"seedJobGalleryPresets('edit-job')\" title='Populate standard logistics facility photos'><i class='fa-solid fa-wand-magic-sparkles'></i> Load Logistics Gallery</button>\n"
+        "            <label class='cms-btn-sm-outline' style='cursor:pointer;' title='Upload photo from computer'><i class='fa-solid fa-cloud-arrow-up'></i> Upload Photo<input type='file' accept='image/*' style='display:none;' onchange=\"uploadJobGalleryPhoto(this, 'edit-job')\"></label>\n"
+        "            <button type='button' class='cms-btn-sm-outline' onclick=\"addJobGalleryPhotoPrompt('edit-job')\" title='Add photo URL'><i class='fa-solid fa-link'></i> Add URL</button>\n"
+        "            <button type='button' class='cms-btn-sm-outline' style='color:#ef4444;' onclick=\"clearJobGallery('edit-job')\" title='Clear all photos'><i class='fa-regular fa-trash-can'></i></button>\n"
+        "          </div>\n"
+        "        </div>\n"
+        "        <input type='hidden' name='gallery_images' id='edit-job-gallery-images'>\n"
+        "        <div class='job-gallery-grid-editor' id='edit-job-gallery-grid'></div>\n"
+        "      </div>\n"
         "    </div>\n"
         "    <div class='cms-tab-pane' id='admin-job-tab-req'>\n"
         "      <div class='cms-form-group'><label class='cms-form-label'>Employment Level</label><input class='cms-form-control' name='level' id='edit-job-level' placeholder='e.g. Mid-Senior'></div>\n"
@@ -929,6 +969,11 @@ def render_edit_modals(all_companies):
         "  document.getElementById('edit-job-apply-email').value = d.applyEmail || '';\n"
         "  document.getElementById('edit-job-status').value = d.status || 'active';\n"
         "  document.getElementById('edit-job-featured').checked = (d.featured === '1');\n"
+        "  document.getElementById('edit-job-image-url').value = d.imageUrl || '';\n"
+        "  var jobImgPrev = document.getElementById('edit-job-image-preview');\n"
+        "  if (jobImgPrev) jobImgPrev.src = d.imageUrl || '/static/images/hero_transport_clean.jpg';\n"
+        "  document.getElementById('edit-job-gallery-images').value = d.galleryImages || '';\n"
+        "  if (window.renderJobGalleryGrid) window.renderJobGalleryGrid('edit-job', d.galleryImages || '');\n"
         "  var logoUrl = d.companyLogo || '';\n"
         "  var logoPrev = document.getElementById('edit-job-logo-prev');\n"
         "  if (logoPrev) logoPrev.src = logoUrl || _makeInitialsSvg(d.companyInitials, d.companyColor);\n"
@@ -1170,15 +1215,47 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
                 (v_limit,)
             ).fetchall()]
 
+    # Canonical section definitions — mirrors /article-blogs live sections exactly
+    ARTICLE_SECTIONS = [
+        ("Top Stories",                  "top-stories",     "featured"),
+        ("Logistic Wave Today",          "logistic-wave-today", "today"),
+        ("Global Freight & Maritime Law","global-freight",  ("Logistics & Brokerage", "Legal Issues", "Maritime", "Maritime & Supply Chain", "Maritime & Tech", "Maritime Shipping", "Container Shipping", "Compliance & Regulation", "Trade & Tariffs")),
+        ("Fleet Safety & Workforce",     "fleet-safety",    ("Drivers & Workforce", "News", "Sponsored Insights", "Compliance & Safety", "Fleet Operations", "Careers")),
+        ("Market Restructuring & M&A",   "market-ma",       ("Layoffs & Bankruptcies", "Intermodal", "Freight Rates", "Rail", "Port Automation", "Clean Freight")),
+    ]
+
+    def _section_where_args(key):
+        """Return (extra_where_clause, args_list) for a canonical section key."""
+        for _lbl, _key, _cats in ARTICLE_SECTIONS:
+            if _key == key:
+                if _cats == "featured":
+                    return "COALESCE(featured, 0) = 1", []
+                elif _cats == "today":
+                    return ("(COALESCE(is_today, 0) = 1 OR tag IN ('Logistic Waves Today', 'Logistic Wave Today') "
+                            "OR category IN ('Logistic Waves Today', 'Logistic Wave Today'))"), []
+                else:
+                    ph = ",".join("?" for _ in _cats)
+                    return f"category IN ({ph})", list(_cats)
+        return None, []
+
     art_cat_counts = []
     web_stats = {"published": 0, "featured": 0, "today": 0}
     if tab == "articles":
-        art_cat_counts = [
-            (r[0], r[1]) for r in conn.execute(
-                "SELECT COALESCE(NULLIF(category, ''), 'General') AS cat, COUNT(*) AS cnt "
-                "FROM articles GROUP BY cat ORDER BY cnt DESC, cat ASC"
-            ).fetchall()
-        ]
+        # Build canonical section counts
+        art_cat_counts = []
+        for _lbl, _key, _cats in ARTICLE_SECTIONS:
+            if _cats == "featured":
+                cnt = conn.execute("SELECT COUNT(*) FROM articles WHERE COALESCE(featured,0)=1").fetchone()[0]
+            elif _cats == "today":
+                cnt = conn.execute(
+                    "SELECT COUNT(*) FROM articles WHERE COALESCE(is_today,0)=1 "
+                    "OR tag IN ('Logistic Waves Today','Logistic Wave Today') "
+                    "OR category IN ('Logistic Waves Today','Logistic Wave Today')"
+                ).fetchone()[0]
+            else:
+                ph = ",".join("?" for _ in _cats)
+                cnt = conn.execute(f"SELECT COUNT(*) FROM articles WHERE category IN ({ph})", list(_cats)).fetchone()[0]
+            art_cat_counts.append((_lbl, _key, cnt))
         _ws = conn.execute(
             "SELECT "
             "SUM(CASE WHEN COALESCE(status, 'published')='published' AND COALESCE(is_today,0)=0 THEN 1 ELSE 0 END), "
@@ -1188,14 +1265,46 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
         ).fetchone()
         if _ws:
             web_stats = {"published": _ws[0] or 0, "featured": _ws[1] or 0, "today": _ws[2] or 0}
+        db_art_categories = [
+            r[0] for r in conn.execute(
+                "SELECT DISTINCT COALESCE(NULLIF(category, ''), 'General') AS cat "
+                "FROM articles ORDER BY cat ASC"
+            ).fetchall()
+        ]
+        # Map section key or label -> (label, default_create_category)
+        _sec_label_map = {}
+        _sec_default_cat = {
+            "top-stories": "Maritime & Supply Chain",
+            "logistic-wave-today": "Logistic Wave Today",
+            "global-freight": "Maritime & Supply Chain",
+            "fleet-safety": "Drivers & Workforce",
+            "market-ma": "Layoffs & Bankruptcies",
+        }
+        for _lbl, _key, _cats in ARTICLE_SECTIONS:
+            _sec_label_map[_key] = _lbl
+            _sec_label_map[_lbl] = _lbl
+
+        def _resolve_sec_key(val):
+            for _lbl, _key, _cats in ARTICLE_SECTIONS:
+                if val == _key or val == _lbl:
+                    return _key
+            return None
+
         art_where = []
         art_args = []
         if like:
             art_where.append("(title LIKE ? ESCAPE '\\' OR category LIKE ? ESCAPE '\\' OR author LIKE ? ESCAPE '\\')")
             art_args.extend([like, like, like])
         if f_cat:
-            art_where.append("category = ?")
-            art_args.append(f_cat)
+            _skey = _resolve_sec_key(f_cat)
+            if _skey:
+                _sw, _sa = _section_where_args(_skey)
+                if _sw:
+                    art_where.append(_sw)
+                    art_args.extend(_sa)
+            else:
+                art_where.append("category = ?")
+                art_args.append(f_cat)
         if f_status:
             art_where.append("COALESCE(status, 'published') = ?")
             art_args.append(f_status)
@@ -1482,6 +1591,8 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
             "data-description='" + e(j.get('description') or '') + "' data-status='" + e(j.get('status') or 'active') + "' "
             "data-apply-url='" + e(j.get('apply_url') or '') + "' data-apply-email='" + e(j.get('apply_email') or '') + "' "
             "data-featured='" + str(j.get('featured') or 0) + "' "
+            "data-image-url='" + e(j.get('image_url') or '') + "' "
+            "data-gallery-images='" + e(j.get('gallery_images') or '') + "' "
             "onclick='openJobEditModal(this)'><i class='fa-solid fa-pen'></i></button>"
             "<form method='post' action='/admin/jobs/duplicate' style='display:inline;'>"
             f"{_csrf_field()}"
@@ -1583,7 +1694,7 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
                 "</div></td>"
             )
             cur_cat = a.get('category') or 'General'
-            cat_names = [cn for cn, _ in art_cat_counts]
+            cat_names = list(db_art_categories)
             if cur_cat not in cat_names:
                 cat_names.append(cur_cat)
             cat_opts_html = "".join(
@@ -1641,8 +1752,11 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
         articles_rows = "".join([article_row(a) for a in all_articles]) or _empty_row(9, "No articles found in this section.")
 
         # 2-Mode Switcher: Inventory Control vs Web Sections Manager
-        add_btn_label = f"Add to {e(f_cat)}" if f_cat else "Add New Article"
-        add_cat_js = e(f_cat or "Maritime & Supply Chain").replace("'", "\\'")
+        _active_sec_key = _resolve_sec_key(f_cat) if f_cat else None
+        _active_sec_label = _sec_label_map.get(f_cat, f_cat) if f_cat else ""
+        add_btn_label = f"Add to {e(_active_sec_label)}" if _active_sec_label else "Add New Article"
+        _default_cat_val = _sec_default_cat.get(_active_sec_key or "", f_cat or "Maritime & Supply Chain")
+        add_cat_js = e(_default_cat_val).replace("'", "\\'")
         mode_bar = (
             "<div class='art-mode-bar'>"
             "<div class='art-mode-tabs'>"
@@ -1653,13 +1767,14 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
             "</div>"
         )
 
-        # Horizontal Category Section Nav Bar (like reference image)
+        # Horizontal Category Section Nav Bar (matches live /article-blogs sections)
         cat_tabs_html = [
             f"<a href='{_art_url(cat_v='')}' class='cat-nav-tab{' active' if not f_cat else ''}'>Discover <span class='cat-nav-count'>{counts['articles']}</span></a>"
         ]
-        for cname, ccnt in art_cat_counts:
+        for cname, ckey, ccnt in art_cat_counts:
+            _is_tab_active = (_active_sec_key == ckey) or (f_cat == cname)
             cat_tabs_html.append(
-                f"<a href='{_art_url(cat_v=cname)}' class='cat-nav-tab{' active' if f_cat == cname else ''}'>{e(cname)} <span class='cat-nav-count'>{ccnt}</span></a>"
+                f"<a href='{_art_url(cat_v=ckey)}' class='cat-nav-tab{' active' if _is_tab_active else ''}'>{e(cname)} <span class='cat-nav-count'>{ccnt}</span></a>"
             )
         cat_nav_bar = "<nav class='cat-nav-bar' aria-label='Article Category Sections'>" + "".join(cat_tabs_html) + "</nav>"
 
@@ -1699,7 +1814,7 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
             "<a href='/admin?tab=articles' class='admin-filter-reset'><i class='fa-solid fa-rotate-left'></i> Reset</a>"
             "</form>"
         )
-        section_heading = f"{e(f_cat)} ({tab_total})" if f_cat else f"All Articles &amp; Reports ({tab_total if tab_total is not None else counts['articles']})"
+        section_heading = f"{e(_active_sec_label)} ({tab_total})" if _active_sec_label else f"All Articles &amp; Reports ({tab_total if tab_total is not None else counts['articles']})"
         active_content = (
             mode_bar +
             cat_nav_bar +
@@ -2393,9 +2508,9 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
         "<link href='https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap' rel='stylesheet'>\n"
         "<link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css' crossorigin='anonymous' referrerpolicy='no-referrer'>\n"
         "<link rel='stylesheet' href='/static/admin.css?v=20261128_v6'>\n"
-        "<link rel='stylesheet' href='/static/cms-editor.css?v=20261128_v2'>\n"
+        "<link rel='stylesheet' href='/static/cms-editor.css?v=20261128_v3'>\n"
         "<script src='https://cdnjs.cloudflare.com/ajax/libs/tinymce/6.8.3/tinymce.min.js' referrerpolicy='origin'></script>\n"
-        "<script src='/static/cms-editor.js?v=20261128_v2' defer></script>\n"
+        "<script src='/static/cms-editor.js?v=20261128_v3' defer></script>\n"
         "</head>\n<body class='admin-body'>\n"
         "<div class='admin-layout'>\n"
 
