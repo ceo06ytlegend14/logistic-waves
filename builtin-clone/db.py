@@ -993,6 +993,7 @@ def init_db():
                 )
                 conn.commit()
             seed_workspace_demo_data(conn)
+            seed_default_courses(conn)
             _sanitize_legacy_placeholders(conn)
             _ensure_today_episodes(conn)
             sync_company_open_jobs(conn)
@@ -1053,6 +1054,10 @@ def init_db():
         conn.execute("ALTER TABLE jobs ADD COLUMN apply_url TEXT DEFAULT ''")
     if "apply_email" not in job_cols:
         conn.execute("ALTER TABLE jobs ADD COLUMN apply_email TEXT DEFAULT ''")
+    if "image_url" not in job_cols:
+        conn.execute("ALTER TABLE jobs ADD COLUMN image_url TEXT DEFAULT ''")
+    if "gallery_images" not in job_cols:
+        conn.execute("ALTER TABLE jobs ADD COLUMN gallery_images TEXT DEFAULT ''")
     conn.commit()
     if conn.execute("SELECT COUNT(*) FROM companies").fetchone()[0] == 0:
         _seed(conn)
@@ -1072,6 +1077,7 @@ def init_db():
     conn.execute("DELETE FROM users WHERE lower(email)='theancoc69@gmail.com'")
     conn.commit()
     seed_workspace_demo_data(conn)
+    seed_default_courses(conn)
     _sanitize_legacy_placeholders(conn)
     _ensure_today_episodes(conn)
     sync_company_open_jobs(conn)
@@ -2258,6 +2264,79 @@ def save_site_settings(conn, updates):
             "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at",
             (key, str(val), now),
         )
+    conn.commit()
+    invalidate_cache()
+
+
+def seed_default_courses(conn):
+    """Seed the 2 canonical course categories (4 courses each) if courses table is empty."""
+    if conn.execute("SELECT 1 FROM demo_seed_state WHERE key='default-courses-v1'").fetchone():
+        return
+    if conn.execute("SELECT COUNT(*) FROM courses").fetchone()[0] > 0:
+        conn.execute("INSERT OR IGNORE INTO demo_seed_state (key,created_at) VALUES (?,?)", ("default-courses-v1", _now()))
+        conn.commit()
+        return
+    default_courses = [
+        # Category 1: Logistic Wave Today (4 courses)
+        ("fw-1", "Logistic Wave Today | November 3", "Logistic Wave Today", "Dooley • FreightWaves Host", "24m", "Nov 4, 2026",
+         "/static/images/fw_today_1.svg?v=2",
+         "Catch the full November 3rd freight market briefing: carrier bankruptcies, spot rate inflections, and intermodal capacity trends across major US lanes.",
+         [{"title": "1. Freight Market Opening & Macro Briefing", "duration": "08:15"},
+          {"title": "2. Spot Market Rates & Carrier Capacity Update", "duration": "09:20"},
+          {"title": "3. Intermodal Volume & Rail Turnaround", "duration": "06:25"}]),
+        ("fw-2", "Diesel Prices Collapse, Then Rebound: What's Driving Volatility?", "Logistic Wave Today", "FreightWaves Energy Desk", "18m", "Nov 4, 2026",
+         "/static/images/fw_today_2.svg?v=2",
+         "Analyze refinery crack spreads, OPEC+ supply adjustments, and fuel surcharge hedging strategies for trucking fleets navigating diesel volatility.",
+         [{"title": "1. Refinery Crack Spreads & Inventory Levels", "duration": "06:10"},
+          {"title": "2. Fuel Surcharge Matrix Optimization", "duration": "06:30"},
+          {"title": "3. Fleet Hedging & Alternative Fuel ROI", "duration": "05:20"}]),
+        ("fw-3", "Why Your Trucking Insurance Costs Are Rising & How to Fight Back", "Logistic Wave Today", "Peter Niro • Risk Specialist", "22m", "Nov 4, 2026",
+         "/static/images/fw_today_3.svg?v=2",
+         "Control your trucking insurance costs by focusing on risk reduction before losses occur. Peter Niro from Progressive Insurance shares underwriting metrics and safety tips.",
+         [{"title": "1. Nuclear Verdicts & Underwriting Pressure", "duration": "07:40"},
+          {"title": "2. Telematics & Dashcam Loss Prevention", "duration": "08:15"},
+          {"title": "3. Renewal Negotiation Playbook", "duration": "06:05"}]),
+        ("fw-4", "Logistics Alert: Capacity SHRINKS for 11 Straight Months", "Logistic Wave Today", "Julie Van De Kamp • VP Logistics", "19m", "Nov 4, 2026",
+         "/static/images/fw_today_4.svg?v=2",
+         "Examine the 11-month contraction in freight capacity, warehouse pricing dynamics, and contract negotiation strategies for Q1.",
+         [{"title": "1. Logistics Managers' Index (LMI) Breakdown", "duration": "05:50"},
+          {"title": "2. Warehousing Space Utilization & Costs", "duration": "07:30"},
+          {"title": "3. Contract Pricing Strategy for Q1", "duration": "05:40"}]),
+        # Category 2: AI & Autonomous Systems Masterclasses (4 courses)
+        ("ai-1", "Autonomous Multi-Agent AI Systems & LLMOps", "AI & Autonomous Systems Masterclasses", "Dr. Sarah Jenkins • Lead AI Systems Architect", "6h 45m", "Nov 4, 2026",
+         "/static/images/editorial_laptop_dashboard.jpg",
+         "Learn to architect, evaluate, and orchestrate autonomous multi-agent loops in production CI/CD pipelines. Covers LangGraph swarm dynamics, function calling, vector RAG retrieval, and enterprise guardrails.",
+         [{"title": "1. ReAct Loops & Autonomous Tool Calling Fundamentals", "duration": "14:20"},
+          {"title": "2. High-Dimension RAG Retrieval & Vector Chunking", "duration": "28:45"},
+          {"title": "3. LangGraph Swarm Consensus & State Machines", "duration": "34:10"},
+          {"title": "4. Automated PR Generation, Self-Healing Code & Tests", "duration": "42:30"}]),
+        ("ai-2", "Generative AI with PyTorch, CUDA & TensorRT", "AI & Autonomous Systems Masterclasses", "Dr. Sarah Jenkins • Principal AI Research Scientist", "11h 10m", "Nov 4, 2026",
+         "/static/images/course_2.jpg",
+         "From FlashAttention-3 kernels to multi-GPU pipeline parallelism: pretraining decoder transformers, LoRA/QLoRA parameter-efficient fine-tuning, and speculative decoding.",
+         [{"title": "1. FlashAttention GPU Memory Hierarchies & Kernel Fusion", "duration": "32:15"},
+          {"title": "2. Distributed Tensor Parallelism with Megatron-LM", "duration": "46:40"},
+          {"title": "3. LoRA, QLoRA & 4-bit Quantization Math", "duration": "36:20"}]),
+        ("ai-3", "Machine Learning for Autonomous Vehicles & Robotics", "AI & Autonomous Systems Masterclasses", "David Sterling • Robotics & Computer Vision Lead", "9h 30m", "Nov 4, 2026",
+         "/static/images/yt_thumb_3.jpg",
+         "Design real-time object detection models for LiDAR, RADAR, and multi-camera sensor fusion pipelines. Covers Kalman filtering, ROS 2 robotics middleware, and Edge TPUs.",
+         [{"title": "1. Sensor Fusion: Camera, Radar & 3D LiDAR Point Clouds", "duration": "26:30"},
+          {"title": "2. Real-Time 3D Bounding Box Regression with PointPillars", "duration": "38:15"},
+          {"title": "3. Extended Kalman Filters & SLAM State Estimation", "duration": "44:00"}]),
+        ("ai-4", "Clinical Genomics & Healthcare Data Intelligence", "AI & Autonomous Systems Masterclasses", "Elena Rostova • Director of Computational Biology", "7h 30m", "Nov 4, 2026",
+         "/static/images/course_1.jpg",
+         "Analyze whole-genome sequencing (WGS) variant calls, patient cohort stratification models, HIPAA-compliant bioinformatics pipelines, and multimodal medical image diagnosis.",
+         [{"title": "1. Next-Generation Sequencing Telemetry & Variant Calling", "duration": "22:15"},
+          {"title": "2. Clinical Data Standards: FHIR, HL7 & HIPAA Guardrails", "duration": "29:40"},
+          {"title": "3. Deep Learning on Histopathology & Medical Imaging", "duration": "36:10"}]),
+    ]
+    now = _now()
+    for slug, title, channel, instructor, duration, pub_date, thumb, desc, chapters in default_courses:
+        conn.execute(
+            """INSERT OR IGNORE INTO courses (slug, title, channel, instructor, duration, published_date, thumb, description, chapters_json, status, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?)""",
+            (slug, title, channel, instructor, duration, pub_date, thumb, desc, json.dumps(chapters), now),
+        )
+    conn.execute("INSERT OR IGNORE INTO demo_seed_state (key,created_at) VALUES (?,?)", ("default-courses-v1", now))
     conn.commit()
     invalidate_cache()
 

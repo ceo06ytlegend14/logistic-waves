@@ -566,7 +566,7 @@ def layout(title, body, user=None, active="", description="", page_class="", ext
   <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/styles.css?v=20261127_hero_slides">
   <link rel="stylesheet" href="/static/home-recreation.css?v=20261126_apple2">
-  <link rel="stylesheet" href="/static/cms-editor.css?v=20261128_cms">
+  <link rel="stylesheet" href="/static/cms-editor.css?v=20261128_v3">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   {extra_head}
 </head>
@@ -918,6 +918,7 @@ def render_cms_job_modal(job, all_companies):
               </div>
               <nav class="cms-side-nav">
                 <button type="button" class="cms-side-nav-btn active" onclick="switchCmsTab(this, 'cms-job-tab-basic')"><i class="fa-solid fa-briefcase"></i> Basic Info</button>
+                <button type="button" class="cms-side-nav-btn" onclick="switchCmsTab(this, 'cms-job-tab-media')"><i class="fa-solid fa-images"></i> Media &amp; Gallery</button>
                 <button type="button" class="cms-side-nav-btn" onclick="switchCmsTab(this, 'cms-job-tab-req')"><i class="fa-solid fa-list-check"></i> Requirements</button>
                 <button type="button" class="cms-side-nav-btn" onclick="switchCmsTab(this, 'cms-job-tab-apply')"><i class="fa-solid fa-paper-plane"></i> Application</button>
                 <button type="button" class="cms-side-nav-btn" onclick="switchCmsTab(this, 'cms-job-tab-settings')"><i class="fa-solid fa-gear"></i> Settings</button>
@@ -949,6 +950,51 @@ def render_cms_job_modal(job, all_companies):
                 <div class="cms-form-group">
                   <label class="cms-form-label">Job Description</label>
                   <textarea class="cms-form-control" name="description" rows="5">{e(job.get('description', ''))}</textarea>
+                </div>
+              </div>
+
+              <div class="cms-tab-pane" id="cms-job-tab-media">
+                <div class="cms-media-cover-box">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                    <label class="cms-form-label" style="margin:0;font-size:13px;justify-content:flex-start;gap:6px;"><i class="fa-solid fa-image" style="color:#2563eb;"></i> Featured Job Cover / Banner</label>
+                    <span style="font-size:11px;color:#64748b;">Hero Header &amp; Social Card</span>
+                  </div>
+                  <div class="cms-cover-preview-wrap">
+                    <img id="cms-job-image-prev" src="{e(job.get('image_url') or '/static/images/hero_transport_clean.jpg')}" alt="Job Cover Preview" onerror="this.onerror=null;this.src='/static/images/hero_transport_clean.jpg'">
+                  </div>
+                  <div style="display:flex;gap:8px;align-items:center;">
+                    <label class="cms-btn-sm-outline" style="cursor:pointer;"><i class="fa-solid fa-cloud-arrow-up"></i> Upload Device Image<input type="file" accept="image/*" style="display:none;" onchange="handleCmsImageUpload(this, 'cms-job-image-url', 'cms-job-image-prev')"></label>
+                    <input class="cms-form-control" name="image_url" id="cms-job-image-url" value="{e(job.get('image_url', ''))}" placeholder="Cover image URL..." style="font-size:12px;" oninput="updateCmsImagePreview(this.value, 'cms-job-image-prev')">
+                  </div>
+                  <div class="cms-preset-row">
+                    <span style="font-size:11px;font-weight:700;color:#64748b;margin-right:2px;">Quick Presets:</span>
+                    <button type="button" class="cms-preset-pill" onclick="setJobCoverPreset('cms-job', '/static/images/port_logistics_1.jpg')"><i class="fa-solid fa-anchor"></i> Port Terminal</button>
+                    <button type="button" class="cms-preset-pill" onclick="setJobCoverPreset('cms-job', '/static/images/cargo_ship_hero.jpg')"><i class="fa-solid fa-ship"></i> Container Vessel</button>
+                    <button type="button" class="cms-preset-pill" onclick="setJobCoverPreset('cms-job', '/static/images/hero_transport_clean.jpg')"><i class="fa-solid fa-truck-moving"></i> Multimodal Cargo</button>
+                    <button type="button" class="cms-preset-pill" onclick="setJobCoverPreset('cms-job', '/static/images/arch_glass_office.jpg')"><i class="fa-solid fa-building"></i> Logistics HQ</button>
+                    <button type="button" class="cms-preset-pill" onclick="setJobCoverPreset('cms-job', '/static/images/fw_today_3.jpg')"><i class="fa-solid fa-plane-departure"></i> Air Cargo</button>
+                  </div>
+                </div>
+                <div class="cms-form-group" style="margin-bottom:6px;">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px;">
+                    <div>
+                      <label class="cms-form-label" style="margin:0;font-size:13px;"><i class="fa-solid fa-images" style="color:#2563eb;"></i> Workplace &amp; Facility Photo Gallery</label>
+                      <div style="font-size:11.5px;color:#64748b;margin-top:2px;">Photos displayed in the Job Listing Dossier</div>
+                    </div>
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                      <button type="button" class="cms-btn-sm-outline" style="color:#2563eb;background:#eff6ff;border-color:#bfdbfe;" onclick="seedJobGalleryPresets('cms-job')" title="Populate standard logistics facility photos"><i class="fa-solid fa-wand-magic-sparkles"></i> Load Logistics Gallery</button>
+                      <label class="cms-btn-sm-outline" style="cursor:pointer;" title="Upload photo from computer"><i class="fa-solid fa-cloud-arrow-up"></i> Upload Photo<input type="file" accept="image/*" style="display:none;" onchange="uploadJobGalleryPhoto(this, 'cms-job')"></label>
+                      <button type="button" class="cms-btn-sm-outline" onclick="addJobGalleryPhotoPrompt('cms-job')" title="Add photo URL"><i class="fa-solid fa-link"></i> Add URL</button>
+                      <button type="button" class="cms-btn-sm-outline" style="color:#ef4444;" onclick="clearJobGallery('cms-job')" title="Clear all photos"><i class="fa-regular fa-trash-can"></i></button>
+                    </div>
+                  </div>
+                  <input type="hidden" name="gallery_images" id="cms-job-gallery-images" value="{e(job.get('gallery_images', ''))}">
+                  <div class="job-gallery-grid-editor" id="cms-job-gallery-grid"></div>
+                  <script>
+                    setTimeout(function() {{
+                      if (window.renderJobGalleryGrid) renderJobGalleryGrid('cms-job', '{e(job.get('gallery_images', ''))}');
+                    }}, 50);
+                  </script>
                 </div>
               </div>
 
@@ -2381,6 +2427,24 @@ def job_detail_page(conn, user, job, similar):
     responsibilities_html = "".join(f'<li>{e(r)}</li>' for r in responsibilities)
     skills_req_html = "".join(f'<li>{e(r)}</li>' for r in skills_required)
 
+    raw_gallery = [x.strip() for x in (job.get("gallery_images") or "").split(",") if x.strip()]
+    if not raw_gallery:
+        raw_gallery = [
+            "/static/images/port_logistics_1.jpg",
+            "/static/images/port_logistics_2.jpg",
+            "/static/images/hero_transport_clean.jpg",
+            "/static/images/fw_today_3.jpg",
+            "/static/images/arch_glass_office.jpg",
+            "/static/images/arch_office_team.jpg",
+        ]
+    gallery_photos_html = "".join([
+        f'<div class="gallery-photo-thumb" style="background-image: url(\'{e(img)}\'); cursor:pointer;" onclick="previewCmsItem(\'{e(img)}\')" title="View workplace photo"></div>'
+        for img in raw_gallery[:8]
+    ])
+
+    job_cover_url = (job.get("image_url") or "").strip()
+    cover_banner_html = f'<div class="flagship-job-cover-banner" style="background-image: url(\'{e(job_cover_url)}\');"></div>' if job_cover_url else ''
+
     save_btn_label = "Saved" if db_saved else "Save"
     save_btn_icon = "fa-solid fa-bookmark" if db_saved else "fa-regular fa-bookmark"
     apply_btn_label = "Application Submitted" if applied else "Easy Apply with CV"
@@ -2435,7 +2499,7 @@ def job_detail_page(conn, user, job, similar):
   
   <link rel="stylesheet" href="/static/styles.css?v=20261127_hero_slides">
   <link rel="stylesheet" href="/static/home-recreation.css?v=20261126_apple2">
-  <link rel="stylesheet" href="/static/cms-editor.css?v=20261128_cms">
+  <link rel="stylesheet" href="/static/cms-editor.css?v=20261128_v3">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link rel="stylesheet" href="/static/thesandbox-css/builtin-theme.css">
   <link rel="stylesheet" href="/static/job-detail-sandbox.css?v=20261126_apple2">
@@ -2463,7 +2527,7 @@ def job_detail_page(conn, user, job, similar):
   <section class="builtin-hero" aria-label="Job Overview and Action Hero">
     <div class="flagship-hero-container">
       <div class="flagship-job-card">
-        
+        {cover_banner_html}
         <!-- Top Row: Logo Box, Company Meta, New Badge & Bookmark -->
         <div class="flagship-top-row">
           <div class="flagship-brand-group">
@@ -2777,12 +2841,7 @@ def job_detail_page(conn, user, job, similar):
             <!-- Gallery -->
             <div class="desc-subheading">Gallery</div>
             <div class="company-gallery-grid">
-              <div class="gallery-photo-thumb" style="background-image: url('https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=350&q=80');"></div>
-              <div class="gallery-photo-thumb" style="background-image: url('https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=350&q=80');"></div>
-              <div class="gallery-photo-thumb" style="background-image: url('https://images.unsplash.com/photo-1556761175-5973dc0f32e7?auto=format&fit=crop&w=350&q=80');"></div>
-              <div class="gallery-photo-thumb" style="background-image: url('https://images.unsplash.com/photo-1531482615713-2afd69097998?auto=format&fit=crop&w=350&q=80');"></div>
-              <div class="gallery-photo-thumb" style="background-image: url('https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=350&q=80');"></div>
-              <div class="gallery-photo-thumb" style="background-image: url('https://images.unsplash.com/photo-1600880292203-757bb62b4baf?auto=format&fit=crop&w=350&q=80');"></div>
+              {gallery_photos_html}
             </div>
 
             <!-- Offices -->
@@ -3076,7 +3135,7 @@ def job_detail_page(conn, user, job, similar):
   {render_cms_job_modal({**job, "company_logo_url": company.get("logo_url") or ""}, [dict(r) for r in conn.execute("SELECT id, name, slug FROM companies ORDER BY name ASC").fetchall()]) if db.can_edit_job(user, job) else ''}
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="/static/app.js?v=20261126_perf" defer></script>
-  <script src="/static/cms-editor.js?v=20261128_v2" defer></script>
+  <script src="/static/cms-editor.js?v=20261128_v3" defer></script>
 </body>
 </html>'''
     return html_content
@@ -4015,40 +4074,6 @@ COURSE_LINES = [
                     {"title": "2. Warehousing Space Utilization & Costs", "duration": "07:30"},
                     {"title": "3. Contract Pricing Strategy for Q1", "duration": "05:40"}
                 ]
-            },
-            {
-                "id": "fw-5",
-                "title": "Truckload Rates Explode: How Shippers Adapt to Rising Costs",
-                "date": "Nov 4, 2026",
-                "duration": "26m",
-                "thumb": "/static/images/fw_today_5.svg?v=2",
-                "desc": "The freight market is experiencing an inflationary leg in its current cycle, pushing truckload rates up over 4% across major lanes. Chris Pickett details defensive routing strategies.",
-                "link_text": "Read more...",
-                "channel": "Logistic Wave Today",
-                "instructor": "Chris Pickett • Chief Strategy Officer",
-                "avatar": "/static/images/expert_marcus_full.png",
-                "chapters": [
-                    {"title": "1. Rate Benchmarking Across Golden Triangle Lanes", "duration": "08:10"},
-                    {"title": "2. Dedicated Fleet Conversion ROI", "duration": "09:30"},
-                    {"title": "3. Mini-Bids & Spot Market Hedging", "duration": "08:20"}
-                ]
-            },
-            {
-                "id": "fw-6",
-                "title": "Global Ocean Freight & Port Operations Engineering",
-                "date": "Nov 4, 2026",
-                "duration": "4h 50m",
-                "thumb": "/static/images/yt_thumb_1.jpg",
-                "desc": "Master container alliance freight routing, deep-draft terminal berthing, customs EDI clearance with VNACCS, Incoterms 2020 legal obligations, and demurrage dispute arbitration.",
-                "link_text": "Read more...",
-                "channel": "Viconship Supply Chain Guild",
-                "instructor": "David Sterling • VP Terminal Operations",
-                "avatar": "/static/images/expert_david.png",
-                "chapters": [
-                    {"title": "1. Ocean Freight Alliances & Vessel Berthing Windows", "duration": "18:20"},
-                    {"title": "2. Container Yard Optimization with Navis N4 Systems", "duration": "27:45"},
-                    {"title": "3. Customs Clearance EDI, Bonded Warehousing & Demurrage", "duration": "31:10"}
-                ]
             }
         ]
     },
@@ -4123,205 +4148,6 @@ COURSE_LINES = [
                     {"title": "1. Next-Generation Sequencing Telemetry & Variant Calling", "duration": "22:15"},
                     {"title": "2. Clinical Data Standards: FHIR, HL7 & HIPAA Guardrails", "duration": "29:40"},
                     {"title": "3. Deep Learning on Histopathology & Medical Imaging", "duration": "36:10"}
-                ]
-            },
-            {
-                "id": "ai-5",
-                "title": "High-Performance LLM Serving & Model Inference",
-                "date": "Nov 4, 2026",
-                "duration": "5h 15m",
-                "thumb": "/static/images/topic_real_2.jpg",
-                "desc": "Deploy ultra-low latency vLLM and TensorRT-LLM inference engines on Kubernetes with speculative decoding, continuous batching, and KV-cache optimization.",
-                "link_text": "Read more...",
-                "channel": "Logistic Waves Academy",
-                "instructor": "Alex Mercer • Lead MLOps Engineer",
-                "avatar": "/static/images/expert_sarah.png",
-                "chapters": [
-                    {"title": "1. Continuous Batching & PagedAttention Internals", "duration": "24:30"},
-                    {"title": "2. Speculative Decoding with Draft Models", "duration": "28:15"},
-                    {"title": "3. Multi-GPU vLLM Deployments on Kubernetes", "duration": "31:00"}
-                ]
-            }
-        ]
-    },
-    {
-        "id": "line-cloud",
-        "title": "Cloud Architecture & DevOps Series",
-        "courses": [
-            {
-                "id": "cloud-1",
-                "title": "Kubernetes, Terraform & Cloud Native DevOps",
-                "date": "Nov 4, 2026",
-                "duration": "10h 15m",
-                "thumb": "/static/images/live_player.jpg",
-                "desc": "Production infrastructure automation from scratch: multi-region Kubernetes clusters, GitOps continuous delivery with ArgoCD, eBPF telemetry, and zero-downtime canary rollouts.",
-                "link_text": "Read more...",
-                "channel": "Datadog Cloud Academy",
-                "instructor": "Marcus Vance • Director of Cloud Infrastructure",
-                "avatar": "/static/images/expert_marcus.png",
-                "chapters": [
-                    {"title": "1. Declarative Infrastructure with Terraform & OpenTofu", "duration": "22:10"},
-                    {"title": "2. Kubernetes Cluster Internals & CNI Networking Deep Dive", "duration": "35:40"},
-                    {"title": "3. GitOps Deployment Pipelines with ArgoCD & Helm Charts", "duration": "29:15"}
-                ]
-            },
-            {
-                "id": "cloud-2",
-                "title": "Distributed Systems & High-Concurrency Rust",
-                "date": "Nov 4, 2026",
-                "duration": "7h 50m",
-                "thumb": "/static/images/yt_thumb_4.jpg",
-                "desc": "Master memory safety without garbage collection: Tokio asynchronous runtime, Raft consensus consensus engines, distributed key-value stores, and SIMD optimizations.",
-                "link_text": "Read more...",
-                "channel": "ByteDance Systems Labs",
-                "instructor": "David Sterling • Staff Systems Engineer",
-                "avatar": "/static/images/expert_david_full.png",
-                "chapters": [
-                    {"title": "1. Ownership, Borrow Checker & Unsafe Rust Demystified", "duration": "20:45"},
-                    {"title": "2. Asynchronous Event Loops with Tokio & Futures", "duration": "31:10"},
-                    {"title": "3. Raft Leader Election, Log Replication & Heartbeats", "duration": "45:30"}
-                ]
-            },
-            {
-                "id": "cloud-3",
-                "title": "Enterprise Cybersecurity, Zero Trust & DevSecOps",
-                "date": "Nov 4, 2026",
-                "duration": "5h 40m",
-                "thumb": "/static/images/course_3.jpg",
-                "desc": "Implement zero-trust security postures: mutual TLS (mTLS), SPIFFE/SPIRE workload identities, runtime container defense with Falco, and OWASP Top 10 API mitigations.",
-                "link_text": "Read more...",
-                "channel": "Axon Defense Cyber Lab",
-                "instructor": "Marcus Vance • Chief Information Security Architect",
-                "avatar": "/static/images/expert_marcus_full.png",
-                "chapters": [
-                    {"title": "1. BeyondCorp Architecture: Zero Trust Workload Principles", "duration": "16:20"},
-                    {"title": "2. Mutual TLS, Certificate Authority PKI & SPIFFE Identities", "duration": "28:30"},
-                    {"title": "3. Runtime Kernel Tracing with Falco & eBPF Security Probes", "duration": "34:15"}
-                ]
-            },
-            {
-                "id": "cloud-4",
-                "title": "Modern Full-Stack Architecture with React 19 & Next.js",
-                "date": "Nov 4, 2026",
-                "duration": "8h 45m",
-                "thumb": "/static/images/lead_story.jpg",
-                "desc": "Deep dive into production web architecture: React Server Components, server actions, streaming SSR, PostgreSQL database indexing, Redis session management, and edge deployment.",
-                "link_text": "Read more...",
-                "channel": "Logistic Waves Academy",
-                "instructor": "Dr. Sarah Jenkins • VP Engineering & Web Architect",
-                "avatar": "/static/images/expert_sarah.png",
-                "chapters": [
-                    {"title": "1. React 19 RSC Mental Model & Streaming SSR Architecture", "duration": "24:10"},
-                    {"title": "2. Server Actions, Optimistic UI & Mutations Without Client JS", "duration": "31:40"},
-                    {"title": "3. High-Performance PostgreSQL Indexing & Connection Pooling", "duration": "39:15"}
-                ]
-            },
-            {
-                "id": "cloud-5",
-                "title": "High-Performance Document Databases & NoSQL Internals",
-                "date": "Nov 4, 2026",
-                "duration": "5h 25m",
-                "thumb": "/static/images/contest_banner.jpg",
-                "desc": "Master enterprise document modeling, distributed replica set quorum, shard key selection strategies, aggregation pipeline optimizations, and native vector search.",
-                "link_text": "Read more...",
-                "channel": "MongoDB Developer Guild",
-                "instructor": "Marcus Vance • Staff Database Systems Architect",
-                "avatar": "/static/images/expert_marcus.png",
-                "chapters": [
-                    {"title": "1. Document Schema Antipatterns & Polymorphic Modeling", "duration": "18:30"},
-                    {"title": "2. Sharding Topologies, Chunks & Distributed Balancing", "duration": "31:45"},
-                    {"title": "3. Multi-Stage Aggregation Pipeline Performance Tuning", "duration": "25:20"}
-                ]
-            }
-        ]
-    },
-    {
-        "id": "line-fintech",
-        "title": "Fintech, Payment Rails & Stream Processing",
-        "courses": [
-            {
-                "id": "fin-1",
-                "title": "Fintech Payment Rails & Real-Time Processing",
-                "date": "Nov 4, 2026",
-                "duration": "8h 20m",
-                "thumb": "/static/images/yt_thumb_2.jpg",
-                "desc": "Architect high-concurrency double-entry transaction ledgers, idempotent webhook consumers, ISO 20022 message parsers, and fault-tolerant financial settlement rails under strict compliance.",
-                "link_text": "Read more...",
-                "channel": "Stripe Developer Platform",
-                "instructor": "Elena Rostova • Principal Fintech Architect",
-                "avatar": "/static/images/expert_elina.png",
-                "chapters": [
-                    {"title": "1. Double-Entry Accounting Ledgers & Exact-Once Semantics", "duration": "18:15"},
-                    {"title": "2. Card Networks, Interchange Mechanics & Real-Time ACH", "duration": "24:30"},
-                    {"title": "3. PCI-DSS Level 1 Cryptography, Vaults & Tokenization", "duration": "32:00"}
-                ]
-            },
-            {
-                "id": "fin-2",
-                "title": "Real-Time Stream Processing with Apache Flink & Kafka",
-                "date": "Nov 4, 2026",
-                "duration": "6h 15m",
-                "thumb": "/static/images/yt_thumb_5.jpg",
-                "desc": "Construct low-latency streaming analytics platforms: event-time processing, sliding session windows, checkpointing recovery algorithms, and real-time fraud scoring.",
-                "link_text": "Read more...",
-                "channel": "Grab Platform Guild",
-                "instructor": "Elena Rostova • Staff Data Infrastructure Engineer",
-                "avatar": "/static/images/expert_elina_full.png",
-                "chapters": [
-                    {"title": "1. Event Time, Processing Time & Watermark Propagation", "duration": "19:40"},
-                    {"title": "2. Stateful Stream Processing & RocksDB Checkpointing", "duration": "33:15"},
-                    {"title": "3. Joining High-Velocity Streams & Dynamic CEP Patterns", "duration": "28:50"}
-                ]
-            },
-            {
-                "id": "fin-3",
-                "title": "Double-Entry Accounting Ledgers & Idempotent Systems",
-                "date": "Nov 4, 2026",
-                "duration": "4h 40m",
-                "thumb": "/static/images/topic_real_1.jpg",
-                "desc": "Design resilient financial transaction ledgers with strict ACID guarantees, multi-region replication, and automated reconciliation against banking network clearings.",
-                "link_text": "Read more...",
-                "channel": "Stripe Engineering Guild",
-                "instructor": "Liam Chen • Senior Financial Systems Engineer",
-                "avatar": "/static/images/expert_sarah.png",
-                "chapters": [
-                    {"title": "1. Immutable Ledger Entries & Debit-Credit Balances", "duration": "16:40"},
-                    {"title": "2. Distributed Locking & Consensus on Hot Accounts", "duration": "22:15"},
-                    {"title": "3. Automated Reconciliation Pipelines with Apache Spark", "duration": "26:30"}
-                ]
-            },
-            {
-                "id": "fin-4",
-                "title": "PCI-DSS Compliance, Key Vaults & HSM Cryptography",
-                "date": "Nov 4, 2026",
-                "duration": "5h 10m",
-                "thumb": "/static/images/topic_real_3.jpg",
-                "desc": "Master hardware security module (HSM) integration, end-to-end tokenization vaults, and payment compliance architectures for multi-currency digital checkout systems.",
-                "link_text": "Read more...",
-                "channel": "Modern Banking Guild",
-                "instructor": "Elena Rostova • Principal Architect",
-                "avatar": "/static/images/expert_elina.png",
-                "chapters": [
-                    {"title": "1. HSM Key Custody, Pin Blocks & AES-GCM Encryption", "duration": "18:20"},
-                    {"title": "2. Tokenization Vault Isolation & Ephemeral Card Pan", "duration": "24:10"},
-                    {"title": "3. Zero-Knowledge Auditing for Global Card Brands", "duration": "20:30"}
-                ]
-            },
-            {
-                "id": "fin-5",
-                "title": "The Logistics of Amazon Deliveries & Real-Time Tracking",
-                "date": "Nov 4, 2026",
-                "duration": "3h 50m",
-                "thumb": "/static/images/course_4.jpg",
-                "desc": "Inspect real-time package tracking architectures, automated fulfillment center robotics, and last-mile route-optimization algorithms at hyperscale.",
-                "link_text": "Read more...",
-                "channel": "Supply Chain Engineering Guild",
-                "instructor": "David Sterling • Logistics Lead",
-                "avatar": "/static/images/expert_david.png",
-                "chapters": [
-                    {"title": "1. Fulfillment Center Robotics & Sortation Matrix", "duration": "15:20"},
-                    {"title": "2. Last-Mile Dispatching & Traveling Salesperson Routing", "duration": "21:40"},
-                    {"title": "3. Real-Time Telematics & Delivery ETA Prediction", "duration": "18:00"}
                 ]
             }
         ]
