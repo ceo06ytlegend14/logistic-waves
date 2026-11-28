@@ -1573,6 +1573,19 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
                 "<div style='flex:1;min-width:0;'>" + _excel_input("articles", a['id'], "author", author_name, "Author", extra_style="font-weight:500;color:#334155;") + "</div>"
                 "</div></td>"
             )
+            cur_cat = a.get('category') or 'General'
+            cat_names = [cn for cn, _ in art_cat_counts]
+            if cur_cat not in cat_names:
+                cat_names.append(cur_cat)
+            cat_opts_html = "".join(
+                f"<option value='{e(cn)}'{' selected' if cn == cur_cat else ''}>{e(cn)}</option>"
+                for cn in cat_names
+            )
+            cat_cell = (
+                "<td><select class='status-select-pill st-scheduled' style='max-width:185px;' "
+                f"data-orig='{e(cur_cat)}' "
+                f"onchange=\"saveInlineCell(this, 'articles', {a['id']}, 'category')\">{cat_opts_html}</select></td>"
+            )
             return (
                 "<tr>"
                 f"<td style='width:38px;text-align:center;'><input type='checkbox' class='admin-check row-check' value='{a['id']}' onchange='updateBulkBar()'></td>"
@@ -1583,7 +1596,7 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
                 + "<div style='display:flex;align-items:center;gap:4px;margin-top:2px;'>"
                 + "<small style='color:#94a3b8;font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;'>/" + e(a.get('slug') or '') + "</small>"
                 + today_badge + "</div></td>"
-                + "<td>" + _excel_input("articles", a['id'], "category", a.get('category') or 'Logistics', "Category", extra_class="excel-pill-input") + "</td>"
+                + cat_cell
                 + author_cell
                 + status_cell
                 + "<td style='white-space:nowrap;color:#64748b;font-size:12px;'>"
@@ -2731,7 +2744,7 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
         "  var wrap = inp.closest('.ind-picker-wrap');"
         "  var items = _getIndItems(wrap);"
         "  if(items.indexOf(v) === -1) items.push(v);"
-        "  _syncIndWrap(wrap, items, false);"
+        "  _syncIndWrap(wrap, items, true);"
         "  inp.value = ''; filterIndOpts(inp);"
         "}"
         "function doneIndPop(btn){"
