@@ -1,5 +1,6 @@
 """Server-rendered HTML views. All markup is generated with the standard library."""
 import html
+from html.parser import HTMLParser
 import json
 import os
 import re
@@ -536,13 +537,14 @@ def job_card(job, compact=False):
     job_url = f'/job/{e(job.get("slug") or "job")}/{cid}'
     compact_cls = " compact" if compact else ""
     applied_badge = '<span class="applied-badge">' + icon("check", 12) + " Applied</span>" if applied else ""
+    featured_badge = '<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:9999px;font-size:11px;font-weight:700;background:#fef3c7;color:#92400e;margin-left:6px;">&#9733; Featured</span>' if job.get("featured") else ""
     return f'''
     <article class="job-card{compact_cls}" style="--accent:{e(accent)}" id="job-{cid}">
       <div class="job-card-primary">
         {company_logo(company, 84)}
         <div class="job-card-title">
           <a class="job-company" href="/company/{e(job.get('company_slug'))}">{e(job.get('company_name'))}</a>
-          <h3><a href="{job_url}">{e(job.get('title'))}</a></h3>
+          <h3><a href="{job_url}">{e(job.get('title'))}</a>{featured_badge}</h3>
           {applied_badge}
         </div>
       </div>
@@ -2814,10 +2816,80 @@ def articles_page(conn, user, q="", category="", tag="", featured=None):
                   extra_head=extra_head)
 
 
+class SafeHTMLSanitizer(HTMLParser):
+    ALLOWED_TAGS = {
+        'p', 'br', 'strong', 'b', 'em', 'i', 'u', 's', 'strike', 'span',
+        'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'figure', 'figcaption',
+        'img', 'a', 'ul', 'ol', 'li', 'mark', 'code', 'pre', 'table', 'thead',
+        'tbody', 'tr', 'th', 'td', 'div', 'hr'
+    }
+    ALLOWED_ATTRS = {
+        'style', 'src', 'alt', 'title', 'href', 'target', 'rel', 'class',
+        'width', 'height', 'align', 'loading', 'decoding'
+    }
+    VOID_TAGS = {'img', 'br', 'hr'}
+
+    def __init__(self):
+        super().__init__()
+        self.result = []
+
+    def handle_starttag(self, tag, attrs):
+        tag = tag.lower()
+        if tag not in self.ALLOWED_TAGS:
+            return
+        clean_attrs = []
+        for name, val in attrs:
+            name = name.lower()
+            if name not in self.ALLOWED_ATTRS:
+                continue
+            val_str = str(val or "")
+            if name in ('src', 'href') and re.match(r"^\s*javascript:", val_str, re.IGNORECASE):
+                continue
+            if name == 'style':
+                val_str = re.sub(r"expression\(|behavior:|javascript:", "", val_str, flags=re.IGNORECASE)
+            clean_attrs.append(f'{name}="{html.escape(val_str, quote=True)}"')
+        attrs_str = (' ' + ' '.join(clean_attrs)) if clean_attrs else ''
+        if tag in self.VOID_TAGS:
+            self.result.append(f'<{tag}{attrs_str} />')
+        else:
+            self.result.append(f'<{tag}{attrs_str}>')
+
+    def handle_endtag(self, tag):
+        tag = tag.lower()
+        if tag in self.ALLOWED_TAGS and tag not in self.VOID_TAGS:
+            self.result.append(f'</{tag}>')
+
+    def handle_data(self, data):
+        self.result.append(html.escape(data))
+
+    def handle_entityref(self, name):
+        self.result.append(f'&{name};')
+
+    def handle_charref(self, name):
+        self.result.append(f'&#{name};')
+
+    def get_html(self):
+        return "".join(self.result)
+
+
+def sanitize_rich_html(raw_html):
+    if not raw_html:
+        return ""
+    parser = SafeHTMLSanitizer()
+    parser.feed(raw_html)
+    return parser.get_html()
+
+
 def format_editorial_body(raw_body):
     raw_body = (raw_body or "").strip()
     if not raw_body:
         return ""
+
+    # If the body contains rich HTML markup from the WYSIWYG editor, sanitize and render directly
+    has_rich_html = bool(re.search(r"<(?:p|div|h[1-6]|img|strong|em|mark|blockquote|ul|ol|table|span)\b", raw_body, re.IGNORECASE))
+    if has_rich_html:
+        return sanitize_rich_html(raw_body)
+
     blocks = [b.strip() for b in re.split(r"\n\s*\n", raw_body) if b.strip()]
     out = []
     for block in blocks:

@@ -177,6 +177,15 @@ CREATE TABLE IF NOT EXISTS rate_limits (
   rl_key TEXT NOT NULL,
   ts BIGINT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id INTEGER PRIMARY KEY,
+  actor_email TEXT,
+  action TEXT NOT NULL,
+  target_table TEXT,
+  target_id INTEGER,
+  detail TEXT,
+  created_at TEXT
+);
 CREATE TABLE IF NOT EXISTS branches (
   id INTEGER PRIMARY KEY,
   code TEXT UNIQUE NOT NULL,
@@ -793,6 +802,12 @@ def _ensure_hr_schema_pg(conn):
         "CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id)",
         "CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)",
         "CREATE INDEX IF NOT EXISTS idx_companies_slug ON companies(slug)",
+        """CREATE TABLE IF NOT EXISTS audit_logs (
+          id SERIAL PRIMARY KEY, actor_email TEXT, action TEXT NOT NULL,
+          target_table TEXT, target_id INTEGER, detail TEXT, created_at TEXT
+        )""",
+        "ALTER TABLE companies ADD COLUMN IF NOT EXISTS verified INTEGER DEFAULT 1",
+        "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS featured INTEGER DEFAULT 0",
     ]
     for s in stmts:
         conn.execute(s)
@@ -861,6 +876,12 @@ def init_db():
             if column not in _SAFE_ARTICLE_COLS:
                 raise ValueError(f"Disallowed column name: {column!r}")
             conn.execute(f"ALTER TABLE articles ADD COLUMN {column} {definition}")
+    comp_cols = {row["name"] for row in conn.execute("PRAGMA table_info(companies)").fetchall()}
+    if "verified" not in comp_cols:
+        conn.execute("ALTER TABLE companies ADD COLUMN verified INTEGER DEFAULT 1")
+    job_cols = {row["name"] for row in conn.execute("PRAGMA table_info(jobs)").fetchall()}
+    if "featured" not in job_cols:
+        conn.execute("ALTER TABLE jobs ADD COLUMN featured INTEGER DEFAULT 0")
     conn.commit()
     if conn.execute("SELECT COUNT(*) FROM companies").fetchone()[0] == 0:
         _seed(conn)
@@ -2120,3 +2141,21 @@ def delete_course(conn, course_id):
     conn.execute("DELETE FROM courses WHERE id=?", (course_id,))
     conn.commit()
     invalidate_cache()
+
+
+def log_audit(conn, actor_email, action, target_table="", target_id=0, detail=""):
+    try:
+        conn.execute(
+            "INSERT INTO audit_logs (actor_email,action,target_table,target_id,detail,created_at) VALUES (?,?,?,?,?,?)",
+            ((actor_email or "system")[:160], (action or "update")[:80], (target_table or "")[:40], int(target_id or 0), (detail or "")[:400], _now()),
+        )
+        conn.commit()
+    except Exception:
+        pass
+
+
+def list_audit_logs(conn, limit=100):
+    try:
+        return [dict(r) for r in conn.execute("SELECT * FROM audit_logs ORDER BY id DESC LIMIT ?", (limit,)).fetchall()]
+    except Exception:
+        return []

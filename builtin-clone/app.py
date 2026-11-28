@@ -143,6 +143,7 @@ POST_PAGE_PATHS = {
     "/admin/applications/delete", "/admin/applications/status",
     "/admin/subscribers/delete",
     "/admin/salaries/create", "/admin/salaries/update", "/admin/salaries/delete",
+    "/admin/api/inline-update", "/admin/inbox/action",
     "/admin/settings/save", "/admin/courses/create", "/admin/courses/update", "/admin/courses/delete", "/admin/courses/duplicate",
     "/api/newsletter", "/apply", "/saved/toggle", "/follow/toggle",
 }
@@ -627,6 +628,53 @@ def route(conn, method, path, query, payload, user, token, host, client_ip="", c
                     "<p>Admin privileges are required to access this area.</p>"
                     "<a href='/'>← Back to Home</a></div>")
             return Response(views.layout("Access Denied", body, user), status=403)
+
+    if path == "/admin/api/inline-update" and method == "POST":
+        table = _clip(payload.get("table", ""), 30)
+        row_id = get_int(payload.get("id", "0"), 0, low=1)
+        field = _clip(payload.get("field", ""), 40)
+        val = (payload.get("value") or "").strip()
+        allowed = {
+            "jobs": {"title": 300, "category": 120, "workplace": 60, "location": 160, "salary_display": 80, "featured": 2, "status": 20},
+            "companies": {"name": 160, "industries": 200, "location": 160, "employees": 12, "verified": 2},
+            "articles": {"title": 300, "category": 120, "tag": 120, "author": 120},
+        }
+        if table not in allowed or field not in allowed[table] or not row_id:
+            return json_response({"ok": False, "error": "Invalid table, field, or id."}, status=400)
+        if field in ("title", "name") and not val:
+            return json_response({"ok": False, "error": "Value cannot be empty."}, status=400)
+        val = val[:allowed[table][field]]
+        if table == "companies" and field == "employees":
+            val = get_int(val, 0, low=0, high=10_000_000)
+        elif field in ("featured", "verified"):
+            val = 1 if str(val) in ("1", "true", "True", "yes") else 0
+        elif table == "jobs" and field == "status" and val not in ("active", "pending", "archived", "rejected"):
+            return json_response({"ok": False, "error": "Invalid job status."}, status=400)
+        if table == "jobs" and field == "workplace":
+            conn.execute("UPDATE jobs SET workplace=?, is_remote=? WHERE id=?", (val, 1 if "remote" in val.lower() else 0, row_id))
+        else:
+            conn.execute(f"UPDATE {table} SET {field}=? WHERE id=?", (val, row_id))
+        conn.commit()
+        db.log_audit(conn, user.get("email"), f"inline_update:{field}", table, row_id, str(val))
+        return json_response({"ok": True})
+
+    if path == "/admin/inbox/action" and method == "POST":
+        kind = _clip(payload.get("kind", ""), 20)
+        row_id = get_int(payload.get("id", "0"), 0, low=1)
+        decision = _clip(payload.get("decision", ""), 20)
+        if kind == "job" and row_id and decision in ("approve", "reject"):
+            new_st = "active" if decision == "approve" else "rejected"
+            conn.execute("UPDATE jobs SET status=? WHERE id=?", (new_st, row_id))
+            conn.commit()
+            db.log_audit(conn, user.get("email"), f"inbox_{decision}_job", "jobs", row_id, f"status={new_st}")
+            return redirect("/admin?tab=inbox&msg=" + urllib.parse.quote(f"Job #{row_id} marked {new_st}."))
+        if kind == "company" and row_id and decision in ("approve", "reject"):
+            new_ver = 1 if decision == "approve" else 0
+            conn.execute("UPDATE companies SET verified=? WHERE id=?", (new_ver, row_id))
+            conn.commit()
+            db.log_audit(conn, user.get("email"), f"inbox_{decision}_company", "companies", row_id, f"verified={new_ver}")
+            return redirect("/admin?tab=inbox&msg=" + urllib.parse.quote(f"Company #{row_id} verification updated."))
+        return redirect("/admin?tab=inbox&err=" + urllib.parse.quote("Invalid inbox action."))
 
     if path in ("/admin", "/admin/dashboard"):
         msg = query.get("msg") or query.get("message", "")
