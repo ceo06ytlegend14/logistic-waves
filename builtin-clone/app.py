@@ -861,6 +861,7 @@ def route(conn, method, path, query, payload, user, token, host, client_ip="", c
         else:
             return json_response({"ok": False, "error": "Invalid bulk action."}, status=400)
         conn.commit()
+        db.invalidate_cache()
         db.log_audit(conn, user.get("email"), f"bulk_{action}", table, ids[0], f"count={len(ids)} ids={ids[:10]}")
         return json_response({"ok": True, "count": len(ids)})
 
@@ -1291,6 +1292,13 @@ def route(conn, method, path, query, payload, user, token, host, client_ip="", c
             "promo_ticker_text": _clip(payload.get("promo_ticker_text", ""), 300),
             "promo_ticker_href": _clip(payload.get("promo_ticker_href", "/jobs"), 200),
             "footer_tagline": _clip(payload.get("footer_tagline", ""), 400),
+            "home_jobs_title": _clip(payload.get("home_jobs_title", "Featured Logistics & Tech Jobs"), 140),
+            "jobs_page_title": _clip(payload.get("jobs_page_title", "Top Logistics & Supply Chain Jobs"), 140),
+            "companies_page_title": _clip(payload.get("companies_page_title", "Explore Top Logistics & Tech Companies"), 140),
+            "salaries_page_title": _clip(payload.get("salaries_page_title", "Logistics & Supply Chain Salaries"), 140),
+            "articles_sec1_title": _clip(payload.get("articles_sec1_title", "Global Freight & Maritime Law"), 140),
+            "articles_sec2_title": _clip(payload.get("articles_sec2_title", "Fleet Safety & Workforce"), 140),
+            "articles_sec3_title": _clip(payload.get("articles_sec3_title", "Market Restructuring & M&A"), 140),
         }
         db.save_site_settings(conn, updates)
         return redirect("/admin?tab=settings&msg=" + urllib.parse.quote("Live site settings & hero banner saved to database!"))

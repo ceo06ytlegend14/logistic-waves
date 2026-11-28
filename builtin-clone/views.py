@@ -1768,7 +1768,7 @@ def home_page(conn, user):
       <div class="container">
         <div class="best-jobs-header-row">
           <div class="best-jobs-title-wrap">
-            <h2 class="best-jobs-title">Best Tech &amp; Engineering Jobs</h2>
+            <h2 class="best-jobs-title">{e(site.get("home_jobs_title") or "Featured Logistics & Tech Jobs")}</h2>
             <span class="flame-pill"><i class="fa-solid fa-fire"></i> High Demand</span>
           </div>
           <a href="/jobs" class="subnav-explore-btn" style="font-size: 13px;">View All {c['jobs']} Jobs &rarr;</a>
@@ -1884,7 +1884,8 @@ def home_page(conn, user):
 def jobs_page(conn, user, f, jobs, total, page, pages, heading=None):
     q = f.get("q", "")
     params = {k: v for k, v in f.items() if v not in (None, "", False, 0)}
-    heading = heading or "Top Tech Jobs & Startup Jobs"
+    site = db.get_site_settings(conn)
+    heading = heading or site.get("jobs_page_title") or "Top Logistics & Supply Chain Jobs"
     remote_on = f.get("remote") in ("1", "true", True, 1)
     filters_json = e(json.dumps({k: v for k, v in f.items() if v not in (None, "", False, 0)}))
     cards = "".join(job_card(j) for j in jobs) or empty_state(
@@ -1944,7 +1945,9 @@ def jobs_page(conn, user, f, jobs, total, page, pages, heading=None):
 # ---------- companies ----------
 
 def companies_page(conn, user, f, companies, total, page, pages, heading=None):
-    heading = heading or "Top Tech Companies"
+    site = db.get_site_settings(conn)
+    heading = heading or "Top Logistics & Tech Companies"
+    comp_hero_title = site.get("companies_page_title") or "Explore Top Logistics & Tech Companies"
     params = {k: v for k, v in f.items() if v not in (None, "", False, 0)}
     cards = "".join(linkedin_company_card(c, conn, user, variant=i) for i, c in enumerate(companies)) or empty_state(
         "No companies found", "Try a different location, industry or company size.", "/companies", "Reset company search"
@@ -1952,7 +1955,7 @@ def companies_page(conn, user, f, companies, total, page, pages, heading=None):
     sizes = ["1 - 10 Employees", "11 - 50 Employees", "51 - 200 Employees", "201 - 500 Employees", "501 - 1000 Employees", "1000+ Employees"]
     body = f'''
     <section class="search-hero companies-hero"><div class="container">
-      <h1>Explore top tech companies</h1>
+      <h1>{e(comp_hero_title)}</h1>
       <form class="company-search-form" method="get" action="/companies">
         <div class="location-wrap large">{icon("pin", 19)}<input type="text" name="q" value="{e(f.get('q',''))}" placeholder="Company name, industry or keyword" aria-label="Search companies"><button class="locate-btn" type="button" title="Use United States">{icon("pin", 18)}</button></div>
         <div class="pill-select">{select("office_type", ["Hybrid", "On-site", "Fully Remote"], f.get("office_type",""), "Office Type", "auto-submit")}{icon("chevron", 14, "select-caret")}</div>
@@ -3092,10 +3095,11 @@ def salaries_page(conn, user, q="", category=""):
           <td><strong>{money(r['median'])}</strong></td><td>{thousands(r['samples'])}</td><td class="trend">{e(r['trend'])}</td>
         </tr>''' for r in rows
     ) or '<tr><td colspan="5">No salary data matches your search.</td></tr>'
+    sal_title = db.get_site_settings(conn).get("salaries_page_title") or "Logistics & Supply Chain Salaries"
     body = f'''
     <section class="page-hero salaries-hero"><div class="container">
       {breadcrumb([("Home", "/"), ("Salaries", "")])}
-      <h1>US Tech + Startup Salaries</h1><p class="hero-sub">See how your salary stacks up</p>
+      <h1>{e(sal_title)}</h1><p class="hero-sub">See how your salary stacks up</p>
       <form class="salary-form" method="get" action="/salaries">
         <div class="pill-select large">{icon("layers", 17)}{select("category", categories, category, "Job Category", "auto-submit")}{icon("chevron", 16, "select-caret")}</div>
         <div class="search-input-wrap"><input type="search" name="q" value="{e(q)}" placeholder="Job title, e.g. Software Engineer" aria-label="Job title"></div>
@@ -3238,11 +3242,12 @@ def articles_page(conn, user, q="", category="", tag="", featured=None):
         except Exception as ex:
             hub_content = f"<!-- Error loading editorial hub: {ex} -->"
 
+    site_cfg = db.get_site_settings(conn)
     latest_editorial = conn.execute(
         """SELECT id, slug, title, category, tag, thumb, accent FROM articles
            WHERE COALESCE(is_today, 0) = 0
              AND COALESCE(status, 'published') = 'published'
-           ORDER BY id DESC LIMIT 4"""
+           ORDER BY COALESCE(featured, 0) DESC, id DESC LIMIT 4"""
     ).fetchall()
     if latest_editorial and '<div class="nav-cards">' in hub_content:
         nav_cards_html = []
@@ -3264,6 +3269,53 @@ def articles_page(conn, user, q="", category="", tag="", featured=None):
             count=1,
             flags=re.DOTALL,
         )
+
+    # Wire lower category sections (#mont-title, #cdl-title, #lay-title) to live DB articles
+    sec_defs = [
+        ("mont-title", site_cfg.get("articles_sec1_title") or "Global Freight & Maritime Law",
+         ("Logistics & Brokerage", "Legal Issues", "Maritime", "Maritime & Supply Chain", "Maritime & Tech", "Maritime Shipping", "Container Shipping", "Compliance & Regulation", "Trade & Tariffs")),
+        ("cdl-title", site_cfg.get("articles_sec2_title") or "Fleet Safety & Workforce",
+         ("Drivers & Workforce", "News", "Sponsored Insights", "Compliance & Safety", "Fleet Operations", "Careers")),
+        ("lay-title", site_cfg.get("articles_sec3_title") or "Market Restructuring & M&A",
+         ("Layoffs & Bankruptcies", "Intermodal", "Freight Rates", "Rail", "Port Automation", "Clean Freight")),
+    ]
+    for sec_id, sec_title, cats in sec_defs:
+        placeholders = ",".join("?" for _ in cats)
+        sec_rows = conn.execute(
+            f"""SELECT id, slug, title, category, tag, thumb, accent FROM articles
+                WHERE COALESCE(is_today, 0) = 0
+                  AND COALESCE(status, 'published') = 'published'
+                  AND category IN ({placeholders})
+                ORDER BY COALESCE(featured, 0) DESC, id DESC LIMIT 4""",
+            cats,
+        ).fetchall()
+        hub_content = re.sub(
+            rf'(<h2[^>]*id="{sec_id}"[^>]*>).*?(</h2>)',
+            lambda m, t=e(sec_title): m.group(1) + t + m.group(2),
+            hub_content,
+            count=1,
+            flags=re.DOTALL,
+        )
+        if sec_rows:
+            sec_cards = []
+            for idx, r in enumerate(sec_rows):
+                a = dict(r)
+                slug = a.get("slug") or f"article-{a['id']}"
+                title = a.get("title") or "Editorial Briefing"
+                cat = a.get("category") or a.get("tag") or "Logistics"
+                thumb = _article_cover_url(a, idx + 4)
+                sec_cards.append(f'''<article class="card">
+<a class="card-media" href="/articles/{e(slug)}"><img alt="{e(title)}" src="{e(thumb)}" decoding="async" width="448" height="254" loading="lazy"/></a>
+<span class="cat">{e(cat)}</span>
+<h3><a href="/articles/{e(slug)}">{e(title)}</a></h3>
+</article>''')
+            hub_content = re.sub(
+                rf'(<section[^>]*aria-labelledby="{sec_id}"[^>]*>.*?<div class="four-grid">).*?(</div>\s*</section>)',
+                lambda m, c="\n".join(sec_cards): m.group(1) + c + m.group(2),
+                hub_content,
+                count=1,
+                flags=re.DOTALL,
+            )
 
     today_articles = conn.execute(
         """SELECT id, slug, title, excerpt, author, published, category, tag, read_time, accent, thumb, is_today, duration, guest FROM articles 

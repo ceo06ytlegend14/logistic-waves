@@ -2212,6 +2212,13 @@ DEFAULT_SITE_SETTINGS = {
     "promo_ticker_text": "",
     "promo_ticker_href": "/jobs",
     "footer_tagline": "Connecting top talent with leaders in shipping, multimodal logistics, supply chain tech, and global commerce.",
+    "home_jobs_title": "Featured Logistics & Tech Jobs",
+    "jobs_page_title": "Top Logistics & Supply Chain Jobs",
+    "companies_page_title": "Explore Top Logistics & Tech Companies",
+    "salaries_page_title": "Logistics & Supply Chain Salaries",
+    "articles_sec1_title": "Global Freight & Maritime Law",
+    "articles_sec2_title": "Fleet Safety & Workforce",
+    "articles_sec3_title": "Market Restructuring & M&A",
 }
 
 
