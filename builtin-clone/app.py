@@ -106,7 +106,9 @@ def _safe_media_url(url: str, default: str = "") -> str:
         return default
     if val.startswith("/") and not val.startswith("//"):
         return val if len(val) <= 500 else default
-    if _DATA_IMG_RE.match(val) and len(val) <= 3_000_000:
+    # Embedded media is convenient locally but creates oversized database rows
+    # and bypasses durable object storage in production.
+    if _DATA_IMG_RE.match(val) and len(val) <= 3_000_000 and not db.is_production_environment():
         return val
     return _safe_http_url(val, max_len=1000) or default
 
@@ -750,6 +752,9 @@ def route(conn, method, path, query, payload, user, token, host, client_ip="", c
         comp = conn.execute("SELECT id, name, initials, color FROM companies WHERE slug=?", (comp_slug,)).fetchone()
         if comp:
             cid, cname, cinit, ccolor = comp
+            new_logo = _safe_media_url(payload.get("logo_url", ""), "")
+            if new_logo and ((user.get("role") or "").lower() == "admin" or db.can_edit_company(user, {"manager_id": conn.execute("SELECT manager_id FROM companies WHERE id=?", (cid,)).fetchone()[0]})):
+                conn.execute("UPDATE companies SET logo_url=? WHERE id=?", (new_logo, cid))
             conn.execute(
                 """UPDATE jobs SET title=?, company_id=?, company_slug=?, company_name=?, company_initials=?, company_color=?,
                    category=?, level=?, workplace=?, location=?, salary_min=?, salary_max=?, salary_display=?, skills=?, description=?,
@@ -821,6 +826,16 @@ def route(conn, method, path, query, payload, user, token, host, client_ip="", c
         db.invalidate_cache()
         db.log_audit(conn, user.get("email"), f"inline_update:{field}", table, row_id, str(val))
         return json_response({"ok": True})
+
+    if path == "/admin/media/upload" and method == "POST":
+        data_uri = payload.get("data_uri", "") if isinstance(payload, dict) else ""
+        if not cloudinary_helper.is_configured():
+            return json_response({"ok": False, "error": "Media storage is not configured."}, status=503)
+        result = cloudinary_helper.upload_data_uri(data_uri, folder="logistic-waves")
+        if not result.get("ok"):
+            return json_response({"ok": False, "error": result.get("error", "Upload failed.")}, status=400)
+        db.log_audit(conn, user.get("email"), "media_upload", "media", 0, result.get("public_id", ""))
+        return json_response({"ok": True, "url": result["url"]})
 
     if path == "/admin/api/bulk-action" and method == "POST":
         table = _clip(payload.get("table", ""), 30)
@@ -1082,6 +1097,9 @@ def route(conn, method, path, query, payload, user, token, host, client_ip="", c
         comp = conn.execute("SELECT id, name, initials, color FROM companies WHERE slug=?", (comp_slug,)).fetchone()
         if comp and job_id:
             cid, cname, cinit, ccolor = comp
+            new_logo = _safe_media_url(payload.get("logo_url", ""), "")
+            if new_logo:
+                conn.execute("UPDATE companies SET logo_url=? WHERE id=?", (new_logo, cid))
             conn.execute(
                 """UPDATE jobs SET title=?, company_id=?, company_slug=?, company_name=?, company_initials=?, company_color=?,
                    category=?, level=?, workplace=?, location=?, salary_min=?, salary_max=?, salary_display=?, skills=?, description=?,

@@ -168,17 +168,48 @@ def brand_logo():
     )
 
 
-def _brand_logo_markup(slug, name, initials="CO", color="#244fe7", size=84, img_id="", lazy=True):
-    brand_svg = STATIC / "images" / "brands" / f"{slug}.svg" if slug else None
-    if brand_svg and not brand_svg.is_file() and initials:
+def resolve_company_logo_url(company):
+    if not company:
+        return ""
+    logo_url = (company.get("logo_url") or "").strip()
+    if logo_url:
+        return logo_url
+    slug = company.get("slug") or company.get("company_slug") or ""
+    initials = company.get("initials") or company.get("company_initials") or ""
+    if slug:
+        brand_svg = STATIC / "images" / "brands" / f"{slug}.svg"
+        if brand_svg.is_file():
+            return f"/static/images/brands/{brand_svg.name}"
+    if initials:
         init_svg = STATIC / "images" / "brands" / f"{initials.lower()}.svg"
         if init_svg.is_file():
-            brand_svg = init_svg
-    if brand_svg and brand_svg.is_file():
+            return f"/static/images/brands/{init_svg.name}"
+    return ""
+
+
+def _initials_svg_data_uri(initials="CO", color="#2563eb"):
+    txt = contrast_text(color)
+    init = html.escape((initials or "CO")[:3])
+    clr = html.escape(color or "#2563eb")
+    svg = f'<svg xmlns="http://www.w3.org/2000/svg" width="84" height="84" viewBox="0 0 84 84"><rect width="84" height="84" rx="14" fill="{clr}"/><text x="42" y="50" font-family="Inter,sans-serif" font-size="28" font-weight="800" fill="{txt}" text-anchor="middle">{init}</text></svg>'
+    return "data:image/svg+xml;utf8," + urllib.parse.quote(svg)
+
+
+def _brand_logo_markup(slug, name, initials="CO", color="#244fe7", size=84, img_id="", lazy=True, logo_url=""):
+    resolved = (logo_url or "").strip()
+    if not resolved:
+        brand_svg = STATIC / "images" / "brands" / f"{slug}.svg" if slug else None
+        if brand_svg and not brand_svg.is_file() and initials:
+            init_svg = STATIC / "images" / "brands" / f"{initials.lower()}.svg"
+            if init_svg.is_file():
+                brand_svg = init_svg
+        if brand_svg and brand_svg.is_file():
+            resolved = f"/static/images/brands/{brand_svg.name}"
+    if resolved:
         id_attr = f' id="{e(img_id)}"' if img_id else ""
         load_attr = ' loading="lazy"' if lazy else ""
         return (
-            f'<img src="/static/images/brands/{e(brand_svg.name)}" alt="{e(name)}"{id_attr}'
+            f'<img src="{e(resolved)}" alt="{e(name)}"{id_attr}'
             f' width="{size}" height="{size}" decoding="async"{load_attr}'
             f' data-fallback-kind="brand" data-initials="{e(initials or "CO")}" data-color="{e(color or "#003366")}"'
             f' style="width:100%;height:100%;max-width:{size}px;max-height:{size}px;object-fit:contain;background:transparent;border:none;">'
@@ -278,7 +309,7 @@ def breadcrumb(items):
     return '<nav class="breadcrumb" aria-label="Breadcrumb">' + "".join(parts) + "</nav>"
 
 
-def promo_ticker():
+def promo_ticker(site_settings=None):
     messages = [
         "Verified engineering, logistics, and supply chain roles open across top global employers",
         "Saigon Newport, Gemadept, Viconship, and DHL are actively hiring across port and remote hubs",
@@ -286,11 +317,20 @@ def promo_ticker():
         "2026 Best Places to Work rankings announced \u2014 explore winning workplaces",
         "Certified tech and logistics training courses now enrolling for 2026",
     ]
+    configured_message = (site_settings or {}).get("promo_ticker_text", "").strip()
+    if configured_message:
+        messages = [configured_message]
+    configured_href = (site_settings or {}).get("promo_ticker_href", "").strip()
+    if configured_href.startswith("/") and not configured_href.startswith("//"):
+        promo_href = configured_href
+    else:
+        promo_href = safe_http_url(configured_href)
     def render_items(aria_hidden=False):
         hidden_attr = ' aria-hidden="true"' if aria_hidden else ''
         content = []
         for msg in messages:
-            content.append(f'<span class="promo-ticker-text">{e(msg)}</span><span class="promo-ticker-dot" aria-hidden="true">&bull;</span>')
+            message_html = f'<a class="promo-ticker-text" href="{e(promo_href)}">{e(msg)}</a>' if promo_href else f'<span class="promo-ticker-text">{e(msg)}</span>'
+            content.append(message_html + '<span class="promo-ticker-dot" aria-hidden="true">&bull;</span>')
         return f'<div class="promo-ticker-track"{hidden_attr}>' + "".join(content) + '</div>'
 
     return f"""
@@ -347,7 +387,7 @@ def promo_ticker():
     </div>"""
 # ---------- shell ----------
 
-def header(user, active=""):
+def header(user, active="", site_settings=None):
     def nav_link(label, href, key):
         cls = "nav-link active" if active == key else "nav-link"
         return f'<a class="{cls}" href="{e(href)}">{e(label)}</a>'
@@ -420,7 +460,7 @@ def header(user, active=""):
         </div>
       </div>
       <nav class="mobile-nav" aria-label="Mobile">{mobile_links}</nav>
-      {promo_ticker()}
+      {promo_ticker(site_settings)}
     </header>
     <div class="search-overlay" id="searchOverlay" hidden>
       <div class="container search-overlay-inner">
@@ -434,7 +474,9 @@ def header(user, active=""):
     </div>'''
 
 
-def footer():
+def footer(site_settings=None):
+    tagline = ((site_settings or {}).get("footer_tagline") or
+               "Connecting top talent with leaders in shipping, multimodal logistics, supply chain tech, and global commerce.")
     columns = [
         ("Opportunities", [
             ("Logistics & Tech Jobs", "/jobs"),
@@ -479,7 +521,7 @@ def footer():
       <div class="container footer-grid">
         <div class="footer-brand">
           {brand_logo()}
-          <p>Connecting top talent with leaders in shipping, multimodal logistics, supply chain tech, and global commerce.</p>
+          <p>{e(tagline)}</p>
           <div class="footer-social">
             <a href="/about" aria-label="About">{icon("globe", 18)}</a>
             <a href="/contact" aria-label="Contact">{icon("mail", 18)}</a>
@@ -498,6 +540,18 @@ def footer():
 
 def layout(title, body, user=None, active="", description="", page_class="", extra_head=""):
     desc = description or "Logistic Waves \u2014 technology & logistics jobs, employer intelligence, and industry editorial."
+    # Shared shell settings apply to every route, not only the homepage. A
+    # cached lookup keeps this inexpensive while admin saves invalidate it.
+    shell_settings = {}
+    settings_conn = None
+    try:
+        settings_conn = db.connect()
+        shell_settings = db.get_site_settings(settings_conn)
+    except Exception:
+        shell_settings = {}
+    finally:
+        if settings_conn:
+            settings_conn.close()
     return f'''<!doctype html>
 <html lang="en">
 <head>
@@ -517,9 +571,9 @@ def layout(title, body, user=None, active="", description="", page_class="", ext
   {extra_head}
 </head>
 <body class="{e(page_class)}" data-logged-in="{'true' if user else 'false'}">
-  {header(user, active)}
+  {header(user, active, shell_settings)}
   <main id="main-content">{body}</main>
-  {footer()}
+  {footer(shell_settings)}
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="/static/app.js?v=20261126_perf" defer></script>
   <script src="/static/cms-editor.js?v=20261128_cms" defer></script>
@@ -666,7 +720,8 @@ def render_cms_company_modal(company):
     status = (company.get("status") or "published").lower()
     if status not in ("published", "draft", "archived"):
         status = "published"
-    logo_src = e(company.get("logo_url") or "/static/images/logo_emblem.png")
+    resolved_logo = resolve_company_logo_url(company)
+    logo_src = e(resolved_logo or _initials_svg_data_uri(company.get("initials", "CO"), company.get("color", "#2563eb")))
     banner_src = e(company.get("banner_url") or "/static/images/fw_today_1.jpg")
     verified_checked = "checked" if company.get("verified", 1) else ""
     featured_checked = "checked" if company.get("featured") else ""
@@ -696,12 +751,15 @@ def render_cms_company_modal(company):
             <!-- Left Column: Logo, Banner & Nav -->
             <div class="cms-col-left">
               <div class="cms-logo-box">
-                <img id="cms-comp-logo-prev" src="{logo_src}" alt="Company Logo" onerror="this.onerror=null;this.src='/static/images/logo_emblem.png'">
+                <img id="cms-comp-logo-prev" src="{logo_src}" alt="Company Logo">
                 <label class="cms-btn-sm-outline">
                   <i class="fa-solid fa-camera"></i> Change Logo
                   <input type="file" accept="image/*" style="display:none;" onchange="handleCmsImageUpload(this, 'cms-comp-logo', 'cms-comp-logo-prev')">
                 </label>
-                <input class="cms-form-control" id="cms-comp-logo" name="logo_url" value="{e(company.get('logo_url', ''))}" placeholder="Logo URL..." style="font-size:11.5px;padding:5px 8px;" oninput="updateCmsImagePreview(this.value, 'cms-comp-logo-prev')">
+                <div class="cms-url-inline-row" style="width:100%;">
+                  <input class="cms-form-control" id="cms-comp-logo" name="logo_url" value="{e(company.get('logo_url') or resolved_logo)}" placeholder="Logo URL..." style="font-size:11.5px;padding:5px 8px;" oninput="updateCmsImagePreview(this.value, 'cms-comp-logo-prev')">
+                  <button type="button" class="cms-btn-sm-outline" onclick="updateCmsImagePreview(document.getElementById('cms-comp-logo').value, 'cms-comp-logo-prev')" title="Fetch Logo URL"><i class="fa-solid fa-magnifying-glass"></i></button>
+                </div>
               </div>
 
               <div class="cms-cover-card">
@@ -817,6 +875,13 @@ def render_cms_job_modal(job, all_companies):
         for s in raw_skills
     )
     featured_checked = "checked" if job.get("featured") else ""
+    job_comp = {
+        "slug": job.get("company_slug"),
+        "initials": job.get("company_initials"),
+        "color": job.get("company_color"),
+        "logo_url": job.get("company_logo_url") or "",
+    }
+    job_logo_src = resolve_company_logo_url(job_comp) or _initials_svg_data_uri(job.get("company_initials", "CO"), job.get("company_color", "#2563eb"))
     return f'''
     <div class="cms-modal-backdrop" id="cms-job-modal">
       <div class="cms-modal-dialog">
@@ -838,10 +903,18 @@ def render_cms_job_modal(job, all_companies):
             <div class="cms-col-left">
               <div class="cms-job-company-card">
                 <div class="cms-job-company-avatar" style="background:{e(job.get('company_color') or '#2563eb')};">
-                  {e(job.get('company_initials') or 'CO')}
+                  <img id="cms-job-logo-prev" src="{e(job_logo_src)}" alt="{e(job.get('company_name') or 'Company')}">
                 </div>
                 <div class="cms-job-company-name">{e(job.get('company_name') or 'Company')}</div>
                 <div class="cms-job-company-loc"><i class="fa-solid fa-location-dot"></i> {e(job.get('location') or 'Remote')}</div>
+                <label class="cms-btn-sm-outline" style="margin-top:4px;">
+                  <i class="fa-solid fa-camera"></i> Change Logo
+                  <input type="file" accept="image/*" style="display:none;" onchange="handleCmsImageUpload(this, 'cms-job-logo-url', 'cms-job-logo-prev')">
+                </label>
+                <div class="cms-url-inline-row" style="width:100%;">
+                  <input class="cms-form-control" id="cms-job-logo-url" name="logo_url" value="{e(job.get('company_logo_url') or resolve_company_logo_url(job_comp))}" placeholder="Logo URL..." style="font-size:11.5px;padding:5px 8px;" oninput="updateCmsImagePreview(this.value, 'cms-job-logo-prev')">
+                  <button type="button" class="cms-btn-sm-outline" onclick="updateCmsImagePreview(document.getElementById('cms-job-logo-url').value, 'cms-job-logo-prev')" title="Fetch Logo"><i class="fa-solid fa-magnifying-glass"></i></button>
+                </div>
               </div>
               <nav class="cms-side-nav">
                 <button type="button" class="cms-side-nav-btn active" onclick="switchCmsTab(this, 'cms-job-tab-basic')"><i class="fa-solid fa-briefcase"></i> Basic Info</button>
@@ -1593,6 +1666,7 @@ def home_page(conn, user):
         60,
         lambda: [db.as_dict(r) for r in conn.execute(
             """SELECT * FROM articles
+               WHERE COALESCE(status, 'published') = 'published'
                ORDER BY CASE WHEN COALESCE(is_today, 0) = 0 THEN 0 ELSE 1 END ASC, id DESC
                LIMIT 8"""
         ).fetchall()],
@@ -1603,7 +1677,8 @@ def home_page(conn, user):
         lead_art = editorial_articles[0]
         _feat_rows = [
             db.as_dict(r) for r in conn.execute(
-                "SELECT * FROM articles WHERE slug IN ('federal-guidance-carrier-selection-tia', '230-immigrants-cdl-crackdown')"
+                """SELECT * FROM articles WHERE COALESCE(status, 'published') = 'published'
+                   AND slug IN ('federal-guidance-carrier-selection-tia', '230-immigrants-cdl-crackdown')"""
             ).fetchall()
         ]
         _feat_map = {r["slug"]: r for r in _feat_rows}
@@ -2211,7 +2286,7 @@ def job_detail_page(conn, user, job, similar):
     company_offices = company.get("offices") or 5
     company_desc = company.get("description") or f"{company_name} is an accredited leader in {job.get('category') or 'multimodal logistics'}."
 
-    logo_html = _brand_logo_markup(company_slug, company_name, initials=company_initials, color=company_color, img_id="hero-logo-img", lazy=False)
+    logo_html = _brand_logo_markup(company_slug, company_name, initials=company_initials, color=company_color, img_id="hero-logo-img", lazy=False, logo_url=company.get("logo_url") or "")
 
     job_title = job["title"]
     location = job.get("location") or "Ho Chi Minh City, VN"
@@ -2335,6 +2410,7 @@ def job_detail_page(conn, user, job, similar):
         </a>
         '''
 
+    shell_settings = db.get_site_settings(conn)
     html_content = f'''<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -2364,7 +2440,7 @@ def job_detail_page(conn, user, job, similar):
 <body data-logged-in="{'true' if user else 'false'}">
 
   <!-- Unified Built In Site Navigation Header -->
-  {header(user, active="jobs")}
+  {header(user, active="jobs", site_settings=shell_settings)}
 
   <main id="main-content">
   <!-- Built In Breadcrumbs Strip -->
@@ -2993,11 +3069,11 @@ def job_detail_page(conn, user, job, similar):
   </main>
 
   <!-- Built In Standard Site Footer -->
-  {footer()}
-  {render_cms_job_modal(job, [dict(r) for r in conn.execute("SELECT id, name, slug FROM companies ORDER BY name ASC").fetchall()]) if db.can_edit_job(user, job) else ''}
+  {footer(shell_settings)}
+  {render_cms_job_modal({**job, "company_logo_url": company.get("logo_url") or ""}, [dict(r) for r in conn.execute("SELECT id, name, slug FROM companies ORDER BY name ASC").fetchall()]) if db.can_edit_job(user, job) else ''}
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="/static/app.js?v=20261126_perf" defer></script>
-  <script src="/static/cms-editor.js?v=20261128_cms" defer></script>
+  <script src="/static/cms-editor.js?v=20261128_v2" defer></script>
 </body>
 </html>'''
     return html_content
@@ -5416,5 +5492,5 @@ def not_found_page(user, path):
     return layout("Page not found", body, user, description="The requested page was not found.")
 
 
-def admin_dashboard_page(conn, user, message="", error="", tab="overview", page=1, q=""):
-    return admin_views.render_admin_dashboard(conn, user, message=message, error=error, tab=tab, page=page, q=q)
+def admin_dashboard_page(conn, user, message="", error="", tab="overview", page=1, q="", filters=None):
+    return admin_views.render_admin_dashboard(conn, user, message=message, error=error, tab=tab, page=page, q=q, filters=filters)

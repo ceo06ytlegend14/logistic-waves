@@ -1,7 +1,24 @@
 import html
 import re
+from pathlib import Path
 from datetime import datetime
 import db
+
+_BRANDS_DIR = Path(__file__).resolve().parent / "static" / "images" / "brands"
+
+def _resolve_brand_logo(slug, initials="", logo_url=""):
+    val = (logo_url or "").strip()
+    if val:
+        return val
+    if slug:
+        p = _BRANDS_DIR / f"{slug}.svg"
+        if p.is_file():
+            return f"/static/images/brands/{p.name}"
+    if initials:
+        p2 = _BRANDS_DIR / f"{initials.lower()}.svg"
+        if p2.is_file():
+            return f"/static/images/brands/{p2.name}"
+    return ""
 
 def e(value):
     return html.escape(str(value if value is not None else ""), quote=True)
@@ -483,9 +500,14 @@ def render_edit_modals(all_companies):
         "<div class='cms-layout-2col'>\n"
         "  <div class='cms-col-left'>\n"
         "    <div class='cms-job-company-card'>\n"
-        "      <div class='cms-job-company-avatar' id='edit-job-company-avatar'>CO</div>\n"
+        "      <div class='cms-job-company-avatar' id='edit-job-company-avatar'><img id='edit-job-logo-prev' src='/static/images/logo_emblem.png' alt='Logo'></div>\n"
         "      <div class='cms-job-company-name' id='edit-job-company-name'>Company</div>\n"
         "      <div class='cms-job-company-loc' id='edit-job-company-loc'>Location</div>\n"
+        "      <label class='cms-btn-sm-outline' style='margin-top:4px;'><i class='fa-solid fa-camera'></i> Change Logo<input type='file' accept='image/*' style='display:none;' onchange=\"handleCmsImageUpload(this, 'edit-job-logo-url', 'edit-job-logo-prev')\"></label>\n"
+        "      <div class='cms-url-inline-row' style='width:100%;'>\n"
+        "        <input class='cms-form-control' id='edit-job-logo-url' name='logo_url' placeholder='Logo URL...' style='font-size:11.5px;padding:5px 8px;' oninput=\"updateCmsImagePreview(this.value, 'edit-job-logo-prev')\">\n"
+        "        <button type='button' class='cms-btn-sm-outline' onclick=\"updateCmsImagePreview(document.getElementById('edit-job-logo-url').value, 'edit-job-logo-prev')\" title='Fetch Logo'><i class='fa-solid fa-magnifying-glass'></i></button>\n"
+        "      </div>\n"
         "    </div>\n"
         "    <nav class='cms-side-nav'>\n"
         "      <button type='button' class='cms-side-nav-btn active' onclick=\"switchCmsTab(this,'admin-job-tab-basic')\"><i class='fa-solid fa-briefcase'></i> Basic Info</button>\n"
@@ -838,6 +860,12 @@ def render_edit_modals(all_companies):
         "  var txt = document.getElementById(targetBodyId);\n"
         "  if (txt) { txt.value += fig; txt.focus(); }\n"
         "}\n"
+        "function _makeInitialsSvg(init, clr) {\n"
+        "  var i = (init || 'CO').slice(0, 3).replace(/[<>&]/g, '');\n"
+        "  var c = clr || '#2563eb';\n"
+        "  var svg = '<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"84\" height=\"84\" viewBox=\"0 0 84 84\"><rect width=\"84\" height=\"84\" rx=\"14\" fill=\"' + c + '\"/><text x=\"42\" y=\"50\" font-family=\"Inter,sans-serif\" font-size=\"28\" font-weight=\"800\" fill=\"#ffffff\" text-anchor=\"middle\">' + i + '</text></svg>';\n"
+        "  return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);\n"
+        "}\n"
         "function openJobEditModal(btn) {\n"
         "  var d = btn.dataset;\n"
         "  document.getElementById('edit-job-id').value = d.id || '';\n"
@@ -858,8 +886,11 @@ def render_edit_modals(all_companies):
         "  document.getElementById('edit-job-apply-email').value = d.applyEmail || '';\n"
         "  document.getElementById('edit-job-status').value = d.status || 'active';\n"
         "  document.getElementById('edit-job-featured').checked = (d.featured === '1');\n"
-        "  var av = document.getElementById('edit-job-company-avatar');\n"
-        "  if (av) { av.textContent = d.companyInitials || 'CO'; av.style.background = d.companyColor || '#2563eb'; }\n"
+        "  var logoUrl = d.companyLogo || '';\n"
+        "  var logoPrev = document.getElementById('edit-job-logo-prev');\n"
+        "  if (logoPrev) logoPrev.src = logoUrl || _makeInitialsSvg(d.companyInitials, d.companyColor);\n"
+        "  var logoInp = document.getElementById('edit-job-logo-url');\n"
+        "  if (logoInp) logoInp.value = logoUrl;\n"
         "  var cn = document.getElementById('edit-job-company-name');\n"
         "  if (cn) cn.textContent = d.companyName || 'Company';\n"
         "  var cl = document.getElementById('edit-job-company-loc');\n"
@@ -883,8 +914,9 @@ def render_edit_modals(all_companies):
         "  document.getElementById('edit-company-description').value = d.description || '';\n"
         "  document.getElementById('edit-company-benefits').value = d.benefits || '';\n"
         "  document.getElementById('edit-company-offices').value = d.offices || '';\n"
-        "  document.getElementById('edit-company-logo-url').value = d.logoUrl || '';\n"
-        "  updateCmsImagePreview(d.logoUrl || '/static/images/logo_emblem.png', 'edit-company-logo-prev');\n"
+        "  var cLogo = d.logoUrl || '';\n"
+        "  document.getElementById('edit-company-logo-url').value = cLogo;\n"
+        "  updateCmsImagePreview(cLogo || _makeInitialsSvg(d.initials, clr), 'edit-company-logo-prev');\n"
         "  document.getElementById('edit-company-banner-url').value = d.bannerUrl || '';\n"
         "  updateCmsImagePreview(d.bannerUrl || '/static/images/fw_today_1.jpg', 'edit-company-banner-prev');\n"
         "  document.getElementById('edit-company-status').value = d.status || 'published';\n"
@@ -1159,7 +1191,7 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
         ).fetchall()]
     elif tab in ("overview", "jobs"):
         all_companies = [dict(r) for r in conn.execute(
-            "SELECT slug, name FROM companies ORDER BY name ASC"
+            "SELECT slug, name, COALESCE(logo_url, '') AS logo_url, initials, color FROM companies ORDER BY name ASC"
         ).fetchall()]
 
     if tab == "users":
@@ -1309,17 +1341,28 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
             f"onchange=\"saveInlineCell(this, '{table}', {int(row_id)}, '{field}')\">{opts_html}</select>"
         )
 
+    comp_logo_map = {
+        c["slug"]: _resolve_brand_logo(c.get("slug"), c.get("initials", ""), c.get("logo_url", ""))
+        for c in all_companies if c.get("slug")
+    }
+
     def render_job_row(j, tab_ctx):
         is_overview = (tab_ctx == "overview")
         c_clr = e(j.get('company_color') or '#2563eb')
         c_init = e(j.get('company_initials') or 'CO')
+        c_logo = comp_logo_map.get(j.get('company_slug') or '', '') or _resolve_brand_logo(j.get('company_slug'), j.get('company_initials', ''), '')
+        job_avatar_html = (
+            "<img src='" + e(c_logo) + "' alt='' style='width:34px;height:34px;border-radius:9px;object-fit:contain;background:#fff;border:1px solid #e2e8f0;flex-shrink:0;'>"
+            if c_logo else
+            "<span style='display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:9px;background:" + c_clr + ";color:#fff;font-weight:800;font-size:11.5px;flex-shrink:0;'>" + c_init + "</span>"
+        )
         st_val = (j.get('status') or 'active').lower()
         st_cls = "st-active" if st_val == "active" else ("st-pending" if st_val == "pending" else ("st-draft" if st_val == "draft" else "st-archived"))
         feat_on = bool(j.get('featured'))
         check_td = "" if is_overview else f"<td style='width:38px;text-align:center;'><input type='checkbox' class='admin-check row-check' value='{j['id']}' onchange='updateBulkBar()'></td>"
         title_cell = (
-            "<td style='min-width:230px;'><div style='display:flex;align-items:center;gap:10px;'>"
-            "<span style='display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:9px;background:" + c_clr + ";color:#fff;font-weight:800;font-size:11.5px;flex-shrink:0;'>" + c_init + "</span>"
+            "<td><div style='display:flex;align-items:center;gap:10px;'>"
+            + job_avatar_html +
             "<div style='min-width:0;'><div style='font-weight:700;color:#0f172a;line-height:1.3;'>" + e(j['title']) +
             (" <span title='Featured Listing' style='color:#d97706;font-size:12px;'>&#9733;</span>" if feat_on else "") +
             "</div><small style='color:#64748b;'>" + e(j.get('category') or 'General') + ("" if not is_overview else " &middot; " + e(j['company_name'])) + "</small></div></div></td>"
@@ -1349,7 +1392,7 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
             "<button type='button' class='btn-action-round btn-action-edit' title='Manage Full Details (Wrench)' "
             "data-id='" + str(j['id']) + "' data-tab='" + tab_ctx + "' data-slug='" + e(j.get('slug') or '') + "' "
             "data-title='" + e(j['title']) + "' data-company-slug='" + e(j.get('company_slug') or '') + "' "
-            "data-company-name='" + e(j.get('company_name') or '') + "' data-company-color='" + c_clr + "' data-company-initials='" + c_init + "' "
+            "data-company-name='" + e(j.get('company_name') or '') + "' data-company-color='" + c_clr + "' data-company-initials='" + c_init + "' data-company-logo='" + e(c_logo) + "' "
             "data-category='" + e(j.get('category') or '') + "' data-level='" + e(j.get('level') or 'Mid-Senior') + "' "
             "data-workplace='" + e(j.get('workplace') or 'Hybrid') + "' data-location='" + e(j.get('location') or '') + "' "
             "data-salary-min='" + str(j.get('salary_min') or 50000) + "' data-salary-max='" + str(j.get('salary_max') or 85000) + "' "
@@ -1580,11 +1623,12 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
             st_cls = "st-active" if st in ("active", "published") else ("st-draft" if st == "review" else "st-archived")
             open_jobs = c.get('open_jobs') or 0
             founded = c.get('founded') or '—'
-            logo_url = c.get('logo_url') or ''
+            c_init = e(c.get('initials') or 'CO')
+            resolved_c_logo = _resolve_brand_logo(c.get('slug') or '', c.get('initials') or '', c.get('logo_url') or '')
             avatar_html = (
-                f"<img src='{e(logo_url)}' alt='' style='width:36px;height:36px;border-radius:9px;object-fit:cover;flex-shrink:0;border:1px solid #e2e8f0;' loading='lazy'>"
-                if logo_url else
-                "<span style='display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:9px;background:" + clr + ";color:#fff;font-weight:800;font-size:12.5px;flex-shrink:0;'>" + e(c.get('initials') or 'CO') + "</span>"
+                f"<img src='{e(resolved_c_logo)}' alt='' style='width:36px;height:36px;border-radius:9px;object-fit:contain;background:#fff;flex-shrink:0;border:1px solid #e2e8f0;' loading='lazy'>"
+                if resolved_c_logo else
+                "<span style='display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:9px;background:" + clr + ";color:#fff;font-weight:800;font-size:12.5px;flex-shrink:0;'>" + c_init + "</span>"
             )
             return (
                 "<tr>"
@@ -1617,7 +1661,7 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
                 "data-industries='" + e(c.get('industries') or '') + "' data-location='" + e(c.get('location') or '') + "' "
                 "data-employees='" + str(c.get('employees') or 1000) + "' data-color='" + e(c.get('color') or '#2563eb') + "' "
                 "data-website='" + e(c.get('website') or '') + "' data-description='" + e(c.get('description') or '') + "' "
-                "data-logo-url='" + e(c.get('logo_url') or '') + "' data-banner-url='" + e(c.get('banner_url') or '') + "' "
+                "data-logo-url='" + e(resolved_c_logo) + "' data-banner-url='" + e(c.get('banner_url') or '') + "' data-initials='" + c_init + "' "
                 "data-benefits='" + e(c.get('benefits') or '') + "' data-offices='" + e(c.get('offices') or '') + "' "
                 "data-social-links='" + e(c.get('social_links') or '') + "' data-status='" + e(c.get('status') or 'active') + "' "
                 "data-verified='" + str(c.get('verified', 1)) + "' data-featured='" + str(c.get('featured') or 0) + "' "
