@@ -749,6 +749,8 @@ def route(conn, method, path, query, payload, user, token, host, client_ip="", c
         if raw_status not in ("active", "draft", "archived"):
             raw_status = "active"
         old_cid = job_dict.get("company_id")
+        image_url = _safe_media_url(payload.get("image_url", job_dict.get("image_url") or ""), "")
+        gallery_images = (payload.get("gallery_images") if "gallery_images" in payload else job_dict.get("gallery_images") or "").strip()
         comp = conn.execute("SELECT id, name, initials, color FROM companies WHERE slug=?", (comp_slug,)).fetchone()
         if comp:
             cid, cname, cinit, ccolor = comp
@@ -758,10 +760,10 @@ def route(conn, method, path, query, payload, user, token, host, client_ip="", c
             conn.execute(
                 """UPDATE jobs SET title=?, company_id=?, company_slug=?, company_name=?, company_initials=?, company_color=?,
                    category=?, level=?, workplace=?, location=?, salary_min=?, salary_max=?, salary_display=?, skills=?, description=?,
-                   apply_url=?, apply_email=?, featured=?, is_remote=?, accent=?, status=? WHERE id=?""",
+                   apply_url=?, apply_email=?, featured=?, is_remote=?, accent=?, status=?, image_url=?, gallery_images=? WHERE id=?""",
                 (title, cid, comp_slug, cname, cinit, ccolor, category, level, workplace, location,
                  salary_min, salary_max, salary_display, skills, description,
-                 apply_url, apply_email, featured, 1 if "Remote" in workplace else 0, ccolor, raw_status, job_id)
+                 apply_url, apply_email, featured, 1 if "Remote" in workplace else 0, ccolor, raw_status, image_url, gallery_images, job_id)
             )
             conn.commit()
             db.sync_company_open_jobs(conn, cid)
@@ -770,10 +772,10 @@ def route(conn, method, path, query, payload, user, token, host, client_ip="", c
         else:
             conn.execute(
                 """UPDATE jobs SET title=?, category=?, level=?, workplace=?, location=?, salary_min=?, salary_max=?, salary_display=?,
-                   skills=?, description=?, apply_url=?, apply_email=?, featured=?, is_remote=?, status=? WHERE id=?""",
+                   skills=?, description=?, apply_url=?, apply_email=?, featured=?, is_remote=?, status=?, image_url=?, gallery_images=? WHERE id=?""",
                 (title, category, level, workplace, location,
                  salary_min, salary_max, salary_display, skills, description,
-                 apply_url, apply_email, featured, 1 if "Remote" in workplace else 0, raw_status, job_id)
+                 apply_url, apply_email, featured, 1 if "Remote" in workplace else 0, raw_status, image_url, gallery_images, job_id)
             )
             conn.commit()
         status_label = {"active": "published", "draft": "saved as draft", "archived": "archived"}.get(raw_status, "updated")
@@ -1043,14 +1045,16 @@ def route(conn, method, path, query, payload, user, token, host, client_ip="", c
         if comp:
             cid, cname, cinit, ccolor = comp
             now_date = datetime.utcnow().strftime("%Y-%m-%d")
+            image_url = _safe_media_url(payload.get("image_url", ""), "") or "/static/images/hero_transport_clean.jpg"
+            gallery_images = (payload.get("gallery_images") or "").strip()
             conn.execute(
                 """INSERT INTO jobs (slug, title, company_id, company_slug, company_name, company_initials, company_color,
                    category, level, workplace, location, salary_min, salary_max, salary_display, industries, skills, description,
-                   apply_url, apply_email, posted_at, posted_label, is_remote, accent, status)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                   apply_url, apply_email, posted_at, posted_label, is_remote, accent, status, image_url, gallery_images)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (slug, title, cid, comp_slug, cname, cinit, ccolor, category, level, workplace, location,
                  salary_min, salary_max, salary_display, "Logistics & Technology", skills, description,
-                 apply_url, apply_email, now_date, "Just now", 1 if "Remote" in workplace else 0, ccolor, "active")
+                 apply_url, apply_email, now_date, "Just now", 1 if "Remote" in workplace else 0, ccolor, "active", image_url, gallery_images)
             )
             db.sync_company_open_jobs(conn, cid)
             return redirect("/admin?tab=jobs&msg=" + urllib.parse.quote(f"Job listing '{title}' published!"))
@@ -1089,6 +1093,8 @@ def route(conn, method, path, query, payload, user, token, host, client_ip="", c
         level = _clip(payload.get("level", "Mid-Senior"), 60) or "Mid-Senior"
         apply_url = _safe_http_url(payload.get("apply_url", ""))
         apply_email = _clip(payload.get("apply_email", ""), 160)
+        image_url = _safe_media_url(payload.get("image_url", ""), "")
+        gallery_images = (payload.get("gallery_images") or "").strip()
         raw_status = (payload.get("status") or "active").strip().lower()
         if raw_status == "published":
             raw_status = "active"
@@ -1105,10 +1111,10 @@ def route(conn, method, path, query, payload, user, token, host, client_ip="", c
             conn.execute(
                 """UPDATE jobs SET title=?, company_id=?, company_slug=?, company_name=?, company_initials=?, company_color=?,
                    category=?, level=?, workplace=?, location=?, salary_min=?, salary_max=?, salary_display=?, skills=?, description=?,
-                   apply_url=?, apply_email=?, is_remote=?, accent=?, status=? WHERE id=?""",
+                   apply_url=?, apply_email=?, is_remote=?, accent=?, status=?, image_url=?, gallery_images=? WHERE id=?""",
                 (title, cid, comp_slug, cname, cinit, ccolor, category, level, workplace, location,
                  salary_min, salary_max, salary_display, skills, description,
-                 apply_url, apply_email, 1 if "Remote" in workplace else 0, ccolor, raw_status, job_id)
+                 apply_url, apply_email, 1 if "Remote" in workplace else 0, ccolor, raw_status, image_url, gallery_images, job_id)
             )
             conn.commit()
             db.sync_company_open_jobs(conn, cid)
@@ -1118,10 +1124,10 @@ def route(conn, method, path, query, payload, user, token, host, client_ip="", c
         elif job_id:
             conn.execute(
                 """UPDATE jobs SET title=?, category=?, level=?, workplace=?, location=?, salary_min=?, salary_max=?, salary_display=?, skills=?, description=?,
-                   apply_url=?, apply_email=?, is_remote=?, status=? WHERE id=?""",
+                   apply_url=?, apply_email=?, is_remote=?, status=?, image_url=?, gallery_images=? WHERE id=?""",
                 (title, category, level, workplace, location,
                  salary_min, salary_max, salary_display, skills, description,
-                 apply_url, apply_email, 1 if "Remote" in workplace else 0, raw_status, job_id)
+                 apply_url, apply_email, 1 if "Remote" in workplace else 0, raw_status, image_url, gallery_images, job_id)
             )
             conn.commit()
             return redirect(f"/admin?tab={tab}&msg=" + urllib.parse.quote(f"Job '{title}' updated successfully!"))

@@ -580,7 +580,7 @@ def render_edit_modals(all_companies):
         "    <div class='cms-tab-pane' id='admin-job-tab-media'>\n"
         "      <div class='cms-media-cover-box'>\n"
         "        <div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;'>\n"
-        "          <label class='cms-form-label' style='margin:0;font-size:13px;'><i class='fa-solid fa-image' style='color:#2563eb;'></i> Featured Job Cover / Banner</label>\n"
+        "          <label class='cms-form-label' style='margin:0;font-size:13px;justify-content:flex-start;gap:6px;'><i class='fa-solid fa-image' style='color:#2563eb;'></i> Featured Job Cover / Banner</label>\n"
         "          <span style='font-size:11px;color:#64748b;'>Hero Header &amp; Social Card</span>\n"
         "        </div>\n"
         "        <div class='cms-cover-preview-wrap'>\n"
@@ -595,14 +595,14 @@ def render_edit_modals(all_companies):
         "          <button type='button' class='cms-preset-pill' onclick=\"setJobCoverPreset('edit-job', '/static/images/port_logistics_1.jpg')\"><i class='fa-solid fa-anchor'></i> Port Terminal</button>\n"
         "          <button type='button' class='cms-preset-pill' onclick=\"setJobCoverPreset('edit-job', '/static/images/cargo_ship_hero.jpg')\"><i class='fa-solid fa-ship'></i> Container Vessel</button>\n"
         "          <button type='button' class='cms-preset-pill' onclick=\"setJobCoverPreset('edit-job', '/static/images/hero_transport_clean.jpg')\"><i class='fa-solid fa-truck-moving'></i> Multimodal Cargo</button>\n"
-        "          <button type='button' class='cms-preset-pill' onclick=\"setJobCoverPreset('edit-job', '/static/images/shipping_modern_tower.jpg')\"><i class='fa-solid fa-building'></i> Logistics HQ</button>\n"
+        "          <button type='button' class='cms-preset-pill' onclick=\"setJobCoverPreset('edit-job', '/static/images/arch_glass_office.jpg')\"><i class='fa-solid fa-building'></i> Logistics HQ</button>\n"
         "          <button type='button' class='cms-preset-pill' onclick=\"setJobCoverPreset('edit-job', '/static/images/fw_today_3.jpg')\"><i class='fa-solid fa-plane-departure'></i> Air Cargo</button>\n"
         "        </div>\n"
         "      </div>\n"
         "      <div class='cms-form-group' style='margin-bottom:6px;'>\n"
         "        <div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px;'>\n"
         "          <div>\n"
-        "            <label class='cms-form-label' style='margin:0;font-size:13px;'><i class='fa-solid fa-images' style='color:#2563eb;'></i> Workplace &amp; Facility Photo Gallery</label>\n"
+        "            <label class='cms-form-label' style='margin:0;font-size:13px;justify-content:flex-start;gap:6px;'><i class='fa-solid fa-images' style='color:#2563eb;'></i> Workplace &amp; Facility Photo Gallery</label>\n"
         "            <div style='font-size:11.5px;color:#64748b;margin-top:2px;'>Photos displayed in the Job Listing Dossier (terminals, fleet, control room, culture)</div>\n"
         "          </div>\n"
         "          <div style='display:flex;gap:6px;flex-wrap:wrap;'>\n"
@@ -1350,7 +1350,7 @@ def render_admin_dashboard(conn, user, message="", error="", tab="overview", pag
         if tab == "jobs":
             total_jobs_count = conn.execute(f"SELECT COUNT(*) FROM jobs{jw_sql}", job_args).fetchone()[0]
         all_jobs = [dict(r) for r in conn.execute(
-            f"SELECT id, slug, title, company_id, company_slug, company_name, company_initials, company_color, category, level, workplace, location, salary_min, salary_max, salary_display, skills, description, posted_at, COALESCE(featured, 0) AS featured, COALESCE(status, 'active') AS status "
+            f"SELECT id, slug, title, company_id, company_slug, company_name, company_initials, company_color, category, level, workplace, location, salary_min, salary_max, salary_display, skills, description, posted_at, COALESCE(featured, 0) AS featured, COALESCE(status, 'active') AS status, apply_url, apply_email, image_url, gallery_images "
             f"FROM jobs{jw_sql} ORDER BY id DESC LIMIT ? OFFSET ?",
             job_args + [j_limit, j_offset]
         ).fetchall()]

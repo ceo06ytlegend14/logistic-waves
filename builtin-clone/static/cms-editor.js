@@ -64,9 +64,22 @@ function handleCmsImageUpload(fileInput, targetInputId, previewImgId) {
       canvas.getContext('2d').drawImage(img, 0, 0, w, h);
       var optimized = canvas.toDataURL('image/jpeg', 0.85);
       var target = document.getElementById(targetInputId);
-      if (target) target.value = optimized;
       var prev = document.getElementById(previewImgId);
       if (prev) prev.src = optimized;
+      var csrf = document.querySelector('meta[name="csrf-token"]');
+      fetch('/admin/media/upload', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRF-Token': csrf ? csrf.content : ''},
+        body: JSON.stringify({data_uri: optimized})
+      }).then(function(res) { return res.json(); }).then(function(data) {
+        if (!data.ok || !data.url) throw new Error(data.error || 'Upload failed.');
+        if (target) target.value = data.url;
+        if (prev) prev.src = data.url;
+      }).catch(function(err) {
+        if (target) target.value = '';
+        if (window.showToast) window.showToast(err.message || 'Image upload failed.', true);
+        else alert(err.message || 'Image upload failed.');
+      });
     };
     img.src = e.target.result;
   };
@@ -214,3 +227,125 @@ document.addEventListener('DOMContentLoaded', function() {
     window.history.replaceState({}, '', window.location.pathname + newQuery + window.location.hash);
   }
 });
+
+/* ==========================================================================
+   JOB MEDIA & GALLERY HELPER FUNCTIONS
+   ========================================================================== */
+function getJobGalleryItems(prefix) {
+  var hidden = document.getElementById(prefix + '-gallery-images');
+  if (!hidden || !hidden.value) return [];
+  return hidden.value.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+}
+
+function syncJobGalleryHidden(prefix, items) {
+  var hidden = document.getElementById(prefix + '-gallery-images');
+  if (hidden) hidden.value = items.join(', ');
+  renderJobGalleryGrid(prefix, items.join(', '));
+}
+
+function renderJobGalleryGrid(prefix, csvList) {
+  var container = document.getElementById(prefix + '-gallery-grid');
+  var hidden = document.getElementById(prefix + '-gallery-images');
+  if (!container) return;
+  var items = (csvList !== undefined ? csvList : (hidden ? hidden.value : '')).split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+  if (hidden && csvList !== undefined) hidden.value = items.join(', ');
+
+  if (!items.length) {
+    container.innerHTML = '<div class="cms-gallery-empty"><i class="fa-regular fa-images"></i><span>No gallery photos added yet. Click &ldquo;Load Logistics Gallery&rdquo; or upload workplace photos.</span></div>';
+    return;
+  }
+
+  var html = items.map(function(url, idx) {
+    var safeUrl = url.replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+    return '<div class="cms-gallery-card">' +
+      '<img src="' + safeUrl + '" alt="Photo ' + (idx + 1) + '" onerror="this.onerror=null;this.src=\'/static/images/fw_today_1.jpg\'">' +
+      '<button type="button" class="cms-gallery-remove" onclick="removeJobGalleryPhoto(\'' + prefix + '\', ' + idx + ')" title="Remove photo">&times;</button>' +
+      '<div class="cms-gallery-badge">Photo ' + (idx + 1) + '</div>' +
+      '</div>';
+  }).join('');
+  container.innerHTML = html;
+}
+
+function addJobGalleryPhoto(prefix, url) {
+  if (!url || !url.trim()) return;
+  var items = getJobGalleryItems(prefix);
+  items.push(url.trim());
+  syncJobGalleryHidden(prefix, items);
+}
+
+function addJobGalleryPhotoPrompt(prefix) {
+  var url = prompt('Enter image URL for job gallery:');
+  if (url && url.trim()) {
+    addJobGalleryPhoto(prefix, url.trim());
+  }
+}
+
+function removeJobGalleryPhoto(prefix, index) {
+  var items = getJobGalleryItems(prefix);
+  if (index >= 0 && index < items.length) {
+    items.splice(index, 1);
+    syncJobGalleryHidden(prefix, items);
+  }
+}
+
+function seedJobGalleryPresets(prefix) {
+  var presets = [
+    '/static/images/port_logistics_1.jpg',
+    '/static/images/port_logistics_2.jpg',
+    '/static/images/hero_transport_clean.jpg',
+    '/static/images/fw_today_3.jpg',
+    '/static/images/arch_glass_office.jpg',
+    '/static/images/arch_office_team.jpg'
+  ];
+  syncJobGalleryHidden(prefix, presets);
+  if (window.showToast) window.showToast('Loaded 6 logistics workplace photos!');
+}
+
+function clearJobGallery(prefix) {
+  if (confirm('Clear all gallery photos for this job?')) {
+    syncJobGalleryHidden(prefix, []);
+  }
+}
+
+function uploadJobGalleryPhoto(fileInput, prefix) {
+  if (!fileInput.files || !fileInput.files[0]) return;
+  var file = fileInput.files[0];
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var img = new Image();
+    img.onload = function() {
+      var maxW = 1200, maxH = 800;
+      var w = img.width, h = img.height;
+      if (w > maxW || h > maxH) {
+        if (w / maxW > h / maxH) { h = Math.round(h * (maxW / w)); w = maxW; }
+        else { w = Math.round(w * (maxH / h)); h = maxH; }
+      }
+      var canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      var optimized = canvas.toDataURL('image/jpeg', 0.85);
+
+      var csrf = document.querySelector('meta[name="csrf-token"]');
+      fetch('/admin/media/upload', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRF-Token': csrf ? csrf.content : ''},
+        body: JSON.stringify({data_uri: optimized})
+      }).then(function(res) { return res.json(); }).then(function(data) {
+        if (!data.ok || !data.url) throw new Error(data.error || 'Upload failed.');
+        addJobGalleryPhoto(prefix, data.url);
+      }).catch(function() {
+        addJobGalleryPhoto(prefix, optimized);
+      });
+      fileInput.value = '';
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function setJobCoverPreset(prefix, url) {
+  var inp = document.getElementById(prefix + '-image-url');
+  var prev = document.getElementById(prefix + '-image-preview');
+  if (inp) inp.value = url;
+  if (prev) prev.src = url;
+}

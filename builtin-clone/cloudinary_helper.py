@@ -86,12 +86,26 @@ def upload_image(file_bytes: bytes, filename: str = "upload.jpg", folder: str = 
 
 def upload_data_uri(data_uri: str, folder: str = "logistic-waves") -> dict:
     """Decode a base64 data:image/... URI and upload it to Cloudinary."""
-    if not data_uri or ";base64," not in data_uri:
+    if not data_uri or len(data_uri) > 7_000_000 or ";base64," not in data_uri:
         return {"ok": False, "error": "Invalid image data URI."}
     header, b64 = data_uri.split(";base64,", 1)
-    ext = "png" if "png" in header.lower() else ("webp" if "webp" in header.lower() else "jpg")
+    mime = header.lower().replace("data:", "", 1)
+    allowed = {
+        "image/png": ("png", b"\x89PNG\r\n\x1a\n"),
+        "image/jpeg": ("jpg", b"\xff\xd8\xff"),
+        "image/jpg": ("jpg", b"\xff\xd8\xff"),
+        "image/webp": ("webp", b"RIFF"),
+        "image/gif": ("gif", b"GIF8"),
+    }
+    if mime not in allowed:
+        return {"ok": False, "error": "Unsupported image type. Use PNG, JPEG, WEBP, or GIF."}
+    ext, signature = allowed[mime]
     try:
-        raw = base64.b64decode(b64)
+        raw = base64.b64decode(b64, validate=True)
     except Exception as ex:
         return {"ok": False, "error": f"Base64 decode failed: {ex}"}
+    if not raw or len(raw) > 5 * 1024 * 1024 or not raw.startswith(signature):
+        return {"ok": False, "error": "Invalid image content or image exceeds 5 MB."}
+    if mime == "image/webp" and raw[8:12] != b"WEBP":
+        return {"ok": False, "error": "Invalid WEBP image content."}
     return upload_image(raw, filename=f"receipt.{ext}", folder=folder)
